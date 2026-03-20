@@ -101,7 +101,6 @@ All available skills in this project:
 | `/homelab-api` | HomeLab API reference — endpoints, auth, date handling | **fork** | Working with api.jkrumm.com |
 | `/excalidraw-diagram` | Create Excalidraw diagrams that argue visually | main | Visualizing workflows, architectures, concepts |
 | `/pencil-design` | Pencil MCP design workflow with basalt-ui tokens | main | Creating/editing .pen design files |
-| `/cq` | Manage the task queue — add, list, pause, clear | main | Queuing tasks for unattended multi-task sessions |
 
 **Note:** For codebase exploration, ask Claude directly and it will use the built-in Explore agent.
 

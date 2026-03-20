@@ -137,8 +137,6 @@ Automates unattended multi-task Claude Code sessions. The Stop hook in `~/.claud
 
 **Block types:** `/command` blocks (⚡) invoke skills; plain text (◆) is injected as a user message; `PAUSE` (⏸) stops the queue.
 
-Use `/cq` skill (SourceRoot) to manage the queue programmatically.
-
 ---
 
 ## Shell Commands (zsh)

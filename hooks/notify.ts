@@ -478,9 +478,6 @@ async function handleStopEvent(
   const queueFile = findQueueFile(input.cwd);
   const nextTask = queueFile ? popQueueTask(queueFile) : null;
 
-  // Debug — remove once queue injection is confirmed working
-  process.stderr.write(`[cq] cwd=${input.cwd} | file=${queueFile} | task=${JSON.stringify(nextTask?.slice(0, 40))}\n`);
-
   if (nextTask === "PAUSE") {
     // Exit synchronously — no async operations before exit(0).
     // Same principle as task injection: awaiting sendNotification risks hanging,
