@@ -191,7 +191,7 @@ All routes return `{ ok: true, data: ... }` or `{ ok: false, error: string }`.
 │  │ ⏸ PAUSE                    [×] │     │
 │  │ ◆ Write CHANGELOG          [×] │     │
 │  └─────────────────────────────────┘     │
-│  Drag to reorder · Click to expand       │
+│  Drag to reorder · Click to expand [[and edit also with EasyMDE the task definition, right?]]       │
 ├──────────────────────────────────────────┤
 │  NOTES  [collapse]                       │
 │  ┌─────────────────────────────────┐     │
@@ -209,7 +209,7 @@ Each task renders as a BlueprintJS Card:
 - **Preview** text: first line of content (JetBrains Mono for slash commands)
 - **Expand** button: shows full multi-line content
 - **Delete** button: removes from queue
-- **Drag handle**: reorder via @dnd-kit/sortable
+- **Drag handle**: reorder via @dnd-kit/sortable [[Look at BlueprintJs and what components to use and what integrates there maybe]]
 
 Add task: BlueprintJS InputGroup at bottom of list, Enter to add. Slash commands detected by `/` prefix.
 
@@ -274,7 +274,7 @@ shell       docker compose exec cqueue sh
 Paths are configured via `.env` (from `../.env` at repo root, not committed):
 
 ```env
-SOURCEROOT_PATH=/Users/yourname/SourceRoot
+SOURCEROOT_PATH=/Users/yourname/SourceRoot [[can we maybe rather make REPO_PATHS or so and have a comma seperated list this doesnt seem so agnostic not sure how supported this is with docker compose volumes]]
 IUROOT_PATH=/Users/yourname/IuRoot
 CQUEUE_PORT=7705
 ```
@@ -309,7 +309,7 @@ When a repo directory is accessed that has neither `cqueue.md` nor `cnotes.md`, 
 ---
 
 ## Open Questions
-
+[[Is docker really the correct runtime here or some system service on my mac? Not sure what is better but I generelly run docker all the time]]
 1. **Recursive repo discovery** — scan one level under `/repos` or deeper? Start with one level (direct children of `~/SourceRoot`), add depth later.
-2. **`cqueue.md` format extension** — keep pure markdown for CLI compat? Yes, no binary or JSON hybrid. The parser gets smarter, the format stays human-editable.
+2. **`cqueue.md` format extension** — keep pure markdown for CLI compat? Yes, no binary or JSON hybrid. The parser gets smarter, the format stays human-editable. [[Do we need to enfore the schema somehow?]]
 3. **Notes conflict on external edit** — banner with "File changed externally — reload?" is probably enough. No true merge needed (single user).
