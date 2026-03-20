@@ -75,5 +75,9 @@
   "skipDangerousModePermissionPrompt": true,
   "model": "sonnet",
 
-  "_NOTE": "This is a template. The real ~/.claude/settings.json is NOT version-controlled — it contains machine-specific permission lists. Copy this to ~/.claude/settings.json on a new machine and extend the allow list as needed."
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true
+  },
+
+  "_NOTE": "This is a template. The real ~/.claude/settings.json is NOT version-controlled — it contains machine-specific permission lists. Copy this to ~/.claude/settings.json on a new machine and extend the allow list as needed. frontend-design and skill-creator are now VCS'd custom skills (skills/global/) — do NOT re-enable them as plugins."
 }
