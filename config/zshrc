@@ -1,0 +1,111 @@
+# OPENSPEC:START
+# OpenSpec shell completions configuration
+fpath=("/Users/johannes.krumm/.zsh/completions" $fpath)
+autoload -Uz compinit
+# Only regenerate completion dump once per day
+if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
+  compinit
+else
+  compinit -C
+fi
+# OPENSPEC:END
+
+# --- FNM (Fast Node Manager) ---------------------------------------------
+eval "$(fnm env --use-on-cd --shell zsh)"
+
+# --- PATH SETUP ----------------------------------------------------------
+HOMEBREW_PREFIX="/opt/homebrew"
+
+# Homebrew binaries (Claude, brew, etc.)
+export PATH="$HOMEBREW_PREFIX/bin:/usr/local/bin:$PATH"
+
+# MySQL from Homebrew
+export PATH="$HOMEBREW_PREFIX/opt/mysql/bin:$PATH"
+
+# pipx (Python app launcher)
+export PATH="$PATH:$HOME/.local/bin"
+
+# Deno environment
+. "$HOME/.deno/env"
+
+# npm global (optional, for additional CLIs)
+export PATH="$PATH:$HOME/.npm-global/bin"
+
+# --- PLUGINS & ALIASES --------------------------------------------------
+# zoxide (fast directory jumping, replaces autojump - using "j" alias)
+eval "$(zoxide init zsh --cmd j)"
+
+# fzf - fuzzy search (cached, regenerated when fzf binary changes)
+_fzf_cache="$HOME/.cache/zsh/fzf-init.zsh"
+if [[ ! -f "$_fzf_cache" || /opt/homebrew/bin/fzf -nt "$_fzf_cache" ]]; then
+  mkdir -p "${_fzf_cache:h}"
+  fzf --zsh >| "$_fzf_cache"
+fi
+source "$_fzf_cache"
+
+# tailscale CLI
+alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
+
+
+
+
+#===========
+# MY ALIASES
+# =========
+alias gback="git reset --soft HEAD~1"
+alias homelab="ssh homelab"  # via Tailscale (100.85.139.104)
+alias vps="ssh vps"          # via Tailscale (100.82.157.104)
+
+# Claude Code with auto workspace detection
+c() {
+  if [[ "$PWD" == "$HOME/SourceRoot"* ]]; then
+    ENABLE_TOOL_SEARCH=true CLAUDE_CODE_ENABLE_TASKS=true claude --dangerously-skip-permissions --plugin-dir ~/SourceRoot/.claude "$@"
+  elif [[ "$PWD" == "$HOME/IuRoot"* ]]; then
+    ENABLE_TOOL_SEARCH=true CLAUDE_CODE_ENABLE_TASKS=true claude --dangerously-skip-permissions --plugin-dir "$(git rev-parse --show-toplevel 2>/dev/null || echo '.')/.claude" "$@"
+  else
+    ENABLE_TOOL_SEARCH=true CLAUDE_CODE_ENABLE_TASKS=true claude --dangerously-skip-permissions "$@"
+  fi
+}
+
+alias start-iu-fe="~/IuRoot/prometheus-scripts/bash/start-frontends.sh"
+alias sync-iu-db="~/IuRoot/prometheus-scripts/bash/sync-dev-db.sh 'AdNfaoa02b=bH\$pSvt.?i+QA4F4bKaf0'"
+alias npmplease="rm -rf node_modules/ && rm -f package-lock.json && npm install"
+
+#===========
+# MY FUNCTIONS
+# =========
+rebuild-vps() {
+  ssh vps "cd sideproject-docker-stack && ./rebuild-container.sh $1"
+}
+
+nb() {
+  local default_branch=$(git remote show origin 2>/dev/null | sed -n 's/.*HEAD branch: //p')
+  git fetch origin "$default_branch" && git checkout -b "$1" "origin/$default_branch"
+}
+# rebuild-vps fpp-server
+# rebuild-vps snow-finder
+
+# Make Ghostty behave like Warp
+# autoload -U select-word-style
+# select-word-style bash  # Better word jumping
+# bindkey -e              # Emacs keybindings (Ctrl+A/E, etc.)
+
+#===========
+# GIT WORKTREE MANAGEMENT (via wtp)
+# =========
+# wtp (git worktree manager, cached)
+_wtp_cache="$HOME/.cache/zsh/wtp-init.zsh"
+if [[ ! -f "$_wtp_cache" || $(command -v wtp) -nt "$_wtp_cache" ]]; then
+  mkdir -p "${_wtp_cache:h}"
+  wtp shell-init zsh >| "$_wtp_cache"
+fi
+source "$_wtp_cache"
+
+# bun completions
+[ -s "/Users/johannes.krumm/.bun/_bun" ] && source "/Users/johannes.krumm/.bun/_bun"
+
+# Claude Code queue CLI
+alias cq="bun ~/.claude/queue.ts"
+
+# Open current (or given) folder in Zed
+zed() { /opt/homebrew/bin/zed "${1:-.}" }
