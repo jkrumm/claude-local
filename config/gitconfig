@@ -1,0 +1,13 @@
+[core]
+    autocrlf = input
+    excludesfile = ~/.gitignore_global
+
+[user]
+    name = jkrumm
+    email = jkrumm@pm.me
+
+[includeIf "gitdir:~/SourceRoot/"]
+    path = ~/.gitconfig-personal
+
+[includeIf "gitdir:~/IuRoot/"]
+    path = ~/.gitconfig-work

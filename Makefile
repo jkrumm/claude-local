@@ -33,6 +33,15 @@ _setup-config:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/config/zshrc" \
 		DST="$(HOME)/.zshrc"
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(CLAUDE_LOCAL)/config/gitconfig" \
+		DST="$(HOME)/.gitconfig"
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(CLAUDE_LOCAL)/config/gitconfig-personal" \
+		DST="$(HOME)/.gitconfig-personal"
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(CLAUDE_LOCAL)/config/gitconfig-work" \
+		DST="$(HOME)/.gitconfig-work"
 
 .PHONY: _setup-hooks
 _setup-hooks:
@@ -96,6 +105,9 @@ status:
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/CLAUDE.md"
 	@$(MAKE) --no-print-directory _check DST="$(SOURCEROOT)/CLAUDE.md"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.zshrc"
+	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitconfig"
+	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitconfig-personal"
+	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitconfig-work"
 	@echo "  Hooks"
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/hooks/notify.ts"
 	@echo "  Scripts"
