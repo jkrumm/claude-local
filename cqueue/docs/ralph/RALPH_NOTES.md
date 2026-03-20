@@ -163,3 +163,35 @@ No new concerns. `repoPath` comes from URL param decoded via `atob` — same pat
 - Consider debouncing `syncToServer` calls on content edits to avoid extra writes on rapid keystrokes before blur.
 
 ---
+
+## Group 6: Notes Editor, SSE Polish & Final Integration
+
+### What was implemented
+
+`NotesPanel.tsx` with EasyMDE editor (imperative, initialized once on mount, hidden via CSS when collapsed), 1s debounced auto-save, and an external-change Callout banner with Reload. `RepoDashboard.tsx` refactored: SSE now parses `{ file: "queue" | "notes" }` event data and routes accordingly — queue changes re-fetch only the queue (new `fetchQueue()`), notes changes set `notesExternallyChanged` flag; SSE error recovery retries after 5s using a local `isActive` closure flag. `RepoList.tsx` upgraded to Blueprint Navbar with title, subtitle, and theme toggle. SPA fallback `*` route added to `server/index.ts` after `staticPlugin`. `DashboardErrorBoundary` class wraps the dashboard with a `NonIdealState` fallback.
+
+### Deviations from prompt
+
+- Used `isActive` local closure flag (instead of `unmountedRef`) for SSE retry guard — simpler and avoids ref lifecycle edge cases since the flag is scoped to the `useEffect` closure.
+- EasyMDE always stays mounted (hidden via `display: none` when collapsed) rather than destroyed/recreated on toggle — avoids the React cleanup-before-render ordering issue where `toTextArea()` would be called after the textarea was already removed from DOM.
+- `DashboardErrorBoundary` is defined in `RepoDashboard.tsx` and wraps `RepoDashboardInner` — no separate file needed for a single-use error boundary.
+- `fetchQueue` calls `api.api.queue.get` (not a full `fetchData` round-trip) so queue SSE events don't overwrite notes state or flicker git status.
+
+### Gotchas & surprises
+
+- EasyMDE `toolbar` type is `false | Array<string | ToolbarButton | ...>` — a plain `string[]` doesn't satisfy it without a cast. Used `as EasyMDE.Options["toolbar"]` to satisfy strict TypeScript without listing every union member.
+- EasyMDE CSS must be imported explicitly (`import "easymde/dist/easymde.min.css"`) — it isn't auto-included and without it the editor renders as unstyled textarea.
+- `autosave: { enabled: false, uniqueId: "..." }` — `uniqueId` is required in some EasyMDE type versions even when `enabled: false`; including it avoids potential type errors without affecting behavior.
+- `@elysiajs/static` registers per-file routes from `dist/`, not a wildcard — so `.get('*', ...)` added after it correctly acts as the SPA fallback without intercepting static asset requests.
+
+### Security notes
+
+No new concerns. SPA fallback serves `dist/index.html` for unmatched routes — safe in a localhost-only container. Path traversal caveat from Groups 2–4 still applies to API routes.
+
+### Future improvements
+
+- Wire `isEditingRef` to NotesPanel's debounce timer — SSE notes change while user is typing could set `notesExternallyChanged` mid-edit; currently benign since the user must click Reload explicitly.
+- Add heartbeat pings to SSE stream so dropped connections are detected faster than browser timeout (currently relies on `EventSource` onerror which may delay).
+- Large bundle warning (677 kB main chunk) — Blueprint + EasyMDE + CodeMirror all in one chunk; dynamic import for NotesPanel would help but is out of scope for MVP.
+
+---
