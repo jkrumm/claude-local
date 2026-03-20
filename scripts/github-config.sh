@@ -14,6 +14,23 @@
 #   - Rebase merge only (no merge commits, no squash)
 #   - Auto-delete merged branches
 #
+# Bypass actors (see github-ruleset.json):
+#   - RepositoryRole/Admin (actor_id: 5) — you, pushing directly from terminal
+#
+#   NOTE: Integration/GitHub Actions bypass is NOT available for personal account
+#   repos — only orgs/enterprise. CI workflows that push to master (e.g. semantic-
+#   release) must authenticate as you via a PAT (RELEASE_TOKEN secret) rather than
+#   the default GITHUB_TOKEN (github-actions[bot] has no bypass rights).
+#   PAT requirements: fine-grained, contents:write on the target repo, owned by
+#   jkrumm so it carries admin bypass rights.
+#
+# WHEN ADDING COLLABORATORS:
+#   Bump required_approving_review_count from 0 to 1 in github-ruleset.json,
+#   then re-run this script. PR review gates all workflow changes before they
+#   land. The PAT approach is safe with collaborators — they cannot push to
+#   master directly, and PR review prevents them from landing workflow changes
+#   that abuse a PAT secret.
+#
 # Usage:
 #   ./scripts/github-config.sh              # all repos for jkrumm
 #   GITHUB_OWNER=other ./scripts/github-config.sh
