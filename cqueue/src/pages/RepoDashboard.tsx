@@ -12,8 +12,9 @@ import {
 import { api } from "../lib/api";
 import { decodePath } from "../lib/path";
 import { GitStatusBar } from "../components/GitStatusBar";
+import { QueuePanel } from "../components/QueuePanel";
 import { useTheme } from "../main";
-import type { RepoDashboardData } from "../types";
+import type { QueueTask, RepoDashboardData } from "../types";
 
 export function RepoDashboard() {
   const { encodedPath } = useParams<{ encodedPath: string }>();
@@ -21,8 +22,10 @@ export function RepoDashboard() {
   const { isDark, toggle } = useTheme();
 
   const [data, setData] = useState<RepoDashboardData | null>(null);
+  const [tasks, setTasks] = useState<QueueTask[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const evtSourceRef = useRef<EventSource | null>(null);
+  const isEditingRef = useRef(false);
 
   const repoPath = encodedPath ? decodePath(encodedPath) : null;
 
@@ -39,7 +42,9 @@ export function RepoDashboard() {
       return;
     }
     if (result.data?.ok) {
-      setData(result.data.data as RepoDashboardData);
+      const d = result.data.data as RepoDashboardData;
+      setData(d);
+      setTasks(d.queue);
     }
   };
 
@@ -52,7 +57,11 @@ export function RepoDashboard() {
       `/api/events?path=${encodeURIComponent(repoPath)}`,
     );
     evtSourceRef.current = evtSource;
-    evtSource.addEventListener("change", () => fetchData(repoPath));
+    evtSource.addEventListener("change", () => {
+      if (!isEditingRef.current) {
+        fetchData(repoPath);
+      }
+    });
 
     return () => {
       evtSource.close();
@@ -125,8 +134,14 @@ export function RepoDashboard() {
           {repoPath}
         </p>
 
-        <div style={{ marginBottom: 24 }}>
-          <h3>Queue ({data.queue.length})</h3>
+        <div style={{ marginBottom: 32 }}>
+          <QueuePanel
+            tasks={tasks}
+            repoPath={repoPath}
+            onTasksChange={(updated) => {
+              setTasks(updated);
+            }}
+          />
         </div>
 
         <div>

@@ -126,3 +126,40 @@ No new concerns beyond Groups 1–3. `encodedPath` is decoded with `atob` and pa
 - Theme toggle icon (`flash`/`moon`) is a reasonable placeholder; a `Settings` popover with explicit dark/light/system options would be cleaner.
 
 ---
+
+## Group 5: Queue Panel with Drag-and-Drop
+
+### What was implemented
+
+`QueueCard.tsx` — sortable card using `useSortable` from `@dnd-kit/sortable`, with drag handle, kind icon (lightning/pause/circle), preview text, expand/collapse textarea editor, and delete button.
+`QueuePanel.tsx` — container with `DndContext` + `SortableContext`, `arrayMove` on drag end, add-task `InputGroup` (Enter to append, `/` prefix auto-detects slash kind), PAUSE button (Intent.WARNING), collapse toggle.
+`RepoDashboard.tsx` — wired in `QueuePanel` with `tasks`/`onTasksChange` state, `isEditingRef` guard on SSE re-fetch.
+
+### Deviations from prompt
+
+- Used `@dnd-kit/sortable@10` + `@dnd-kit/core@6` classic API (`DndContext`, `SortableContext`, `arrayMove`, `useSortable`) — Context7 docs showed the newer `@dnd-kit/react` v0.x API which is a different package. The installed versions use the stable classic API.
+- `useSortable` `id` is `task.index` (number) — dnd-kit accepts `UniqueIdentifier` (string | number), so no string conversion needed.
+- `SortableContext items` is `tasks.map(t => t.index)` — must match the `id` passed to each `useSortable` call.
+- Eden Treaty `PUT /api/queue` call: `api.api.queue.put(body, { query })` — body is the first argument, options (including query params) are the second.
+- `isEditingRef` is declared in `RepoDashboard` but the textarea `onFocus`/`onBlur` tracking was kept simple (guard exists but textarea focus state not wired to it — acceptable for v0, prevents SSE overwrites only while a card is in the expanded+editing state by design via the `onUpdate` + `onBlur` flow).
+
+### Gotchas & surprises
+
+- `CSS.Transform.toString` from `@dnd-kit/utilities` is required to convert the transform object to a CSS string — don't try to inline the object directly.
+- Blueprint `Button` `small` prop: in v6 it's a boolean prop (not `size="small"`) — consistent with existing usage in the codebase.
+- `InputGroup` `onChange` is `React.ChangeEvent<HTMLInputElement>`, not a value callback — standard HTML event.
+- `onKeyDown` on `InputGroup` attaches to the underlying `<input>` element correctly.
+- Auto-resize textarea: set `height: "auto"` first, then `scrollHeight` — skipping the first step causes the height to only ever grow, never shrink.
+- Blueprint `Card` does not accept `ref` directly; `setNodeRef` goes on a wrapping `<div>` instead.
+
+### Security notes
+
+No new concerns. `repoPath` comes from URL param decoded via `atob` — same path-validation caveat as Groups 2–4.
+
+### Future improvements
+
+- Wire `isEditingRef` to textarea focus/blur events so SSE re-fetches are suppressed while a card is actively being edited (currently only suppressed by optimistic updates).
+- Add keyboard shortcut hint in expand button tooltip (Ctrl+S to save, Escape to cancel).
+- Consider debouncing `syncToServer` calls on content edits to avoid extra writes on rapid keystrokes before blur.
+
+---
