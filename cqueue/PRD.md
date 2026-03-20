@@ -18,6 +18,8 @@ It provides a purpose-built UI that understands queue structure (task types, ord
 - File changes from CLI (`cq add`, `cq pop`) or Claude Code are reflected in the UI in near-real-time
 - No backend state — every truth lives in the files; the server is stateless
 
+[[I am missing ]]
+
 ## Non-Goals
 
 - Authentication, multi-user, or any network exposure

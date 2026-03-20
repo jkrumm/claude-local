@@ -16,6 +16,7 @@ setup:
 	@$(MAKE) --no-print-directory _setup-hooks
 	@$(MAKE) --no-print-directory _setup-scripts
 	@$(MAKE) --no-print-directory _setup-skills
+	@$(MAKE) --no-print-directory _setup-settings
 	@$(MAKE) --no-print-directory _setup-gitignore
 	@echo ""
 	@echo "  Done. Run 'make status' to verify."
@@ -70,6 +71,16 @@ _setup-skills:
 		$(MAKE) --no-print-directory _link SRC="$$skill" DST="$(SOURCEROOT)/.claude/skills/$$name"; \
 	done
 
+.PHONY: _setup-settings
+_setup-settings:
+	@echo "  Claude Code settings..."
+	@if [ ! -f "$(CLAUDE_DIR)/settings.json" ]; then \
+		cp "$(CLAUDE_LOCAL)/config/settings.template.json" "$(CLAUDE_DIR)/settings.json"; \
+		echo "    ✓ settings.json created from template (extend allow list as needed)"; \
+	else \
+		echo "    · settings.json already exists (not overwritten)"; \
+	fi
+
 .PHONY: _setup-gitignore
 _setup-gitignore:
 	@echo "  Global gitignore..."
@@ -108,6 +119,12 @@ status:
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitconfig"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitconfig-personal"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitconfig-work"
+	@echo "  Settings"
+	@if [ -f "$(CLAUDE_DIR)/settings.json" ]; then \
+		echo "    ✓ settings.json (hooks + statusline wired)"; \
+	else \
+		echo "    ✗ settings.json MISSING — run make setup"; \
+	fi
 	@echo "  Hooks"
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/hooks/notify.ts"
 	@echo "  Scripts"
