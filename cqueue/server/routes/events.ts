@@ -2,6 +2,7 @@ import { Elysia, sse } from "elysia";
 import { watch } from "fs";
 import { existsSync } from "fs";
 import { join } from "path";
+import { toContainerPath } from "../lib/workspace";
 
 export const eventsRoutes = new Elysia({ prefix: "/api" }).get(
   "/events",
@@ -12,8 +13,9 @@ export const eventsRoutes = new Elysia({ prefix: "/api" }).get(
       return;
     }
 
-    const queuePath = join(path, "cqueue.md");
-    const notesPath = join(path, "cnotes.md");
+    const containerPath = toContainerPath(path);
+    const queuePath = join(containerPath, "cqueue.md");
+    const notesPath = join(containerPath, "cnotes.md");
 
     const pending: Array<{ file: "queue" | "notes" }> = [];
     let wake: (() => void) | null = null;

@@ -182,7 +182,7 @@ github-config-dry:
 
 .PHONY: up
 up:
-	cd cqueue && docker compose --env-file ../.env up -d --build
+	cd cqueue && docker compose up -d --build
 
 .PHONY: down
 down:
@@ -190,7 +190,7 @@ down:
 
 .PHONY: rebuild
 rebuild:
-	cd cqueue && docker compose --env-file ../.env up -d --build --force-recreate
+	cd cqueue && docker compose up -d --build --force-recreate
 
 .PHONY: logs
 logs:

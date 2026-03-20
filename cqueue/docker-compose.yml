@@ -4,8 +4,10 @@ services:
     ports:
       - "${CQUEUE_PORT:-7705}:7705"
     volumes:
-      - ${SOURCEROOT_PATH}:/repos/SourceRoot:rw
-      - ${IUROOT_PATH}:/repos/IuRoot:rw
+      - ${PERSONAL_REPOS_PATH}:/repos/personal:rw
+      - ${WORK_REPOS_PATH}:/repos/work:rw
     user: "${UID:-501}:${GID:-20}"
     restart: unless-stopped
-    env_file: ../.env
+    environment:
+      - PERSONAL_REPOS_PATH=${PERSONAL_REPOS_PATH}
+      - WORK_REPOS_PATH=${WORK_REPOS_PATH}

@@ -4,7 +4,7 @@
 #
 # Line 1: Model · Context (usable) · Session lines · Total tokens · Duration
 # Line 2: CWD · Git branch & dirty flag
-# Line 3: Queue status — only shown when ~/.claude/queue.md has tasks
+# Line 3: Queue status — only shown when <git-root>/cqueue.md has tasks
 
 input=$(cat)
 
@@ -91,11 +91,11 @@ if git -C "$cwd" rev-parse --git-dir >/dev/null 2>&1; then
   git_section=" | ${status_icon} ${branch}"
 fi
 
-# ── Queue (read queue.md from git root of session cwd) ─────────────────────────
+# ── Queue (read cqueue.md from git root of session cwd) ─────────────────────────
 queue_line=""
 git_root=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)
 queue_file=""
-[ -n "$git_root" ] && queue_file="${git_root}/queue.md"
+[ -n "$git_root" ] && queue_file="${git_root}/cqueue.md"
 if [ -n "$queue_file" ] && [ -f "$queue_file" ]; then
   # Strip comment lines and blank lines to get task content
   content=$(grep -v '^#' "$queue_file" | sed '/^[[:space:]]*$/d')

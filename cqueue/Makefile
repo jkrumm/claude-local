@@ -1,16 +1,16 @@
 up:
-	docker compose --env-file ../.env up -d --build
+	docker compose up -d --build
 
 down:
-	docker compose --env-file ../.env down
+	docker compose down
 
 rebuild:
-	docker compose --env-file ../.env up -d --build --force-recreate
+	docker compose up -d --build --force-recreate
 
 logs:
-	docker compose --env-file ../.env logs -f
+	docker compose logs -f
 
 shell:
-	docker compose --env-file ../.env exec cqueue sh
+	docker compose exec cqueue sh
 
 .PHONY: up down rebuild logs shell

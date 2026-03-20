@@ -121,15 +121,15 @@ Smart git commit with conventional commits and intelligent splitting.
 
 ## Task Queue (`cq`)
 
-Automates unattended multi-task Claude Code sessions. The Stop hook in `~/.claude/hooks/notify.ts` pops the next task from `~/.claude/queue.md` and injects it as the next user message (exit code 2), keeping the session alive without babysitting.
+Automates unattended multi-task Claude Code sessions. The Stop hook in `~/.claude/hooks/notify.ts` pops the next task from the per-repo `cqueue.md` and injects it as the next user message (exit code 2), keeping the session alive without babysitting.
 
-**Queue file:** `~/.claude/queue.md` — human-editable, tasks separated by `---`
+**Queue file:** `<git-root>/cqueue.md` — human-editable, tasks separated by `---`
 
 | Command | Effect |
 |-|-|
 | `cq add "text"` | Append a task (single-line) |
 | `cq add` | Append a multi-line task via stdin (Ctrl+D) |
-| `cq edit` | Open queue.md in $EDITOR |
+| `cq edit` | Open cqueue.md in $EDITOR |
 | `cq list` | Show all tasks with index and preview |
 | `cq status` | Pending count |
 | `cq pause` | Append PAUSE sentinel (stops queue, sends notification) |

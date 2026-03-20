@@ -7,7 +7,7 @@ export function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<RepoList />} />
-        <Route path="/:encodedPath" element={<RepoDashboard />} />
+        <Route path="/:workspace/:repo" element={<RepoDashboard />} />
       </Routes>
     </BrowserRouter>
   );

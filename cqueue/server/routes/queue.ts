@@ -3,6 +3,7 @@ import { join } from "path";
 import { promises as fs } from "fs";
 import { parseQueue, serializeQueue } from "../lib/parse-queue";
 import type { QueueTask } from "../lib/parse-queue";
+import { toContainerPath } from "../lib/workspace";
 
 export const queueRoutes = new Elysia({ prefix: "/api" })
   .get("/queue", async ({ query, set }) => {
@@ -12,7 +13,7 @@ export const queueRoutes = new Elysia({ prefix: "/api" })
       return { ok: false, error: "Missing path query parameter" } as const;
     }
 
-    const queuePath = join(path, "cqueue.md");
+    const queuePath = join(toContainerPath(path), "cqueue.md");
 
     try {
       const raw = await Bun.file(queuePath).text();
@@ -35,7 +36,7 @@ export const queueRoutes = new Elysia({ prefix: "/api" })
       return { ok: false, error: "Body must be { tasks: QueueTask[] }" } as const;
     }
 
-    const queuePath = join(path, "cqueue.md");
+    const queuePath = join(toContainerPath(path), "cqueue.md");
     const tmpPath = `${queuePath}.tmp`;
 
     const serialized = serializeQueue(b.tasks);

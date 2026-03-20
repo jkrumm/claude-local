@@ -136,7 +136,7 @@ import { homedir } from "os";
 // ============================================================================
 
 /**
- * Find the queue.md file for the given cwd by locating the git root.
+ * Find the cqueue.md file for the given cwd by locating the git root.
  * Returns null if cwd is not inside a git repo.
  */
 function findQueueFile(cwd: string): string | null {
@@ -147,7 +147,7 @@ function findQueueFile(cwd: string): string | null {
       stderr: "pipe",
     });
     if (result.exitCode !== 0) return null;
-    return join(result.stdout.toString().trim(), "queue.md");
+    return join(result.stdout.toString().trim(), "cqueue.md");
   } catch {
     return null;
   }
@@ -180,7 +180,7 @@ function writeQueueBlocks(queueFile: string, blocks: string[]): void {
 }
 
 /**
- * Pop the first task from the repo's queue.md.
+ * Pop the first task from the repo's cqueue.md.
  * Returns null if no queue or empty, "PAUSE" for the PAUSE sentinel.
  */
 function popQueueTask(queueFile: string): string | null {

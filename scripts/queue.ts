@@ -3,13 +3,13 @@
 /**
  * Claude Code Task Queue CLI
  *
- * Manage the ~/.claude/queue.md task queue for automated Claude Code sessions.
+ * Manage the per-repo cqueue.md task queue for automated Claude Code sessions.
  * The Stop hook in notify.ts pops tasks and injects them as the next user message.
  *
  * Usage:
  *   cq add "task text"       - Add a task (single-line)
  *   cq add                   - Add a task via stdin (Ctrl+D to finish)
- *   cq edit                  - Open queue.md in $EDITOR
+ *   cq edit                  - Open cqueue.md in $EDITOR
  *   cq list                  - Show all queued tasks
  *   cq pop                   - Print + remove first task (used by Stop hook)
  *   cq clear                 - Remove all tasks
@@ -78,7 +78,7 @@ function getQueueFile(): string {
     console.error(fmt.error("\n  Not inside a git repository. cq is per-repo.\n"));
     process.exit(1);
   }
-  return join(result.stdout.toString().trim(), "queue.md");
+  return join(result.stdout.toString().trim(), "cqueue.md");
 }
 
 const QUEUE_FILE = getQueueFile();
@@ -267,6 +267,37 @@ function cmdStatus(): void {
   }
 }
 
+function cmdInit(): void {
+  const repoRoot = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
+    cwd: process.cwd(),
+    stdout: "pipe",
+    stderr: "pipe",
+  }).stdout.toString().trim();
+
+  const queue = join(repoRoot, "cqueue.md");
+  const notes = join(repoRoot, "cnotes.md");
+  const created: string[] = [];
+
+  if (!existsSync(queue)) {
+    writeFileSync(queue, "");
+    created.push("cqueue.md");
+  }
+  if (!existsSync(notes)) {
+    writeFileSync(notes, "");
+    created.push("cnotes.md");
+  }
+
+  console.log();
+  if (created.length === 0) {
+    console.log(`  ${fmt.detail("Already initialized.")}  ${fmt.path(repoRoot)}\n`);
+  } else {
+    for (const f of created) {
+      console.log(`  ${fmt.success("✓")} ${fmt.label(f)}  ${fmt.path(join(repoRoot, f))}`);
+    }
+    console.log(`\n  ${fmt.detail("Repo will appear in cqueue dashboard on next scan.")}\n`);
+  }
+}
+
 function cmdPause(): void {
   const raw = readQueue();
   const blocks = parseBlocks(raw);
@@ -289,12 +320,13 @@ function printHelp(): void {
   ${fmt.label("COMMANDS")}
     ${fmt.warn("add")} ${fmt.detail('"text"')}    Add a single-line task
     ${fmt.warn("add")}            Add a multi-line task from stdin ${fmt.detail("(Ctrl+D to finish)")}
-    ${fmt.warn("edit")}           Open queue.md directly in $EDITOR
+    ${fmt.warn("edit")}           Open cqueue.md directly in $EDITOR
     ${fmt.warn("list")}           Show all queued tasks with index
     ${fmt.warn("pop")}            Print + remove first task ${fmt.detail("(used by Stop hook)")}
     ${fmt.warn("clear")}          Remove all tasks
     ${fmt.warn("status")}         Show pending task count
     ${fmt.warn("pause")}          Append PAUSE sentinel at end of queue
+    ${fmt.warn("init")}           Create cqueue.md + cnotes.md in current repo
     ${fmt.warn("help")}           Show this help
 
   ${fmt.label("TASK KINDS")}
@@ -340,6 +372,9 @@ switch (subcommand) {
     break;
   case "pause":
     cmdPause();
+    break;
+  case "init":
+    cmdInit();
     break;
   case "help":
   case "--help":

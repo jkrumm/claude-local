@@ -8,9 +8,13 @@ export interface GitStatus {
 }
 
 function run(args: string[]): string | null {
-  const result = Bun.spawnSync(["git", ...args], { stderr: "ignore" });
-  if (result.exitCode !== 0) return null;
-  return new TextDecoder().decode(result.stdout).trim();
+  try {
+    const result = Bun.spawnSync(["git", ...args], { stderr: "ignore" });
+    if (result.exitCode !== 0) return null;
+    return new TextDecoder().decode(result.stdout).trim();
+  } catch {
+    return null;
+  }
 }
 
 export function getGitStatus(repoPath: string): GitStatus | null {

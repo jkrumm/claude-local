@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   Alignment,
   Button,
@@ -14,20 +14,18 @@ import {
   Tag,
 } from "@blueprintjs/core";
 import { api } from "../lib/api";
-import { encodePath } from "../lib/path";
 import { useTheme } from "../main";
 import type { RepoInfo } from "../types";
 
 function workspaceLabel(path: string): string {
-  if (path.startsWith("/repos/SourceRoot")) return "SourceRoot";
-  if (path.startsWith("/repos/IuRoot")) return "IuRoot";
+  if (path.startsWith("/repos/personal")) return "personal";
+  if (path.startsWith("/repos/work")) return "work";
   return "unknown";
 }
 
 export function RepoList() {
   const [repos, setRepos] = useState<RepoInfo[] | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const navigate = useNavigate();
   const { isDark, toggle } = useTheme();
 
   useEffect(() => {
@@ -93,34 +91,37 @@ export function RepoList() {
           />
         ) : (
           repos.map((repo) => (
-            <Card
+            <Link
               key={repo.path}
-              interactive
-              style={{
-                marginBottom: 12,
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-              }}
-              onClick={() => navigate(`/${encodePath(repo.path)}`)}
+              to={repo.path}
+              style={{ textDecoration: "none", display: "block", marginBottom: 12 }}
             >
-              <span
+              <Card
+                interactive
                 style={{
-                  fontFamily: "var(--font-mono)",
-                  fontWeight: 600,
-                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
                 }}
               >
-                {repo.name}
-              </span>
-              <Tag minimal>{workspaceLabel(repo.path)}</Tag>
-              {repo.hasQueue && (
-                <Tag intent={Intent.PRIMARY} minimal>
-                  queue
-                </Tag>
-              )}
-              {repo.hasNotes && <Tag minimal>notes</Tag>}
-            </Card>
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontWeight: 600,
+                    flex: 1,
+                  }}
+                >
+                  {repo.name}
+                </span>
+                <Tag minimal>{workspaceLabel(repo.path)}</Tag>
+                {repo.hasQueue && (
+                  <Tag intent={Intent.PRIMARY} minimal>
+                    queue
+                  </Tag>
+                )}
+                {repo.hasNotes && <Tag minimal>notes</Tag>}
+              </Card>
+            </Link>
           ))
         )}
       </div>

@@ -17,7 +17,7 @@ outward — edit at either end, git always sees the change here.
 | `config/gitconfig` | `~/.gitconfig` | includeIf per workspace |
 | `config/gitconfig-personal` | `~/.gitconfig-personal` | jkrumm@pm.me + 1Password signing |
 | `config/gitconfig-work` | `~/.gitconfig-work` | johannes.krumm@iu.org + 1Password signing |
-| `config/gitignore_global` | `~/.gitignore_global` | queue.md, cnotes.md |
+| `config/gitignore_global` | `~/.gitignore_global` | cqueue.md, cnotes.md |
 | `hooks/notify.ts` | `~/.claude/hooks/notify.ts` | All 4 hook events |
 | `scripts/queue.ts` | `~/.claude/queue.ts` | cq CLI |
 | `scripts/statusline.sh` | `~/.claude/statusline.sh` | 3-line statusline |
@@ -40,7 +40,7 @@ to merge into the live file. Never edit the live settings.json for persistent ch
 
 ## Key Technical Facts
 
-- `queue.md` blocks separated by `\n---\n`. Block types: plain text (◆), `/slash` (⚡), `PAUSE` (⏸).
+- `cqueue.md` blocks separated by `\n---\n`. Block types: plain text (◆), `/slash` (⚡), `PAUSE` (⏸).
 - Stop hook: `writeSync(1, task)` + `process.exit(2)` injects next task. No `await` between them.
 - PAUSE exits with code 0 synchronously — no async notification call before exit.
 - Skills have optional `model:` frontmatter (`haiku` for fast forks, default = sonnet).

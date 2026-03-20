@@ -4,6 +4,7 @@ import { join } from "path";
 import { scanRepos } from "../lib/repo-scanner";
 import { parseQueue } from "../lib/parse-queue";
 import { getGitStatus } from "../lib/git";
+import { toContainerPath } from "../lib/workspace";
 
 async function ensureFile(filePath: string): Promise<string> {
   if (!existsSync(filePath)) {
@@ -24,8 +25,9 @@ export const reposRoutes = new Elysia({ prefix: "/api" })
       return { ok: false, error: "Missing path query parameter" };
     }
 
-    const queuePath = join(path, "cqueue.md");
-    const notesPath = join(path, "cnotes.md");
+    const containerPath = toContainerPath(path);
+    const queuePath = join(containerPath, "cqueue.md");
+    const notesPath = join(containerPath, "cnotes.md");
 
     const [queueRaw, notes] = await Promise.all([
       ensureFile(queuePath),
@@ -33,11 +35,12 @@ export const reposRoutes = new Elysia({ prefix: "/api" })
     ]);
 
     const queue = parseQueue(queueRaw);
-    const git = getGitStatus(path);
+    const git = getGitStatus(containerPath);
 
     const repo = {
       name: path.split("/").pop() ?? path,
       path,
+      containerPath,
       hasQueue: existsSync(queuePath),
       hasNotes: existsSync(notesPath),
     };

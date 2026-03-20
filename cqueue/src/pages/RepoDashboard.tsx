@@ -11,7 +11,6 @@ import {
   Tag,
 } from "@blueprintjs/core";
 import { api } from "../lib/api";
-import { decodePath } from "../lib/path";
 import { GitStatusBar } from "../components/GitStatusBar";
 import { QueuePanel } from "../components/QueuePanel";
 import { NotesPanel } from "../components/NotesPanel";
@@ -45,11 +44,11 @@ class DashboardErrorBoundary extends React.Component<
 }
 
 function RepoDashboardInner() {
-  const { encodedPath } = useParams<{ encodedPath: string }>();
+  const { workspace, repo } = useParams<{ workspace: string; repo: string }>();
   const navigate = useNavigate();
   const { isDark, toggle } = useTheme();
 
-  const repoPath = encodedPath ? decodePath(encodedPath) : null;
+  const repoPath = workspace && repo ? `/${workspace}/${repo}` : null;
 
   const [data, setData] = useState<RepoDashboardData | null>(null);
   const [tasks, setTasks] = useState<QueueTask[]>([]);

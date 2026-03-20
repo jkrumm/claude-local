@@ -43,8 +43,8 @@ It provides a purpose-built UI that understands queue structure (task types, ord
 │  ├── /api/*        REST + SSE       │
 │  └── /*            Vite SPA (built) │
 │                                     │
-│  Volume: ~/SourceRoot → /repos      │
-│  Volume: ~/IuRoot    → /repos/IuRoot│
+│  Volume: ~/SourceRoot → /repos/personal │
+│  Volume: ~/IuRoot    → /repos/work      │
 │  Volume: ~/.claude  → /claude       │
 └─────────────────────────────────────┘
 ```
@@ -74,14 +74,14 @@ The container mounts the host filesystem read-write:
 
 ```yaml
 volumes:
-  - ~/SourceRoot:/repos/SourceRoot    # personal projects workspace
-  - ~/IuRoot:/repos/IuRoot            # work projects workspace
+  - ~/SourceRoot:/repos/personal    # personal projects workspace
+  - ~/IuRoot:/repos/work            # work projects workspace
   - ~/.claude:/claude                 # queue state dir (for future global views)
 ```
 
 Paths in the API use the host path prefix. Example:
-- URL: `localhost:7705/repos/SourceRoot/vps`
-- Container resolves to: `/repos/SourceRoot/vps/cqueue.md` and `/repos/SourceRoot/vps/cnotes.md`
+- URL: `localhost:7705/repos/personal/vps`
+- Container resolves to: `/repos/personal/vps/cqueue.md` and `/repos/personal/vps/cnotes.md`
 
 The server scans for repos by finding all directories under `/repos` (one level deep) that contain either `cqueue.md` or `cnotes.md`.
 
@@ -164,13 +164,13 @@ UI shows fresh state (no stale cache)
 
 ```
 GET  /api/repos                       List all repos with cqueue.md or cnotes.md
-GET  /api/repo?path=/repos/SourceRoot/vps   Parse both files + git status for a repo
-GET  /api/queue?path=/repos/SourceRoot/vps  Parse cqueue.md → task array
-PUT  /api/queue?path=/repos/SourceRoot/vps  Write task array → cqueue.md
-GET  /api/notes?path=/repos/SourceRoot/vps  Read cnotes.md raw markdown
-PUT  /api/notes?path=/repos/SourceRoot/vps  Write cnotes.md
-GET  /api/git?path=/repos/SourceRoot/vps    Git status (branch, ahead/behind, staged/unstaged)
-GET  /api/events?path=/repos/SourceRoot/vps SSE stream — emits "change" on file mutation
+GET  /api/repo?path=/repos/personal/vps   Parse both files + git status for a repo
+GET  /api/queue?path=/repos/personal/vps  Parse cqueue.md → task array
+PUT  /api/queue?path=/repos/personal/vps  Write task array → cqueue.md
+GET  /api/notes?path=/repos/personal/vps  Read cnotes.md raw markdown
+PUT  /api/notes?path=/repos/personal/vps  Write cnotes.md
+GET  /api/git?path=/repos/personal/vps    Git status (branch, ahead/behind, staged/unstaged)
+GET  /api/events?path=/repos/personal/vps SSE stream — emits "change" on file mutation
 ```
 
 All routes return `{ ok: true, data: ... }` or `{ ok: false, error: string }`.
@@ -186,7 +186,7 @@ All routes return `{ ok: true, data: ... }` or `{ ok: false, error: string }`.
 /:encodedPath              Project dashboard for one repo
 ```
 
-`encodedPath` is the repo's absolute path URL-encoded (e.g. `%2Frepos%2FSourceRoot%2Fvps`).
+`encodedPath` is the repo's absolute path URL-encoded (e.g. `%2Frepos%2Fpersonal%2Fvps`).
 
 ### Project Dashboard
 
@@ -299,8 +299,8 @@ shell       docker compose exec cqueue sh
 Paths are configured via `.env` (from `../.env` at repo root, not committed):
 
 ```env
-SOURCEROOT_PATH=/Users/yourname/SourceRoot
-IUROOT_PATH=/Users/yourname/IuRoot
+PERSONAL_REPOS_PATH=/Users/yourname/SourceRoot
+WORK_REPOS_PATH=/Users/yourname/IuRoot
 CQUEUE_PORT=7705
 UID=501
 GID=20
@@ -317,15 +317,15 @@ services:
     ports:
       - "${CQUEUE_PORT:-7705}:7705"
     volumes:
-      - ${SOURCEROOT_PATH}:/repos/SourceRoot:rw
-      - ${IUROOT_PATH}:/repos/IuRoot:rw
+      - ${PERSONAL_REPOS_PATH}:/repos/personal:rw
+      - ${WORK_REPOS_PATH}:/repos/work:rw
     user: "${UID}:${GID}"
     restart: unless-stopped
 ```
 
 ### Key Docker details
 
-- **Dual volume mounts**: both `~/SourceRoot` and `~/IuRoot` are mounted under `/repos/`, making repos from both workspaces visible at `/repos/SourceRoot/*` and `/repos/IuRoot/*`
+- **Dual volume mounts**: both `~/SourceRoot` and `~/IuRoot` are mounted under `/repos/`, making repos from both workspaces visible at `/repos/personal/*` and `/repos/work/*`
 - **Host UID**: `user: "${UID}:${GID}"` ensures file writes have correct ownership — no permission issues when `cq` CLI or Claude Code reads the same files afterward
 - **Makefile delegates to root `.env`**: `cd cqueue && docker compose --env-file ../.env up`
 - **Git commands**: the server runs `git` inside the container; the `.git/` directory is accessible via the volume mount

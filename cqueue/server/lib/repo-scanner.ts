@@ -1,14 +1,14 @@
 import { existsSync, readdirSync, statSync } from "fs";
 import { join } from "path";
+import { WORKSPACE_ROOTS, toDisplayPath } from "./workspace";
 
 export interface RepoInfo {
   name: string;
-  path: string;
+  path: string;          // display path: "/SourceRoot/vps"
+  containerPath: string; // internal path: "/repos/personal/vps"
   hasQueue: boolean;
   hasNotes: boolean;
 }
-
-const WORKSPACE_ROOTS = ["/repos/SourceRoot", "/repos/IuRoot"];
 
 export function scanRepos(): RepoInfo[] {
   const repos: RepoInfo[] = [];
@@ -38,7 +38,8 @@ export function scanRepos(): RepoInfo[] {
 
       repos.push({
         name: entry,
-        path: repoPath,
+        path: toDisplayPath(repoPath),
+        containerPath: repoPath,
         hasQueue,
         hasNotes,
       });
