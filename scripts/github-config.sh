@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # Apply consistent branch protection and merge settings to all GitHub repos.
 #
+# Strategy:
+#   Public repos → GitHub Rulesets (modern, supports bypass actors)
+#   Private repos on free tier → No API protection available (requires GitHub Pro)
+#                                 Claude Code hook (protect-branches.ts) still applies
+#
 # Enforces per repo:
 #   - Pull request required to merge to main/master (0 approvals — solo dev)
-#   - No direct force pushes (bypass_actors: RepositoryRole/Admin = you)
+#   - No force pushes (Rulesets: admin bypass; Classic: enforce_admins=false)
 #   - Linear history required before merge
+#   - No branch deletion
 #   - Rebase merge only (no merge commits, no squash)
 #   - Auto-delete merged branches
 #
@@ -34,58 +40,67 @@ fi
 
 echo ""
 echo "  GitHub Config — $OWNER"
-echo "  Ruleset: $(basename $RULESET_FILE)"
 [ "$DRY_RUN" = "1" ] && echo "  DRY RUN — no changes will be made"
 echo ""
 
 repos=$(gh repo list "$OWNER" \
   --limit 200 \
   --no-archived \
-  --json name \
-  --jq '.[].name')
+  --json name,isPrivate \
+  --jq '.[] | "\(.name) \(.isPrivate)"')
 
 total=$(echo "$repos" | wc -l | xargs)
 echo "  Found $total non-archived repos"
 echo ""
 
 ok=0
-skipped=0
 failed=0
 
-for repo in $repos; do
+while IFS=" " read -r repo is_private; do
   if [ "$DRY_RUN" = "1" ]; then
-    echo "  [dry] $OWNER/$repo"
+    [ "$is_private" = "true" ] \
+      && echo "  [dry] $OWNER/$repo (private → classic API)" \
+      || echo "  [dry] $OWNER/$repo (public → ruleset)"
     continue
   fi
 
   echo "  → $OWNER/$repo"
 
-  # Apply branch ruleset (idempotent: update if exists, create if not)
-  existing_id=$(gh api "repos/$OWNER/$repo/rulesets" \
-    --jq '.[] | select(.name=="protect-default-branch") | .id' 2>/dev/null || echo "")
-
-  if [ -n "$existing_id" ]; then
-    if gh api "repos/$OWNER/$repo/rulesets/$existing_id" \
-        -X PUT --input "$RULESET_FILE" --silent 2>/dev/null; then
-      echo "    ✓ ruleset updated (id: $existing_id)"
-    else
-      echo "    ✗ ruleset update failed" >&2
-      ((failed++)) || true
-      continue
-    fi
+  if [ "$is_private" = "true" ]; then
+    # Private repos: GitHub Rulesets AND classic branch protection both require
+    # GitHub Pro on private repos. Nothing can be applied via API on free tier.
+    # Protection is provided solely by the Claude Code hook (hooks/protect-branches.ts).
+    echo "    ⚠ private repo — GitHub API protection requires Pro subscription"
+    echo "    · Claude Code hook (protect-branches.ts) still blocks pushes to main/master"
+    ((ok++)) || true
   else
-    new_id=$(gh api "repos/$OWNER/$repo/rulesets" \
-      -X POST --input "$RULESET_FILE" --jq '.id' 2>/dev/null || echo "")
-    if [ -n "$new_id" ]; then
-      echo "    ✓ ruleset created (id: $new_id)"
+    # Public repo: use Rulesets
+    existing_id=$(gh api "repos/$OWNER/$repo/rulesets" \
+      --jq '.[] | select(.name=="protect-default-branch") | .id' 2>/dev/null || echo "")
+
+    ruleset_ok=false
+    if [ -n "$existing_id" ]; then
+      if gh api "repos/$OWNER/$repo/rulesets/$existing_id" \
+          -X PUT --input "$RULESET_FILE" --silent 2>/dev/null; then
+        echo "    ✓ ruleset updated (id: $existing_id)"
+        ruleset_ok=true
+      else
+        echo "    ✗ ruleset update failed" >&2
+      fi
     else
-      echo "    ✗ ruleset creation failed" >&2
-      ((failed++)) || true
-      continue
+      new_id=$(gh api "repos/$OWNER/$repo/rulesets" \
+        -X POST --input "$RULESET_FILE" --jq '.id' 2>/dev/null || echo "")
+      if [ -n "$new_id" ]; then
+        echo "    ✓ ruleset created (id: $new_id)"
+        ruleset_ok=true
+      else
+        echo "    ✗ ruleset creation failed" >&2
+      fi
     fi
+    $ruleset_ok && ((ok++)) || ((failed++)) || true
   fi
 
-  # Apply merge strategy: rebase only, auto-delete merged branches
+  # Apply merge strategy regardless of protection method
   if gh api "repos/$OWNER/$repo" -X PATCH \
       --field allow_merge_commit=false \
       --field allow_squash_merge=false \
@@ -93,12 +108,11 @@ for repo in $repos; do
       --field delete_branch_on_merge=true \
       --silent 2>/dev/null; then
     echo "    ✓ rebase-only merge, auto-delete branches"
-    ((ok++)) || true
   else
     echo "    ✗ merge settings update failed" >&2
-    ((failed++)) || true
   fi
-done
+
+done <<< "$repos"
 
 echo ""
 echo "  Done: $ok configured, $failed failed"
