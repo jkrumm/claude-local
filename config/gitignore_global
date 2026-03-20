@@ -1,0 +1,7 @@
+# Claude Code per-repo AI files — never commit these
+cqueue.md
+cnotes.md
+queue.md
+
+# macOS
+.DS_Store
