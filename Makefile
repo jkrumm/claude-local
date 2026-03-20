@@ -54,11 +54,11 @@ _setup-scripts:
 
 .PHONY: _setup-skills
 _setup-skills:
-	@echo "  Skills (all global → ~/.claude/skills/)..."
-	@mkdir -p $(CLAUDE_DIR)/skills
+	@echo "  Skills (SourceRoot-scoped → ~/SourceRoot/.claude/skills/)..."
+	@mkdir -p $(SOURCEROOT)/.claude/skills
 	@for skill in $(CLAUDE_LOCAL)/skills/*/; do \
 		name=$$(basename "$$skill"); \
-		$(MAKE) --no-print-directory _link SRC="$$skill" DST="$(CLAUDE_DIR)/skills/$$name"; \
+		$(MAKE) --no-print-directory _link SRC="$$skill" DST="$(SOURCEROOT)/.claude/skills/$$name"; \
 	done
 
 .PHONY: _setup-gitignore
@@ -103,10 +103,10 @@ status:
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/statusline.sh"
 	@echo "  Gitignore"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitignore_global"
-	@echo "  Skills ($(shell ls $(CLAUDE_LOCAL)/skills/ | wc -l | xargs) total)"
+	@echo "  Skills ($(shell ls $(CLAUDE_LOCAL)/skills/ | wc -l | xargs) — SourceRoot only)"
 	@for skill in $(CLAUDE_LOCAL)/skills/*/; do \
 		name=$$(basename "$$skill"); \
-		$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/skills/$$name"; \
+		$(MAKE) --no-print-directory _check DST="$(SOURCEROOT)/.claude/skills/$$name"; \
 	done
 	@echo ""
 
