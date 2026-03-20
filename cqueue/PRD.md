@@ -18,7 +18,7 @@ It provides a purpose-built UI that understands queue structure (task types, ord
 - File changes from CLI (`cq add`, `cq pop`) or Claude Code are reflected in the UI in near-real-time
 - No backend state — every truth lives in the files; the server is stateless
 
-[[I am missing ]]
+[[I am compltly missing a GitHub integration. Seeing the branch wer are on how many + and - changes how many commits staged. How many on branch already. And global ones like how many PRs are open what the status is on them e.g. failing CI or pending ci or CI and CodeRabbit feedback concluded...]]
 
 ## Non-Goals
 
@@ -54,7 +54,7 @@ Single `package.json`, no Bun workspace needed. Vite builds the React SPA to `di
 |-|-|-|
 | Runtime | Bun | Matches existing cq tooling, fast startup |
 | Server | Elysia | Typed, Bun-native, built-in SSE |
-| Frontend | React 19 + Vite | BlueprintJS is React-first |
+| Frontend | React 19 + Vite | BlueprintJS is React-first | [[We connect FE and BE with EdenTreaty, right? Does that work for SSE aswell?]]
 | UI | BlueprintJS v6 | Requested; dark/light, rich components |
 | Editor | EasyMDE | Markdown editor for cnotes.md |
 | Fonts | JetBrains Mono + Geist Sans | Requested |
@@ -69,7 +69,7 @@ The container mounts the host filesystem read-write:
 
 ```yaml
 volumes:
-  - ~/SourceRoot:/repos          # all project repos
+  - ~/SourceRoot:/repos          # all project repos [[Also IuRoot]]
   - ~/.claude:/claude            # queue state dir (for future global views)
 ```
 
@@ -110,7 +110,7 @@ interface QueueTask {
 }
 ```
 
-Parsing logic mirrors `queue.ts` exactly (shared module) so CLI and web are never out of sync on interpretation.
+Parsing logic mirrors `queue.ts` exactly (shared module) so CLI and web are never out of sync on interpretation. [[Is this queue.ts maybe not part of this repo or folder so maybe cq CLI should move here and actually share code etc dont forget to update Makefile etc if we do this]]
 
 ---
 
@@ -146,7 +146,7 @@ UI shows fresh state (no stale cache)
 
 **Conflict handling:** Last-write-wins is correct here. This is a single-user local tool. The only real race is Claude Code's Stop hook popping a task while the user is reordering — the SSE sync handles this gracefully (UI resets to actual file state after the write).
 
-**Atomic write** (rename trick) ensures the file is never half-written when the CLI reads it.
+**Atomic write** (rename trick) ensures the file is never half-written when the CLI reads it. [[Are those temp files also in my global gitignore?]]
 
 ---
 
@@ -182,7 +182,7 @@ All routes return `{ ok: true, data: ... }` or `{ ok: false, error: string }`.
 ```
 ┌──────────────────────────────────────────┐
 │  Header: repo name + path                │
-│  [☀/🌙 theme toggle]   [Refresh]         │
+│  [☀/🌙 theme toggle] [[Usually just system theme]]  [Refresh]         │
 ├──────────────────────────────────────────┤
 │  QUEUE  [collapse]              [+ Add]  │
 │  ┌─────────────────────────────────┐     │

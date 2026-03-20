@@ -75,10 +75,16 @@ _setup-skills:
 _setup-settings:
 	@echo "  Claude Code settings..."
 	@if [ ! -f "$(CLAUDE_DIR)/settings.json" ]; then \
-		cp "$(CLAUDE_LOCAL)/config/settings.template.json" "$(CLAUDE_DIR)/settings.json"; \
-		echo "    ✓ settings.json created from template (extend allow list as needed)"; \
+		jq 'del(._NOTE)' "$(CLAUDE_LOCAL)/config/settings.template.json" \
+			> "$(CLAUDE_DIR)/settings.json"; \
+		echo "    ✓ settings.json created from template"; \
 	else \
-		echo "    · settings.json already exists (not overwritten)"; \
+		jq --slurpfile existing "$(CLAUDE_DIR)/settings.json" \
+			'del(._NOTE) * {permissions: $$existing[0].permissions}' \
+			"$(CLAUDE_LOCAL)/config/settings.template.json" \
+			> /tmp/claude-settings-merged.json \
+		&& mv /tmp/claude-settings-merged.json "$(CLAUDE_DIR)/settings.json"; \
+		echo "    ✓ settings.json merged (template applied, permissions preserved)"; \
 	fi
 
 .PHONY: _setup-gitignore
