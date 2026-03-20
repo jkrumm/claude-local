@@ -59,7 +59,7 @@ failed=0
 while IFS=" " read -r repo is_private; do
   if [ "$DRY_RUN" = "1" ]; then
     [ "$is_private" = "true" ] \
-      && echo "  [dry] $OWNER/$repo (private → classic API)" \
+      && echo "  [dry] $OWNER/$repo (private → hook only, no API on free tier)" \
       || echo "  [dry] $OWNER/$repo (public → ruleset)"
     continue
   fi
@@ -97,7 +97,7 @@ while IFS=" " read -r repo is_private; do
         echo "    ✗ ruleset creation failed" >&2
       fi
     fi
-    $ruleset_ok && ((ok++)) || ((failed++)) || true
+    if $ruleset_ok; then ((ok++)) || true; else ((failed++)) || true; fi
   fi
 
   # Apply merge strategy regardless of protection method
