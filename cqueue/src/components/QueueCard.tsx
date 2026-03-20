@@ -114,7 +114,7 @@ export function QueueCard({ task, onDelete, onUpdate }: Props) {
             {...listeners}
             style={{
               cursor: "grab",
-              color: "var(--pt-intent-primary-text, #8f99a8)",
+              color: "var(--bp-typography-color-muted)",
               flexShrink: 0,
               display: "flex",
               alignItems: "center",
@@ -136,7 +136,7 @@ export function QueueCard({ task, onDelete, onUpdate }: Props) {
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
               fontFamily:
-                task.kind === "slash" ? "var(--font-mono)" : undefined,
+                task.kind === "slash" ? "var(--bp-typography-family-mono)" : undefined,
               fontSize: 13,
             }}
           >
@@ -174,11 +174,11 @@ export function QueueCard({ task, onDelete, onUpdate }: Props) {
             style={{
               width: "100%",
               resize: "none",
-              fontFamily: "var(--font-mono)",
+              fontFamily: "var(--bp-typography-family-mono)",
               fontSize: 12,
               lineHeight: 1.5,
               padding: "6px 8px",
-              border: "1px solid var(--pt-divider-black, rgba(16,22,26,.15))",
+              border: "1px solid var(--bp-surface-border-color-default)",
               borderRadius: 3,
               background: "transparent",
               color: "inherit",

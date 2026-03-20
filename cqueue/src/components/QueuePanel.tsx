@@ -144,18 +144,7 @@ export function QueuePanel({ tasks, repoPath, onTasksChange }: Props) {
           marginBottom: 10,
         }}
       >
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            opacity: 0.6,
-            textTransform: "uppercase",
-          }}
-        >
-          Queue ({tasks.length})
-        </span>
+        <p className="section-label">Queue ({tasks.length})</p>
         <Button
           variant="minimal"
           icon={collapsed ? "chevron-right" : "chevron-down"}
@@ -210,14 +199,12 @@ export function QueuePanel({ tasks, repoPath, onTasksChange }: Props) {
                 onChange={(e) => setAddValue(e.target.value)}
                 onKeyDown={handleAddKeyDown}
                 placeholder="Add task or /slash-command… (Enter)"
-                small
                 leftIcon="plus"
-                style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}
+                style={{ fontFamily: "var(--bp-typography-family-mono)" }}
               />
             </div>
             <Button
               intent={Intent.WARNING}
-              small
               onClick={handleAddPause}
               style={{ flexShrink: 0 }}
             >

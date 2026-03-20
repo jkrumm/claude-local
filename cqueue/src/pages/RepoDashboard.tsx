@@ -46,7 +46,7 @@ class DashboardErrorBoundary extends React.Component<
 function RepoDashboardInner() {
   const { workspace, repo } = useParams<{ workspace: string; repo: string }>();
   const navigate = useNavigate();
-  const { isDark, toggle } = useTheme();
+  const { mode, toggle } = useTheme();
 
   const repoPath = workspace && repo ? `/${workspace}/${repo}` : null;
 
@@ -173,7 +173,7 @@ function RepoDashboardInner() {
             icon="arrow-left"
             onClick={() => navigate("/")}
           />
-          <NavbarHeading style={{ fontFamily: "var(--font-mono)" }}>
+          <NavbarHeading style={{ fontFamily: "var(--bp-typography-family-mono)" }}>
             {data.repo.name}
           </NavbarHeading>
         </NavbarGroup>
@@ -186,7 +186,7 @@ function RepoDashboardInner() {
           <GitStatusBar git={data.git} repoName={data.repo.name} />
           <Button
             variant="minimal"
-            icon={isDark ? "flash" : "moon"}
+            icon={mode === "light" ? "moon" : mode === "dark" ? "desktop" : "flash"}
             onClick={toggle}
           />
         </NavbarGroup>
@@ -195,7 +195,7 @@ function RepoDashboardInner() {
       <div style={{ padding: 24 }}>
         <p
           style={{
-            fontFamily: "var(--font-mono)",
+            fontFamily: "var(--bp-typography-family-mono)",
             opacity: 0.5,
             fontSize: 12,
             marginBottom: 24,

@@ -18,15 +18,13 @@ import { useTheme } from "../main";
 import type { RepoInfo } from "../types";
 
 function workspaceLabel(path: string): string {
-  if (path.startsWith("/repos/personal")) return "personal";
-  if (path.startsWith("/repos/work")) return "work";
-  return "unknown";
+  return path.split("/").filter(Boolean)[0] ?? "unknown";
 }
 
 export function RepoList() {
   const [repos, setRepos] = useState<RepoInfo[] | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const { isDark, toggle } = useTheme();
+  const { mode, toggle } = useTheme();
 
   useEffect(() => {
     api.api.repos
@@ -60,7 +58,7 @@ export function RepoList() {
       <Navbar>
         <NavbarGroup align={Alignment.START}>
           <NavbarHeading
-            style={{ fontFamily: "var(--font-sans)", fontWeight: 700 }}
+            style={{ fontFamily: "var(--bp-typography-family-default)", fontWeight: 700 }}
           >
             cqueue
           </NavbarHeading>
@@ -72,7 +70,7 @@ export function RepoList() {
         <NavbarGroup align={Alignment.END}>
           <Button
             variant="minimal"
-            icon={isDark ? "flash" : "moon"}
+            icon={mode === "light" ? "moon" : mode === "dark" ? "desktop" : "flash"}
             onClick={toggle}
           />
         </NavbarGroup>
@@ -106,7 +104,7 @@ export function RepoList() {
               >
                 <span
                   style={{
-                    fontFamily: "var(--font-mono)",
+                    fontFamily: "var(--bp-typography-family-mono)",
                     fontWeight: 600,
                     flex: 1,
                   }}

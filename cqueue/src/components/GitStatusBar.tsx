@@ -11,7 +11,7 @@ export function GitStatusBar({ git }: Props) {
 
   return (
     <span style={{ display: "flex", gap: 6, alignItems: "center", marginRight: 8 }}>
-      <Tag minimal style={{ fontFamily: "var(--font-mono)" }}>
+      <Tag minimal style={{ fontFamily: "var(--bp-typography-family-mono)" }}>
         {git.branch}
       </Tag>
       {git.ahead > 0 && (

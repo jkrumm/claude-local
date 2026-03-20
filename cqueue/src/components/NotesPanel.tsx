@@ -83,17 +83,7 @@ export function NotesPanel({
       <div
         style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}
       >
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontWeight: 600,
-            fontSize: 12,
-            letterSpacing: "0.1em",
-            opacity: 0.7,
-          }}
-        >
-          NOTES
-        </span>
+        <p className="section-label">Notes</p>
         <Button
           variant="minimal"
           small
