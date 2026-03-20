@@ -93,3 +93,36 @@ Same path-traversal caveat as Group 2 — paths are not validated against `/repo
 - Consider heartbeat pings on the SSE stream to detect stale connections more reliably.
 
 ---
+
+## Group 4: React Skeleton — Routing, Theme & Repo List
+
+### What was implemented
+
+`ThemeContext` in `src/main.tsx` (dark/light toggle with `localStorage` + `prefers-color-scheme` fallback), Blueprint CSS + normalize import in `src/styles/global.css`, React Router v7 routes in `src/App.tsx`, `RepoList` page (fetches `/api/repos`, renders Blueprint Cards), `RepoDashboard` page shell (header Navbar, SSE subscription, git status bar, placeholder Queue/Notes sections), `GitStatusBar` component (compact Tag row), and `src/lib/path.ts` for URL-safe base64 path encoding.
+
+### Deviations from prompt
+
+- Added `src/types.ts` to centralize `import type` re-exports from server libs — cleaner than importing directly from `../../server/lib/...` in every component, while following the same pattern established by `api.ts`.
+- Used URL-safe base64 (`btoa` + replace `+→-`, `/→_`, strip `=`) for `encodedPath` instead of double `encodeURIComponent` — avoids React Router treating `/` in the encoded string as a route separator.
+- `RepoDashboard` uses raw `EventSource` for SSE (not Eden Treaty) — Treaty's SSE abstraction doesn't suit the generator-based Elysia SSE endpoint as well as a direct `EventSource` connection.
+- `RepoList` shows a plain `queue` badge (no count) when `hasQueue: true` — the `/api/repos` endpoint doesn't include task counts; fetching each repo individually for counts would be N+1 for a list view.
+
+### Gotchas & surprises
+
+- Blueprint v6 uses `Classes.DARK` = `"ns-dark"` (not `"bp5-dark"` or `"bp4-dark"`). Always use the `Classes` constant.
+- Blueprint v6 `Button`: `minimal` boolean prop is replaced by `variant="minimal"`. Using the old boolean prop generates no TypeScript error but has no effect.
+- `Navbar` (lowercase `b`) is the correct import — not `NavBar`.
+- `tsconfig.src.json` `include` only covers `src/**/*`, but TypeScript still resolves cross-boundary `import type` from `../server/lib/...` as documented in Group 3 gotchas. Typecheck passes cleanly.
+- `fetchData` is defined inside `useEffect` to avoid stale closure warnings, but extracted as a named `const` in `RepoDashboard` so both the initial load and the SSE change handler can call it.
+
+### Security notes
+
+No new concerns beyond Groups 1–3. `encodedPath` is decoded with `atob` and passed to the API as `path` query param — server-side path validation (deferred since Group 2) remains the correct place to enforce `/repos/` prefix restriction.
+
+### Future improvements
+
+- `RepoList` could show task counts by adding `queueCount` to the `/api/repos` response (server-side optimization, not N+1 fetches).
+- SSE `EventSource` errors (network drop, server restart) are silently swallowed — add an `onerror` handler to surface connection state in the UI.
+- Theme toggle icon (`flash`/`moon`) is a reasonable placeholder; a `Settings` popover with explicit dark/light/system options would be cleaner.
+
+---
