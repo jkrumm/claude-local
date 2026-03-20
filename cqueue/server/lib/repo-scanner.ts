@@ -1,0 +1,49 @@
+import { existsSync, readdirSync, statSync } from "fs";
+import { join } from "path";
+
+export interface RepoInfo {
+  name: string;
+  path: string;
+  hasQueue: boolean;
+  hasNotes: boolean;
+}
+
+const WORKSPACE_ROOTS = ["/repos/SourceRoot", "/repos/IuRoot"];
+
+export function scanRepos(): RepoInfo[] {
+  const repos: RepoInfo[] = [];
+
+  for (const root of WORKSPACE_ROOTS) {
+    if (!existsSync(root)) continue;
+
+    let entries: string[];
+    try {
+      entries = readdirSync(root);
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const repoPath = join(root, entry);
+      try {
+        if (!statSync(repoPath).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+
+      const hasQueue = existsSync(join(repoPath, "cqueue.md"));
+      const hasNotes = existsSync(join(repoPath, "cnotes.md"));
+
+      if (!hasQueue && !hasNotes) continue;
+
+      repos.push({
+        name: entry,
+        path: repoPath,
+        hasQueue,
+        hasNotes,
+      });
+    }
+  }
+
+  return repos;
+}
