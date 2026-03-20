@@ -1,8 +1,21 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, Intent, NonIdealState, Spinner, Tag } from "@blueprintjs/core";
+import {
+  Alignment,
+  Button,
+  Card,
+  Intent,
+  Navbar,
+  NavbarDivider,
+  NavbarGroup,
+  NavbarHeading,
+  NonIdealState,
+  Spinner,
+  Tag,
+} from "@blueprintjs/core";
 import { api } from "../lib/api";
 import { encodePath } from "../lib/path";
+import { useTheme } from "../main";
 import type { RepoInfo } from "../types";
 
 function workspaceLabel(path: string): string {
@@ -15,6 +28,7 @@ export function RepoList() {
   const [repos, setRepos] = useState<RepoInfo[] | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { isDark, toggle } = useTheme();
 
   useEffect(() => {
     api.api.repos
@@ -43,61 +57,73 @@ export function RepoList() {
     );
   }
 
-  if (!repos) {
-    return (
-      <div style={{ padding: 40, display: "flex", justifyContent: "center" }}>
-        <Spinner />
-      </div>
-    );
-  }
-
-  if (repos.length === 0) {
-    return (
-      <div style={{ padding: 40 }}>
-        <NonIdealState
-          icon="folder-open"
-          title="No repos found"
-          description="Add cqueue.md or cnotes.md to a repo to see it here."
-        />
-      </div>
-    );
-  }
-
   return (
-    <div style={{ padding: 24, maxWidth: 800, margin: "0 auto" }}>
-      <h1 style={{ fontFamily: "var(--font-mono)", marginBottom: 24 }}>
-        cqueue
-      </h1>
-      {repos.map((repo) => (
-        <Card
-          key={repo.path}
-          interactive
-          style={{
-            marginBottom: 12,
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-          }}
-          onClick={() => navigate(`/${encodePath(repo.path)}`)}
-        >
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontWeight: 600,
-              flex: 1,
-            }}
+    <div>
+      <Navbar>
+        <NavbarGroup align={Alignment.START}>
+          <NavbarHeading
+            style={{ fontFamily: "var(--font-sans)", fontWeight: 700 }}
           >
-            {repo.name}
+            cqueue
+          </NavbarHeading>
+          <NavbarDivider />
+          <span style={{ opacity: 0.6, fontSize: 13 }}>
+            Claude Code task queue dashboard
           </span>
-          <Tag minimal>{workspaceLabel(repo.path)}</Tag>
-          {repo.hasQueue && (
-            <Tag intent={Intent.PRIMARY} minimal>
-              queue
-            </Tag>
-          )}
-          {repo.hasNotes && <Tag minimal>notes</Tag>}
-        </Card>
-      ))}
+        </NavbarGroup>
+        <NavbarGroup align={Alignment.END}>
+          <Button
+            variant="minimal"
+            icon={isDark ? "flash" : "moon"}
+            onClick={toggle}
+          />
+        </NavbarGroup>
+      </Navbar>
+
+      <div style={{ padding: 24, maxWidth: 800, margin: "0 auto" }}>
+        {!repos ? (
+          <div style={{ display: "flex", justifyContent: "center", paddingTop: 40 }}>
+            <Spinner />
+          </div>
+        ) : repos.length === 0 ? (
+          <NonIdealState
+            icon="folder-open"
+            title="No repos found"
+            description="Add cqueue.md or cnotes.md to a repo to see it here."
+          />
+        ) : (
+          repos.map((repo) => (
+            <Card
+              key={repo.path}
+              interactive
+              style={{
+                marginBottom: 12,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+              }}
+              onClick={() => navigate(`/${encodePath(repo.path)}`)}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontWeight: 600,
+                  flex: 1,
+                }}
+              >
+                {repo.name}
+              </span>
+              <Tag minimal>{workspaceLabel(repo.path)}</Tag>
+              {repo.hasQueue && (
+                <Tag intent={Intent.PRIMARY} minimal>
+                  queue
+                </Tag>
+              )}
+              {repo.hasNotes && <Tag minimal>notes</Tag>}
+            </Card>
+          ))
+        )}
+      </div>
     </div>
   );
 }

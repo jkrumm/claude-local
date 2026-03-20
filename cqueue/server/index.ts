@@ -12,6 +12,10 @@ const app = new Elysia()
   .use(notesRoutes)
   .use(eventsRoutes)
   .use(staticPlugin({ assets: "dist", prefix: "/" }))
+  .get("*", ({ set }) => {
+    set.headers["content-type"] = "text/html";
+    return Bun.file("dist/index.html");
+  })
   .listen(7705);
 
 console.log("cqueue server running on port 7705");

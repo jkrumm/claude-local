@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Alignment,
@@ -8,26 +8,58 @@ import {
   NavbarHeading,
   NonIdealState,
   Spinner,
+  Tag,
 } from "@blueprintjs/core";
 import { api } from "../lib/api";
 import { decodePath } from "../lib/path";
 import { GitStatusBar } from "../components/GitStatusBar";
 import { QueuePanel } from "../components/QueuePanel";
+import { NotesPanel } from "../components/NotesPanel";
 import { useTheme } from "../main";
 import type { QueueTask, RepoDashboardData } from "../types";
 
-export function RepoDashboard() {
+class DashboardErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 40 }}>
+          <NonIdealState
+            icon="error"
+            title="Dashboard error"
+            description={this.state.error.message}
+          />
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function RepoDashboardInner() {
   const { encodedPath } = useParams<{ encodedPath: string }>();
   const navigate = useNavigate();
   const { isDark, toggle } = useTheme();
 
+  const repoPath = encodedPath ? decodePath(encodedPath) : null;
+
   const [data, setData] = useState<RepoDashboardData | null>(null);
   const [tasks, setTasks] = useState<QueueTask[]>([]);
+  const [notes, setNotes] = useState<string>("");
+  const [notesExternallyChanged, setNotesExternallyChanged] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [sseDisconnected, setSseDisconnected] = useState(false);
+
   const evtSourceRef = useRef<EventSource | null>(null);
   const isEditingRef = useRef(false);
-
-  const repoPath = encodedPath ? decodePath(encodedPath) : null;
 
   const fetchData = async (path: string) => {
     const result = await api.api.repo
@@ -45,6 +77,14 @@ export function RepoDashboard() {
       const d = result.data.data as RepoDashboardData;
       setData(d);
       setTasks(d.queue);
+      setNotes(d.notes);
+    }
+  };
+
+  const fetchQueue = async (path: string) => {
+    const result = await api.api.queue.get({ query: { path } }).catch(() => null);
+    if (result?.data?.ok) {
+      setTasks(result.data.data as QueueTask[]);
     }
   };
 
@@ -53,21 +93,47 @@ export function RepoDashboard() {
 
     fetchData(repoPath);
 
-    const evtSource = new EventSource(
-      `/api/events?path=${encodeURIComponent(repoPath)}`,
-    );
-    evtSourceRef.current = evtSource;
-    evtSource.addEventListener("change", () => {
-      if (!isEditingRef.current) {
-        fetchData(repoPath);
-      }
-    });
+    let isActive = true;
+
+    const connect = () => {
+      const evtSource = new EventSource(
+        `/api/events?path=${encodeURIComponent(repoPath)}`,
+      );
+      evtSourceRef.current = evtSource;
+
+      evtSource.addEventListener("change", (e: MessageEvent) => {
+        const payload = JSON.parse(e.data as string) as {
+          file: "queue" | "notes";
+        };
+        if (payload.file === "queue" && !isEditingRef.current) {
+          fetchQueue(repoPath);
+        } else if (payload.file === "notes") {
+          setNotesExternallyChanged(true);
+        }
+      });
+
+      evtSource.onerror = () => {
+        if (!isActive) return;
+        setSseDisconnected(true);
+        evtSource.close();
+        evtSourceRef.current = null;
+        setTimeout(() => {
+          if (isActive) {
+            setSseDisconnected(false);
+            connect();
+          }
+        }, 5000);
+      };
+    };
+
+    connect();
 
     return () => {
-      evtSource.close();
+      isActive = false;
+      evtSourceRef.current?.close();
       evtSourceRef.current = null;
     };
-    // fetchData is stable — repoPath is the only dep that matters
+    // fetchData / fetchQueue use stable setters; repoPath is the only dep that matters
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoPath]);
 
@@ -113,6 +179,11 @@ export function RepoDashboard() {
           </NavbarHeading>
         </NavbarGroup>
         <NavbarGroup align={Alignment.END}>
+          {sseDisconnected && (
+            <Tag intent="danger" minimal style={{ marginRight: 8 }}>
+              Disconnected
+            </Tag>
+          )}
           <GitStatusBar git={data.git} repoName={data.repo.name} />
           <Button
             variant="minimal"
@@ -144,10 +215,21 @@ export function RepoDashboard() {
           />
         </div>
 
-        <div>
-          <h3>Notes</h3>
-        </div>
+        <NotesPanel
+          notes={notes}
+          repoPath={repoPath}
+          externallyChanged={notesExternallyChanged}
+          onExternalChangeAck={() => setNotesExternallyChanged(false)}
+        />
       </div>
     </div>
+  );
+}
+
+export function RepoDashboard() {
+  return (
+    <DashboardErrorBoundary>
+      <RepoDashboardInner />
+    </DashboardErrorBoundary>
   );
 }
