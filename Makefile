@@ -51,6 +51,9 @@ _setup-hooks:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/hooks/notify.ts" \
 		DST="$(CLAUDE_DIR)/hooks/notify.ts"
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(CLAUDE_LOCAL)/hooks/protect-branches.ts" \
+		DST="$(CLAUDE_DIR)/hooks/protect-branches.ts"
 
 .PHONY: _setup-scripts
 _setup-scripts:
@@ -133,6 +136,7 @@ status:
 	fi
 	@echo "  Hooks"
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/hooks/notify.ts"
+	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/hooks/protect-branches.ts"
 	@echo "  Scripts"
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/queue.ts"
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/statusline.sh"
@@ -156,6 +160,20 @@ _check:
 	else \
 		echo "    ✗ $(notdir $(DST)) [missing — run make setup]"; \
 	fi
+
+# ============================================================================
+# GitHub Config — apply branch protection + merge settings to all repos
+# ============================================================================
+
+.PHONY: github-config
+github-config:
+	@chmod +x $(CLAUDE_LOCAL)/scripts/github-config.sh
+	@$(CLAUDE_LOCAL)/scripts/github-config.sh
+
+.PHONY: github-config-dry
+github-config-dry:
+	@chmod +x $(CLAUDE_LOCAL)/scripts/github-config.sh
+	@DRY_RUN=1 $(CLAUDE_LOCAL)/scripts/github-config.sh
 
 # ============================================================================
 # cqueue — web dashboard
@@ -194,8 +212,10 @@ help:
 	@echo ""
 	@echo "  claude-local"
 	@echo ""
-	@echo "  make setup      Symlink all config/hooks/scripts/skills into place"
-	@echo "  make status     Verify symlink health"
+	@echo "  make setup           Symlink all config/hooks/scripts/skills into place"
+	@echo "  make status          Verify symlink health"
+	@echo "  make github-config   Apply branch protection + merge settings to all repos"
+	@echo "  make github-config-dry  Preview without applying"
 	@echo ""
 	@echo "  make up         Start cqueue dashboard  (localhost:7705)"
 	@echo "  make down       Stop cqueue"
