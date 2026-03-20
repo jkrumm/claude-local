@@ -20,3 +20,7 @@ dist/
 cqueue.md
 cnotes.md
 queue.md
+
+# RALPH loop state & logs
+.ralph-tasks.json
+.ralph-logs/

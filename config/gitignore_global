@@ -3,5 +3,9 @@ cqueue.md
 cnotes.md
 queue.md
 
+# cqueue atomic write temp files
+.cqueue.md.tmp
+.cnotes.md.tmp
+
 # macOS
 .DS_Store
