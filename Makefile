@@ -48,6 +48,7 @@ _setup-config:
 _setup-hooks:
 	@echo "  Hooks..."
 	@mkdir -p $(CLAUDE_DIR)/hooks
+	@chmod +x $(CLAUDE_LOCAL)/hooks/*.ts
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/hooks/notify.ts" \
 		DST="$(CLAUDE_DIR)/hooks/notify.ts"
