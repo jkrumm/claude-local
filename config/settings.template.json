@@ -1,0 +1,79 @@
+{
+  "env": {
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "0"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(bun run *)",
+      "Bash(bun add *)",
+      "Bash(bun remove *)",
+      "Bash(bun install)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git branch *)",
+      "Bash(git rev-parse *)",
+      "Bash(git fetch *)",
+      "Bash(git remote *)",
+      "Bash(git reset --hard *)",
+      "Bash(git rebase *)",
+      "Bash(cat *)",
+      "Bash(ls *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(echo *)",
+      "Bash(mkdir *)",
+      "Bash(rm *)",
+      "Bash(rm -rf *)",
+      "Bash(curl *)",
+      "Bash(which *)",
+      "Bash(docker ps *)",
+      "Bash(docker logs *)",
+      "WebSearch",
+      "mcp__tavily__*",
+      "mcp__context7__*"
+    ],
+    "deny": [
+      "Bash(git push --force *)"
+    ],
+    "defaultMode": "default"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [{ "type": "command", "command": "~/.claude/hooks/notify.ts" }]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [{ "type": "command", "command": "~/.claude/hooks/notify.ts" }]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [{ "type": "command", "command": "~/.claude/hooks/notify.ts" }]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [{ "type": "command", "command": "~/.claude/hooks/notify.ts" }]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/statusline.sh"
+  },
+  "alwaysThinkingEnabled": true,
+  "effortLevel": "medium",
+  "autoUpdatesChannel": "latest",
+  "skipDangerousModePermissionPrompt": true,
+  "model": "sonnet",
+
+  "_NOTE": "This is a template. The real ~/.claude/settings.json is NOT version-controlled — it contains machine-specific permission lists. Copy this to ~/.claude/settings.json on a new machine and extend the allow list as needed."
+}
