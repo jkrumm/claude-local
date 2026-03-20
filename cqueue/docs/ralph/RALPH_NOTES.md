@@ -61,3 +61,35 @@ All file access is constrained to paths under `/repos/` (container mount). No pa
 - `/api/repo` currently returns `hasQueue`/`hasNotes` based on pre-ensureFile existence; after `ensureFile` both will always be `true` — minor inconsistency to clean up.
 
 ---
+
+## Group 3: Queue API, Notes API & SSE
+
+### What was implemented
+
+`server/routes/queue.ts` (GET/PUT `/api/queue`), `server/routes/notes.ts` (GET/PUT `/api/notes`), `server/routes/events.ts` (GET `/api/events` SSE stream), wired all three into `server/index.ts`, installed `@elysiajs/eden`, and created `src/lib/api.ts` with the Eden Treaty typed client.
+
+### Deviations from prompt
+
+- Used Elysia's built-in generator-based SSE (`async function*` + `sse()` from `elysia`) — no external SSE plugin needed in Elysia v1.4+.
+- Used a `closed` guard flag in cleanup to make double-cleanup idempotent (abort handler + post-loop call).
+- Eden Treaty base URL detects environment via `window.location.host` at runtime — covers both dev (Vite proxies `/api`) and production Docker (same origin on port 7705).
+- `@elysiajs/eden` was missing from `package.json`; installed it before implementing `src/lib/api.ts`.
+
+### Gotchas & surprises
+
+- Elysia's SSE generator functions use `yield sse({ event, data })` — the `sse()` helper constructs the SSE frame. No `context.sendEvent()` API exists in v1.4; everything is generator-based.
+- Cleanup on SSE disconnect uses `request.signal` (`AbortSignal`). The pattern: add an `abort` event listener that resolves the pending promise and closes watchers. The generator loop then sees `request.signal.aborted === true` and exits naturally.
+- `fs.watch()` on a non-existent file throws synchronously — added `existsSync` guard before registering watchers. Files are created lazily by `ensureFile` in `/api/repo`, so they may not exist when `/api/events` is first called.
+- Typecheck passes with `import type { App } from '../../server/index'` across tsconfig project boundaries because `moduleResolution: Bundler` resolves source files directly and `skipLibCheck: true` suppresses Bun-type leakage into the DOM context.
+
+### Security notes
+
+Same path-traversal caveat as Group 2 — paths are not validated against `/repos/` prefix. Acceptable for localhost-only. Atomic write (`.tmp` → rename) prevents corrupt partial-writes being seen by file watchers.
+
+### Future improvements
+
+- Add path-prefix validation (reject paths outside `/repos/`) to both queue and notes routes.
+- SSE watchers only start on files that exist at connection time; if the file is created later, the watcher won't see it. Could re-check and register watchers on first change event.
+- Consider heartbeat pings on the SSE stream to detect stale connections more reliably.
+
+---
