@@ -14,7 +14,7 @@
  *   cq pop                   - Print + remove first task (used by Stop hook)
  *   cq clear                 - Remove all tasks
  *   cq status                - One-line count of pending tasks
- *   cq pause                 - Append PAUSE block at end of queue
+ *   cq stop                  - Append STOP block at end of queue
  */
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
@@ -59,7 +59,7 @@ const fmt = {
   warn: (s: string) => style(s, c.yellow),
   error: (s: string) => style(s, c.red),
   path: (s: string) => style(s, c.dim, c.cyan),
-  pause: (s: string) => style(s, c.magenta, c.bold),
+  stop: (s: string) => style(s, c.red, c.bold),
   count: (s: string) => style(s, c.bold, c.cyan),
   slash: (s: string) => style(s, c.blue, c.bold),
 };
@@ -133,15 +133,17 @@ function writeBlocks(blocks: string[]): void {
 // Helpers
 // ============================================================================
 
-function taskKind(block: string): "pause" | "slash" | "task" {
-  if (block === "PAUSE") return "pause";
+function taskKind(block: string): "stop" | "clear" | "slash" | "task" {
+  if (block === "STOP") return "stop";
+  if (block.trim() === "/clear") return "clear";
   if (block.startsWith("/")) return "slash";
   return "task";
 }
 
 function taskIcon(block: string): string {
   switch (taskKind(block)) {
-    case "pause":  return "⏸";
+    case "stop":   return "⏹";
+    case "clear":  return "🔄";
     case "slash":  return "⚡";
     default:       return "◆";
   }
@@ -156,8 +158,12 @@ function renderTask(block: string, index: number): string {
   const icon = taskIcon(block);
   const num = fmt.index(`[${index}]`);
 
-  if (kind === "pause") {
-    return `  ${num} ${icon} ${fmt.pause("PAUSE")} ${fmt.detail("— queue will stop here")}`;
+  if (kind === "stop") {
+    return `  ${num} ${icon} ${fmt.stop("STOP")} ${fmt.detail("— queue will stop here")}`;
+  }
+
+  if (kind === "clear") {
+    return `  ${num} ${icon} ${fmt.warn("/clear")} ${fmt.detail("— restart with fresh context")}`;
   }
 
   if (kind === "slash") {
@@ -298,12 +304,12 @@ function cmdInit(): void {
   }
 }
 
-function cmdPause(): void {
+function cmdStop(): void {
   const raw = readQueue();
   const blocks = parseBlocks(raw);
-  blocks.push("PAUSE");
+  blocks.push("STOP");
   writeBlocks(blocks);
-  console.log(`\n  ⏸  ${fmt.pause("PAUSE")} ${fmt.success("appended")} ${fmt.detail(`(${blocks.length} blocks total)`)}\n`);
+  console.log(`\n  ⏹  ${fmt.stop("STOP")} ${fmt.success("appended")} ${fmt.detail(`(${blocks.length} blocks total)`)}\n`);
 }
 
 // ============================================================================
@@ -325,14 +331,15 @@ function printHelp(): void {
     ${fmt.warn("pop")}            Print + remove first task ${fmt.detail("(used by Stop hook)")}
     ${fmt.warn("clear")}          Remove all tasks
     ${fmt.warn("status")}         Show pending task count
-    ${fmt.warn("pause")}          Append PAUSE sentinel at end of queue
+    ${fmt.warn("stop")}           Append STOP sentinel at end of queue
     ${fmt.warn("init")}           Create cqueue.md + cnotes.md in current repo
     ${fmt.warn("help")}           Show this help
 
   ${fmt.label("TASK KINDS")}
     ${fmt.slash("⚡ /command")}    Injected as slash command ${fmt.detail("(e.g. /commit, /code-quality)")}
     ${fmt.preview("◆ regular")}     Plain instruction injected as user message
-    ${fmt.pause("⏸ PAUSE")}       Stops queue and sends notification
+    ${fmt.warn("🔄 /clear")}      Ends session, restarts with fresh context
+    ${fmt.stop("⏹ STOP")}        Stops queue — session ends
 
   ${fmt.label("QUEUE FILE")}
     ${fmt.path(QUEUE_FILE)}  ${fmt.detail("(git root of current repo)")}
@@ -340,7 +347,7 @@ function printHelp(): void {
   ${fmt.label("EXAMPLES")}
     ${fmt.detail('cq add "/commit --split"')}
     ${fmt.detail('cq add "Refactor the auth service to use DI"')}
-    ${fmt.detail("cq pause")}
+    ${fmt.detail("cq stop")}
     ${fmt.detail("cq list")}
 `);
 }
@@ -370,8 +377,8 @@ switch (subcommand) {
   case "status":
     cmdStatus();
     break;
-  case "pause":
-    cmdPause();
+  case "stop":
+    cmdStop();
     break;
   case "init":
     cmdInit();
