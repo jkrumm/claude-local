@@ -15,6 +15,16 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Light mode — tone down the aggressive white on background and navbar */
+body:not(.bp6-dark) {
+  background-color: var(--bp-palette-light-gray-5) !important;
+}
+
+body:not(.bp6-dark) .bp6-navbar {
+  background-color: var(--bp-palette-light-gray-2) !important;
+  box-shadow: 0 1px 0 var(--bp-surface-border-color-default) !important;
+}
+
 body.bp6-dark {
   background-color: var(--bp-palette-dark-gray-1);
 }
@@ -35,54 +45,30 @@ body.bp6-dark {
   color: white;
 }
 
-/* EasyMDE dark mode — !important required since component CSS loads after global */
-body.bp6-dark .EasyMDEContainer .CodeMirror {
-  background-color: var(--bp-palette-dark-gray-5) !important;
-  color: var(--bp-typography-color-default) !important;
-  border-color: var(--bp-surface-border-color-default) !important;
+/* CodeMirror 6 — Blueprint integration */
+.cm-editor {
+  font-family: var(--bp-typography-family-default);
+  font-size: 13px;
+  border: 1px solid var(--bp-surface-border-color-default);
+  border-radius: 3px;
 }
 
-body.bp6-dark .EasyMDEContainer .CodeMirror-cursor {
-  border-left-color: var(--bp-typography-color-default) !important;
+.cm-editor .cm-placeholder {
+  color: var(--bp-typography-color-muted);
 }
 
-body.bp6-dark .EasyMDEContainer .CodeMirror-selected {
-  background-color: var(--bp-surface-layer-color-default) !important;
+/* Compact markdown file tree */
+.md-file-tree .bp6-tree-node-content {
+  height: 26px;
+  padding-left: 8px;
 }
 
-body.bp6-dark .EasyMDEContainer .editor-toolbar {
-  background-color: var(--bp-palette-dark-gray-4) !important;
-  border-color: var(--bp-surface-border-color-default) !important;
+.md-file-tree .bp6-tree-node-label {
+  font-family: var(--bp-typography-family-mono);
+  font-size: 12px;
 }
 
-body.bp6-dark .EasyMDEContainer .editor-toolbar a {
-  color: var(--bp-typography-color-muted) !important;
+.md-file-tree .bp6-tree-node-caret {
+  min-width: 18px;
 }
 
-body.bp6-dark .EasyMDEContainer .editor-toolbar a:hover,
-body.bp6-dark .EasyMDEContainer .editor-toolbar a.active {
-  background-color: var(--bp-surface-layer-color-default) !important;
-  border-color: var(--bp-surface-border-color-default) !important;
-  color: var(--bp-typography-color-default) !important;
-}
-
-/* Prevent EasyMDE from using its own white hover background in dark mode */
-body.bp6-dark .EasyMDEContainer .editor-toolbar button:hover,
-body.bp6-dark .EasyMDEContainer .editor-toolbar button.active {
-  background-color: var(--bp-surface-layer-color-default) !important;
-  border-color: var(--bp-surface-border-color-default) !important;
-}
-
-body.bp6-dark .EasyMDEContainer .editor-toolbar a,
-body.bp6-dark .EasyMDEContainer .editor-toolbar button {
-  background: transparent !important;
-}
-
-body.bp6-dark .EasyMDEContainer .editor-toolbar i.separator {
-  border-right-color: var(--bp-surface-border-color-default) !important;
-}
-
-body.bp6-dark .EasyMDEContainer .editor-preview {
-  background-color: var(--bp-palette-dark-gray-5) !important;
-  color: var(--bp-typography-color-default) !important;
-}
