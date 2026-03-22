@@ -5,6 +5,9 @@ import { reposRoutes } from "./routes/repos";
 import { queueRoutes } from "./routes/queue";
 import { notesRoutes } from "./routes/notes";
 import { eventsRoutes } from "./routes/events";
+import { markdownRoutes } from "./routes/markdown";
+import { completedRoutes } from "./routes/completed";
+import { usageRoutes } from "./routes/usage";
 
 const indexHtml = readFileSync("dist/index.html", "utf-8");
 
@@ -14,6 +17,9 @@ const app = new Elysia()
   .use(queueRoutes)
   .use(notesRoutes)
   .use(eventsRoutes)
+  .use(markdownRoutes)
+  .use(completedRoutes)
+  .use(usageRoutes)
   .use(staticPlugin({ assets: "dist/assets", prefix: "/assets" }))
   .onError(({ code, set }) => {
     if (code === "NOT_FOUND") {

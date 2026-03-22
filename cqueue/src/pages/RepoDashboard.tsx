@@ -12,10 +12,11 @@ import {
 } from "@blueprintjs/core";
 import { api } from "../lib/api";
 import { GitStatusBar } from "../components/GitStatusBar";
+import { UsageTags } from "../components/UsageTags";
 import { QueuePanel } from "../components/QueuePanel";
 import { NotesPanel } from "../components/NotesPanel";
 import { useTheme } from "../main";
-import type { QueueTask, RepoDashboardData } from "../types";
+import type { CompletedTask, QueueTask, RepoDashboardData } from "../types";
 
 class DashboardErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -53,6 +54,7 @@ function RepoDashboardInner() {
   const [data, setData] = useState<RepoDashboardData | null>(null);
   const [tasks, setTasks] = useState<QueueTask[]>([]);
   const [notes, setNotes] = useState<string>("");
+  const [completedTasks, setCompletedTasks] = useState<CompletedTask[]>([]);
   const [notesExternallyChanged, setNotesExternallyChanged] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [sseDisconnected, setSseDisconnected] = useState(false);
@@ -87,10 +89,20 @@ function RepoDashboardInner() {
     }
   };
 
+  const fetchCompleted = async (path: string) => {
+    const result = await api.api["completed-tasks"]
+      .get({ query: { path } })
+      .catch(() => null);
+    if (result?.data?.ok) {
+      setCompletedTasks(result.data.data as CompletedTask[]);
+    }
+  };
+
   useEffect(() => {
     if (!repoPath) return;
 
     fetchData(repoPath);
+    fetchCompleted(repoPath);
 
     let isActive = true;
 
@@ -106,6 +118,7 @@ function RepoDashboardInner() {
         };
         if (payload.file === "queue" && !isEditingRef.current) {
           fetchQueue(repoPath);
+          fetchCompleted(repoPath);
         } else if (payload.file === "notes") {
           setNotesExternallyChanged(true);
         }
@@ -113,10 +126,13 @@ function RepoDashboardInner() {
 
       evtSource.onerror = () => {
         if (!isActive) return;
-        setSseDisconnected(true);
         evtSource.close();
         evtSourceRef.current = null;
+        const showTimer = setTimeout(() => {
+          if (isActive) setSseDisconnected(true);
+        }, 2000);
         setTimeout(() => {
+          clearTimeout(showTimer);
           if (isActive) {
             setSseDisconnected(false);
             connect();
@@ -127,8 +143,17 @@ function RepoDashboardInner() {
 
     connect();
 
+    // Polling fallback — fs.watch inside Docker doesn't detect host file changes
+    const pollInterval = setInterval(() => {
+      if (!isEditingRef.current) {
+        fetchQueue(repoPath);
+        fetchCompleted(repoPath);
+      }
+    }, 2000);
+
     return () => {
       isActive = false;
+      clearInterval(pollInterval);
       evtSourceRef.current?.close();
       evtSourceRef.current = null;
     };
@@ -183,6 +208,7 @@ function RepoDashboardInner() {
               Disconnected
             </Tag>
           )}
+          <UsageTags />
           <GitStatusBar git={data.git} repoName={data.repo.name} />
           <Button
             variant="minimal"
@@ -208,6 +234,7 @@ function RepoDashboardInner() {
           <QueuePanel
             tasks={tasks}
             repoPath={repoPath}
+            completedTasks={completedTasks}
             onTasksChange={(updated) => {
               setTasks(updated);
             }}

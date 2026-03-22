@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -14,14 +14,41 @@ import {
   verticalListSortingStrategy,
   arrayMove,
 } from "@dnd-kit/sortable";
-import { Button, InputGroup, Intent } from "@blueprintjs/core";
+import {
+  Button,
+  Collapse,
+  Icon,
+  InputGroup,
+  Intent,
+  Spinner,
+} from "@blueprintjs/core";
 import { api } from "../lib/api";
 import { QueueCard } from "./QueueCard";
-import type { QueueTask } from "../types";
+import type { CompletedTask, QueueTask } from "../types";
+
+function timeAgo(timestamp: number, now: number): string {
+  const seconds = Math.floor((now - timestamp) / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ago`;
+}
+
+const subLabelStyle: React.CSSProperties = {
+  fontFamily: "var(--bp-typography-family-mono)",
+  fontSize: 11,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  color: "var(--bp-typography-color-muted)",
+  opacity: 0.6,
+  margin: "10px 0 4px 0",
+};
 
 interface Props {
   tasks: QueueTask[];
   repoPath: string;
+  completedTasks: CompletedTask[];
   onTasksChange: (tasks: QueueTask[]) => void;
 }
 
@@ -36,10 +63,116 @@ async function syncToServer(
   await api.api.queue.put({ tasks }, { query: { path } });
 }
 
-export function QueuePanel({ tasks, repoPath, onTasksChange }: Props) {
+function CompletedTaskRow({
+  task,
+  now,
+  isRunning,
+  isExpanded,
+  onToggle,
+}: {
+  task: CompletedTask;
+  now: number;
+  isRunning: boolean;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const isMultiLine = task.content.split("\n").length > 1;
+
+  return (
+    <div
+      style={{
+        padding: "4px 8px",
+        opacity: isRunning ? 1 : 0.6,
+        borderLeft: isRunning
+          ? "2px solid var(--bp-intent-primary-color)"
+          : "2px solid transparent",
+        marginBottom: 2,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          cursor: isMultiLine ? "pointer" : "default",
+        }}
+        onClick={isMultiLine ? onToggle : undefined}
+      >
+        {isRunning ? (
+          <Spinner size={12} />
+        ) : (
+          <Icon
+            icon={task.kind === "slash" ? "flash" : "circle"}
+            size={12}
+            intent={task.kind === "slash" ? "warning" : "none"}
+          />
+        )}
+        <span
+          style={{
+            flex: 1,
+            fontFamily: "var(--bp-typography-family-mono)",
+            fontSize: 12,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {task.preview}
+        </span>
+        <span
+          style={{
+            fontSize: 11,
+            opacity: 0.5,
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+          }}
+        >
+          {timeAgo(task.completed_at, now)}
+        </span>
+        {isMultiLine && (
+          <Icon
+            icon={isExpanded ? "chevron-up" : "chevron-down"}
+            size={12}
+            style={{ opacity: 0.4 }}
+          />
+        )}
+      </div>
+      {isMultiLine && (
+        <Collapse isOpen={isExpanded}>
+          <pre
+            style={{
+              fontFamily: "var(--bp-typography-family-mono)",
+              fontSize: 11,
+              margin: "4px 0 0 20px",
+              whiteSpace: "pre-wrap",
+              opacity: 0.7,
+            }}
+          >
+            {task.content}
+          </pre>
+        </Collapse>
+      )}
+    </div>
+  );
+}
+
+export function QueuePanel({
+  tasks,
+  repoPath,
+  completedTasks,
+  onTasksChange,
+}: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const [addValue, setAddValue] = useState("");
   const addInputRef = useRef<HTMLInputElement>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+
+  // Refresh "Xm ago" display every 10 seconds
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 10_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -73,8 +206,8 @@ export function QueuePanel({ tasks, repoPath, onTasksChange }: Props) {
 
     const firstLine = trimmed.split("\n")[0];
     let kind: QueueTask["kind"];
-    if (firstLine.toUpperCase() === "PAUSE") {
-      kind = "pause";
+    if (firstLine.toUpperCase() === "STOP") {
+      kind = "stop";
     } else if (firstLine.startsWith("/")) {
       kind = "slash";
     } else {
@@ -118,12 +251,12 @@ export function QueuePanel({ tasks, repoPath, onTasksChange }: Props) {
     setAddValue("");
   };
 
-  const handleAddPause = () => {
+  const handleAddStop = () => {
     const newTask: QueueTask = {
       index: tasks.length,
-      kind: "pause",
-      content: "PAUSE",
-      preview: "PAUSE",
+      kind: "stop",
+      content: "STOP",
+      preview: "STOP",
       lineCount: 1,
     };
     const updated = reindex([...tasks, newTask]);
@@ -131,6 +264,22 @@ export function QueuePanel({ tasks, repoPath, onTasksChange }: Props) {
     void syncToServer(repoPath, updated);
   };
 
+  const toggleExpand = (id: number) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Split completed tasks into running vs done (oldest first for done)
+  const runningTask = completedTasks.find((t) => t.is_running === 1) ?? null;
+  const doneTasks = completedTasks
+    .filter((t) => t.is_running === 0)
+    .reverse(); // oldest first (API returns newest first)
+
+  const hasCompletedSection = doneTasks.length > 0 || runningTask;
   const sortableIds = tasks.map((t) => t.index);
 
   return (
@@ -155,7 +304,43 @@ export function QueuePanel({ tasks, repoPath, onTasksChange }: Props) {
 
       {!collapsed && (
         <>
-          {tasks.length === 0 && (
+          {/* Done tasks */}
+          {doneTasks.length > 0 && (
+            <>
+              <p style={subLabelStyle}>Done</p>
+              {doneTasks.map((ct) => (
+                <CompletedTaskRow
+                  key={ct.id}
+                  task={ct}
+                  now={now}
+                  isRunning={false}
+                  isExpanded={expandedIds.has(ct.id)}
+                  onToggle={() => toggleExpand(ct.id)}
+                />
+              ))}
+            </>
+          )}
+
+          {/* Running task */}
+          {runningTask && (
+            <>
+              <p style={subLabelStyle}>Running</p>
+              <CompletedTaskRow
+                task={runningTask}
+                now={now}
+                isRunning
+                isExpanded={expandedIds.has(runningTask.id)}
+                onToggle={() => toggleExpand(runningTask.id)}
+              />
+            </>
+          )}
+
+          {/* Queued tasks */}
+          {hasCompletedSection && tasks.length > 0 && (
+            <p style={subLabelStyle}>Queued</p>
+          )}
+
+          {tasks.length === 0 && !hasCompletedSection && (
             <p
               style={{
                 fontSize: 12,
@@ -204,11 +389,11 @@ export function QueuePanel({ tasks, repoPath, onTasksChange }: Props) {
               />
             </div>
             <Button
-              intent={Intent.WARNING}
-              onClick={handleAddPause}
-              style={{ flexShrink: 0 }}
+              intent={Intent.DANGER}
+              icon="stop"
+              onClick={handleAddStop}
             >
-              PAUSE
+              Stop
             </Button>
           </div>
         </>
