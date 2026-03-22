@@ -132,10 +132,10 @@ Automates unattended multi-task Claude Code sessions. The Stop hook in `~/.claud
 | `cq edit` | Open cqueue.md in $EDITOR |
 | `cq list` | Show all tasks with index and preview |
 | `cq status` | Pending count |
-| `cq pause` | Append PAUSE sentinel (stops queue, sends notification) |
+| `cq stop` | Append STOP sentinel (ends queue processing) |
 | `cq clear` | Empty the queue |
 
-**Block types:** `/command` blocks (⚡) invoke skills; plain text (◆) is injected as a user message; `PAUSE` (⏸) stops the queue.
+**Block types:** `/command` blocks (⚡) invoke skills; plain text (◆) is injected as a user message; `STOP` (⏹) ends queue processing.
 
 ---
 

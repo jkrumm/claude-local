@@ -1,6 +1,6 @@
 export interface QueueTask {
   index: number;
-  kind: "task" | "slash" | "pause";
+  kind: "task" | "slash" | "stop";
   content: string;
   preview: string;
   lineCount: number;
@@ -18,8 +18,8 @@ export function parseQueue(raw: string): QueueTask[] {
     const firstLine = trimmed.split("\n")[0];
     let kind: QueueTask["kind"];
 
-    if (firstLine.toUpperCase() === "PAUSE") {
-      kind = "pause";
+    if (firstLine.toUpperCase() === "STOP") {
+      kind = "stop";
     } else if (firstLine.startsWith("/")) {
       kind = "slash";
     } else {

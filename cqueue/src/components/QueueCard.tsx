@@ -14,8 +14,8 @@ function kindIcon(kind: QueueTask["kind"]): React.ReactElement {
   if (kind === "slash") {
     return <Icon icon="lightning" intent={Intent.PRIMARY} size={14} />;
   }
-  if (kind === "pause") {
-    return <Icon icon="pause" intent={Intent.WARNING} size={14} />;
+  if (kind === "stop") {
+    return <Icon icon="stop" intent={Intent.DANGER} size={14} />;
   }
   return <Icon icon="circle" size={14} />;
 }
@@ -42,7 +42,7 @@ export function QueueCard({ task, onDelete, onUpdate }: Props) {
   };
 
   const handleExpand = () => {
-    if (task.kind === "pause") return;
+    if (task.kind === "stop") return;
     setExpanded((prev) => {
       if (!prev) {
         setEditContent(task.content);
@@ -145,7 +145,7 @@ export function QueueCard({ task, onDelete, onUpdate }: Props) {
 
           {/* Actions */}
           <span style={{ display: "flex", gap: 2, flexShrink: 0 }}>
-            {task.kind !== "pause" && (
+            {task.kind !== "stop" && (
               <Button
                 variant="minimal"
                 icon={expanded ? "chevron-up" : "chevron-down"}
