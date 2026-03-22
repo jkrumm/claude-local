@@ -28,6 +28,22 @@ interface HookInput {
 
 const PROTECTED = ["main", "master"];
 
+// Repos where direct pushes to main/master are allowed (infra/config repos, no PR workflow)
+const UNPROTECTED_REPOS = ["homelab", "homelab-private", "vps", "claude-local"];
+
+function getRepoName(cwd: string): string | null {
+  const result = Bun.spawnSync(["git", "remote", "get-url", "origin"], {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) return null;
+  const url = result.stdout.toString().trim();
+  // Handles both SSH (git@github.com:user/repo.git) and HTTPS formats
+  const match = url.match(/\/([^/]+?)(?:\.git)?$/);
+  return match?.[1] ?? null;
+}
+
 function getCurrentBranch(cwd: string): string | null {
   const result = Bun.spawnSync(["git", "branch", "--show-current"], {
     cwd,
@@ -53,6 +69,10 @@ function block(reason: string): never {
 const input: HookInput = JSON.parse(await Bun.stdin.text());
 
 if (input.tool_name !== "Bash") process.exit(0);
+
+// Skip protection for infra/config repos that use direct-to-main workflow
+const repoName = getRepoName(input.cwd ?? process.cwd());
+if (repoName && UNPROTECTED_REPOS.includes(repoName)) process.exit(0);
 
 const command = (input.tool_input?.command ?? "").trim();
 const cwd = input.cwd ?? process.cwd();
