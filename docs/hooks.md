@@ -87,20 +87,19 @@ interface NotificationState {
 See `docs/cq.md` for full details. The critical sequence in `handleStopEvent`:
 
 ```
-1. findQueueFile(input.cwd)   → resolves {git-root}/queue.md
+1. findQueueFile(input.cwd)   → resolves {git-root}/cqueue.md
 2. popQueueTask(queueFile)    → removes + returns first block
-3a. "PAUSE" → stderr message + process.exit(0)
-3b. task    → writeSync(1, task) + process.exit(2)   ← continues session
-3c. null    → normal stop notification
+3a. "STOP"  → stderr message + process.exit(0)             ← session ends
+3b. task    → JSON {"decision":"block","reason":task} to stdout + exit(0) ← continues session
+3c. null    → normal stop notification                     ← session ends
 ```
 
 ## Exit Codes
 
 | Code | Meaning |
 |-|-|
-| 0 | Normal — hook ran clean, Claude session ends |
-| 2 | Continue — Claude treats stdout as next user message |
-| non-zero | Hook error — shown in Claude UI as "Stop hook error: {stderr}" |
+| 0 | Normal — session ends. But if stdout contains `{"decision":"block","reason":"..."}`, session continues with reason as feedback |
+| non-zero | Hook error — shown in Claude UI |
 
 ## Debug Output
 

@@ -50,9 +50,9 @@ then merges on subsequent runs — template wins on all keys, permissions preser
 
 ## Key Tooling
 
-**cq** — per-repo task queue at `{git-root}/queue.md`. The Stop hook pops the
-next task and injects it as a Claude message via `exit 2`, enabling unattended
-multi-task sessions. `cq add`, `cq list`, `cq pause`, `cq clear`.
+**cq** — per-repo task queue at `{git-root}/cqueue.md`. The Stop hook pops the
+next task and injects it via JSON `decision:block` on stdout, enabling unattended
+multi-task sessions. `cq add`, `cq list`, `cq stop`, `cq clear`.
 
 **notify.ts** — single hook script for all Claude Code events: session timing,
 rich notifications (cmux-first, osascript fallback), queue injection on Stop.

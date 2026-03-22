@@ -13,7 +13,7 @@ code 2 — keeping the session alive without babysitting the terminal.
 
 | File | Location | Purpose |
 |-|-|-|
-| CLI | `~/.claude/queue.ts` | `cq` command — add, list, pop, clear, pause |
+| CLI | `~/.claude/queue.ts` | `cq` command — add, list, pop, clear, stop |
 | Queue file | `{git-root}/queue.md` | Per-repo task list |
 | Stop hook | `~/.claude/hooks/notify.ts` | Pops tasks and injects them on Stop |
 | Shell alias | `~/.zshrc` | `alias cq="bun ~/.claude/queue.ts"` |
@@ -34,7 +34,7 @@ Relevant: src/auth/validators.ts
 ---
 /code-quality
 ---
-PAUSE
+STOP
 ---
 Write CHANGELOG entry
 ```
@@ -45,7 +45,7 @@ Write CHANGELOG entry
 |-|-|-|
 | Lines starting with `/` | ⚡ | Injected as slash command → triggers skill |
 | Plain text | ◆ | Injected as user message |
-| `PAUSE` exactly | ⏸ | Stops queue, prints `[cq] PAUSED` to stderr, exits 0 |
+| `STOP` exactly | ⏹ | Ends queue processing — session stops |
 
 **Rules:**
 - `#` lines at the very top = file-level comments, ignored by parser
@@ -63,7 +63,7 @@ cq list           # Show all tasks with index, icon, preview
 cq pop            # Print + remove first task (used by Stop hook internally)
 cq status         # One-line pending count
 cq clear          # Empty the queue
-cq pause          # Append PAUSE sentinel at end
+cq stop           # Append STOP sentinel at end
 cq help           # Usage reference
 ```
 
@@ -75,21 +75,23 @@ The relevant section in `~/.claude/hooks/notify.ts` (inside `handleStopEvent`):
 const queueFile = findQueueFile(input.cwd);
 const nextTask  = queueFile ? popQueueTask(queueFile) : null;
 
-if (nextTask === "PAUSE") {
-  process.stderr.write("[cq] PAUSED — resume with: cq add\n");
+if (nextTask === "STOP") {
+  process.stderr.write("[cq] STOPPED — resume with: cq add\n");
   process.exit(0);   // Normal stop — session ends
 }
 
 if (nextTask) {
-  writeSync(1, nextTask);   // Synchronous stdout write
-  process.exit(2);          // Exit 2 = inject as next user message
+  // JSON decision=block continues session, reason becomes feedback to Claude
+  const output = JSON.stringify({ decision: "block", reason: nextTask });
+  writeSync(1, output);     // Synchronous stdout write
+  process.exit(0);          // Exit 0 — Claude parses JSON and continues
 }
 
 // Queue empty — fall through to normal stop notification
 ```
 
-**Why `writeSync` + immediate `process.exit(2)`?**
-Any `await` between the stdout write and `process.exit(2)` risks hanging
+**Why `writeSync` + immediate `process.exit(0)`?**
+Any `await` between the stdout write and `process.exit` risks hanging
 (e.g. cmux notify, osascript). A hanging hook gets killed by Claude Code,
 dropping the queued task. `writeSync` is synchronous and guaranteed to flush
 before `process.exit`.
@@ -129,7 +131,7 @@ Line 3 of the statusline (`~/.claude/statusline.sh`) shows queue state when non-
 ```
 ⚡ /commit --split · +2 more
 ◆ Refactor auth service · +1 more
-⏸ paused · 3 total
+⏹ stopped · 3 total
 ```
 
 Reads from `${git_root}/queue.md` directly — always live.
