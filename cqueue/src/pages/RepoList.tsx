@@ -14,6 +14,7 @@ import {
   Tag,
 } from "@blueprintjs/core";
 import { api } from "../lib/api";
+import { UsageTags } from "../components/UsageTags";
 import { useTheme } from "../main";
 import type { RepoInfo } from "../types";
 
@@ -68,6 +69,7 @@ export function RepoList() {
           </span>
         </NavbarGroup>
         <NavbarGroup align={Alignment.END}>
+          <UsageTags />
           <Button
             variant="minimal"
             icon={mode === "light" ? "moon" : mode === "dark" ? "desktop" : "flash"}
