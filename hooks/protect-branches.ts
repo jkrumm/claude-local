@@ -39,8 +39,15 @@ function getCurrentBranch(cwd: string): string | null {
 }
 
 function block(reason: string): never {
-  process.stdout.write(reason);
-  process.exit(1);
+  const output = JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: reason,
+    },
+  });
+  process.stdout.write(output);
+  process.exit(0);
 }
 
 const input: HookInput = JSON.parse(await Bun.stdin.text());
@@ -89,17 +96,22 @@ if (/\bgit\s+push\b/.test(command)) {
     );
   }
 
-  // Block implicit push when current branch is main/master
-  // Detect "bare" push: after stripping git push, flags, and one remote arg, no branch remains
+  // Block push when current branch is main/master — covers:
+  //   git push                        (bare push, no ref)
+  //   git push origin                 (remote only, no ref)
+  //   git push origin HEAD            (HEAD resolves to current branch)
+  //   git push -u origin HEAD         (same with tracking flag)
   const stripped = command
     .replace(/\bgit\s+push\b/, "")
     .replace(/--[\w-]+(=\S+)?/g, "")
     .replace(/(?:^|\s)-\w+/g, "")
     .trim();
   const positional = stripped.split(/\s+/).filter(Boolean);
-  const hasExplicitRef = positional.length >= 2; // [remote, branch]
+  // positional: [] = bare, ["origin"] = remote only, ["origin", "HEAD"] = HEAD ref
+  const refArg = positional[1]; // undefined, "HEAD", or a branch name
+  const pushesToCurrentBranch = !refArg || refArg === "HEAD";
 
-  if (!hasExplicitRef) {
+  if (pushesToCurrentBranch) {
     const current = getCurrentBranch(cwd);
     if (current && PROTECTED.includes(current)) {
       block(
