@@ -58,8 +58,8 @@ alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 # =========
 alias gback="git reset --soft HEAD~1"
 alias sz="source ~/.zshrc"
-alias homelab="ssh homelab"  # via Tailscale (100.85.139.104)
-alias vps="ssh vps"          # via Tailscale (100.82.157.104)
+alias homelab="ssh homelab"
+alias vps="ssh vps"
 
 # Claude Code with auto workspace detection + queue /clear restart loop
 c() {
@@ -91,7 +91,7 @@ c() {
 }
 
 alias start-iu-fe="~/IuRoot/prometheus-scripts/bash/start-frontends.sh"
-alias sync-iu-db="~/IuRoot/prometheus-scripts/bash/sync-dev-db.sh 'AdNfaoa02b=bH\$pSvt.?i+QA4F4bKaf0'"
+alias sync-iu-db="~/IuRoot/prometheus-scripts/bash/sync-dev-db.sh"  # password via script/env
 alias npmplease="rm -rf node_modules/ && rm -f package-lock.json && npm install"
 
 #===========
