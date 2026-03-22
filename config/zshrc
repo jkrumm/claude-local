@@ -31,6 +31,10 @@ export PATH="$PATH:$HOME/.local/bin"
 # npm global (optional, for additional CLIs)
 export PATH="$PATH:$HOME/.npm-global/bin"
 
+# --- 1PASSWORD SECRETS ---------------------------------------------------
+export ANTHROPIC_API_KEY=$(op read "op://CLI/Anthropic/credential" 2>/dev/null)
+export ANTHROPIC_BASE_URL=$(op read "op://CLI/Anthropic/hostname" 2>/dev/null)
+
 # --- PLUGINS & ALIASES --------------------------------------------------
 # zoxide (fast directory jumping, replaces autojump - using "j" alias)
 eval "$(zoxide init zsh --cmd j)"
@@ -53,18 +57,37 @@ alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 # MY ALIASES
 # =========
 alias gback="git reset --soft HEAD~1"
+alias sz="source ~/.zshrc"
 alias homelab="ssh homelab"  # via Tailscale (100.85.139.104)
 alias vps="ssh vps"          # via Tailscale (100.82.157.104)
 
-# Claude Code with auto workspace detection
+# Claude Code with auto workspace detection + queue /clear restart loop
 c() {
-  if [[ "$PWD" == "$HOME/SourceRoot"* ]]; then
-    ENABLE_TOOL_SEARCH=true CLAUDE_CODE_ENABLE_TASKS=true claude --dangerously-skip-permissions --plugin-dir ~/SourceRoot/.claude "$@"
-  elif [[ "$PWD" == "$HOME/IuRoot"* ]]; then
-    ENABLE_TOOL_SEARCH=true CLAUDE_CODE_ENABLE_TASKS=true claude --dangerously-skip-permissions --plugin-dir "$(git rev-parse --show-toplevel 2>/dev/null || echo '.')/.claude" "$@"
-  else
-    ENABLE_TOOL_SEARCH=true CLAUDE_CODE_ENABLE_TASKS=true claude --dangerously-skip-permissions "$@"
-  fi
+  local restart_marker="$HOME/.claude/.queue-restart"
+  local claude_args=("$@")
+
+  while true; do
+    if [[ "$PWD" == "$HOME/SourceRoot"* ]]; then
+      ENABLE_TOOL_SEARCH=true claude --dangerously-skip-permissions --chrome --plugin-dir ~/SourceRoot/.claude "${claude_args[@]}"
+    elif [[ "$PWD" == "$HOME/IuRoot"* ]]; then
+      ENABLE_TOOL_SEARCH=true claude --dangerously-skip-permissions --chrome --plugin-dir "$(git rev-parse --show-toplevel 2>/dev/null || echo '.')/.claude" "${claude_args[@]}"
+    else
+      ENABLE_TOOL_SEARCH=true claude --dangerously-skip-permissions --chrome "${claude_args[@]}"
+    fi
+
+    # Queue /clear: hook wrote next task to marker — restart with fresh context
+    if [[ -f "$restart_marker" ]]; then
+      local next_task
+      next_task=$(<"$restart_marker")
+      rm -f "$restart_marker"
+      if [[ -n "$next_task" ]]; then
+        echo "\n[cq] Fresh context — continuing queue\n"
+        claude_args=("$next_task")
+        continue
+      fi
+    fi
+    break
+  done
 }
 
 alias start-iu-fe="~/IuRoot/prometheus-scripts/bash/start-frontends.sh"
@@ -85,7 +108,10 @@ nb() {
   fi
 
   local default_branch
-  default_branch=$(git remote show origin 2>/dev/null | sed -n 's/.*HEAD branch: //p')
+  default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
+  if [[ -z "$default_branch" ]]; then
+    default_branch=$(git remote show origin 2>/dev/null | sed -n 's/.*HEAD branch: //p')
+  fi
   if [[ -z "$default_branch" ]]; then
     echo "error: could not determine default branch"
     return 1
