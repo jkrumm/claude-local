@@ -57,6 +57,11 @@ body.bp6-dark {
   color: var(--bp-typography-color-muted);
 }
 
+/* Hide scrollbar on tab strip (webkit) */
+.notes-tab-strip::-webkit-scrollbar {
+  display: none;
+}
+
 /* Compact markdown file tree */
 .md-file-tree .bp6-tree-node-content {
   height: 26px;

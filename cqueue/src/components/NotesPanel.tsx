@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Button,
   Callout,
-  Icon,
   Menu,
   MenuItem,
   Popover,
   Spinner,
+  Tag,
   Tree,
 } from "@blueprintjs/core";
 import type { TreeNodeInfo } from "@blueprintjs/core";
@@ -101,13 +101,12 @@ export function NotesPanel({
   const [mdFiles, setMdFiles] = useState<string[] | null>(null);
   const [treeOpen, setTreeOpen] = useState(false);
 
-  // localStorage
   const storagePrefix = `cqueue:${repoPath}`;
 
-  const [recentFiles, setRecentFiles] = useState<string[]>(() => {
+  const [openTabs, setOpenTabs] = useState<string[]>(() => {
     try {
       return JSON.parse(
-        localStorage.getItem(`${storagePrefix}:recentMds`) ?? "[]",
+        localStorage.getItem(`${storagePrefix}:openTabs`) ?? "[]",
       );
     } catch {
       return [];
@@ -124,16 +123,24 @@ export function NotesPanel({
     return new Set(["docs"]);
   });
 
-  // Fetch markdown files when tree popover opens
+  // Eagerly fetch markdown files to detect README and populate tree
   useEffect(() => {
-    if (treeOpen && mdFiles === null) {
-      api.api["markdown-files"]
-        .get({ query: { path: repoPath } })
-        .then((res) => {
-          if (res.data?.ok) setMdFiles(res.data.data as string[]);
-        });
-    }
-  }, [treeOpen, mdFiles, repoPath]);
+    api.api["markdown-files"]
+      .get({ query: { path: repoPath } })
+      .then((res) => {
+        if (res.data?.ok) setMdFiles(res.data.data as string[]);
+      });
+  }, [repoPath]);
+
+  const readmeFile = useMemo(
+    () => mdFiles?.find((f) => f.toLowerCase() === "readme.md") ?? null,
+    [mdFiles],
+  );
+
+  const saveOpenTabs = (tabs: string[]) => {
+    setOpenTabs(tabs);
+    localStorage.setItem(`${storagePrefix}:openTabs`, JSON.stringify(tabs));
+  };
 
   const handleFileSelect = async (file: string) => {
     if (selectedFile === file) {
@@ -148,16 +155,15 @@ export function NotesPanel({
       setEditorContent(res.data.data as string);
       setFileVersion((v) => v + 1);
       setTreeOpen(false);
-      // Update recents
-      const updated = [file, ...recentFiles.filter((f) => f !== file)].slice(
-        0,
-        10,
-      );
-      setRecentFiles(updated);
-      localStorage.setItem(
-        `${storagePrefix}:recentMds`,
-        JSON.stringify(updated),
-      );
+      // Add to openTabs if not pinned and not already open
+      if (file !== readmeFile && !openTabs.includes(file)) {
+        saveOpenTabs([...openTabs, file]);
+      }
+    } else {
+      // Remove from openTabs if it failed to load (file likely deleted)
+      if (openTabs.includes(file)) {
+        saveOpenTabs(openTabs.filter((f) => f !== file));
+      }
     }
   };
 
@@ -170,6 +176,19 @@ export function NotesPanel({
     setSelectedFile(null);
     setEditorContent(content);
     setCnoteVersion((v) => v + 1);
+  };
+
+  const handleCloseTab = async (file: string) => {
+    saveOpenTabs(openTabs.filter((f) => f !== file));
+    if (selectedFile === file) {
+      const res = await api.api.notes
+        .get({ query: { path: repoPath } })
+        .catch(() => null);
+      const content = res?.data?.ok ? (res.data.data as string) : notes;
+      setSelectedFile(null);
+      setEditorContent(content);
+      setCnoteVersion((v) => v + 1);
+    }
   };
 
   const handleCnoteReload = async () => {
@@ -222,7 +241,6 @@ export function NotesPanel({
     [mdFiles, expandedFolders, selectedFile],
   );
 
-  // Save functions
   const editorSave = selectedFile
     ? (content: string) =>
         api.api["markdown-file"].put(
@@ -236,6 +254,9 @@ export function NotesPanel({
     ? `${selectedFile}:${fileVersion}`
     : `cnotes:${cnoteVersion}`;
 
+  // Tabs to show in the strip (exclude readme from openTabs since it's pinned)
+  const closableTabs = openTabs.filter((f) => f !== readmeFile);
+
   return (
     <div>
       {/* Header row */}
@@ -245,50 +266,84 @@ export function NotesPanel({
           alignItems: "center",
           gap: 8,
           marginBottom: 8,
+          minWidth: 0,
         }}
       >
-        <p className="section-label">Notes</p>
+        <p className="section-label" style={{ flexShrink: 0 }}>
+          Notes
+        </p>
         <Button
           variant="minimal"
           small
           icon={collapsed ? "chevron-right" : "chevron-down"}
           onClick={() => setCollapsed((c) => !c)}
+          style={{ flexShrink: 0 }}
         />
-        <div style={{ flex: 1 }} />
+
         {!collapsed && (
-          <div style={{ display: "flex", gap: 4 }}>
-            <Button
-              small
-              text="CNote"
-              variant="outlined"
-              active={!selectedFile}
-              onClick={handleSwitchToCnote}
-            />
-            <Popover
-              content={
-                <Menu>
-                  {recentFiles.map((file) => (
-                    <MenuItem
-                      key={file}
-                      text={file}
-                      icon="document"
-                      active={selectedFile === file}
-                      onClick={() => handleFileSelect(file)}
-                    />
-                  ))}
-                </Menu>
-              }
-              placement="bottom-end"
-              minimal
+          <>
+            {/* Horizontally scrollable tab strip */}
+            <div
+              className="notes-tab-strip"
+              style={{
+                flex: 1,
+                minWidth: 0,
+                overflowX: "auto",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "2px 2px",
+                scrollbarWidth: "none",
+              }}
             >
-              <Button
-                small
-                text="Recent"
-                variant="outlined"
-                rightIcon="caret-down"
-                disabled={recentFiles.length === 0}
-              />
-            </Popover>
+              {/* CNote — pinned, no close */}
+              <Tag
+                interactive
+                minimal={selectedFile !== null}
+                intent="none"
+                onClick={handleSwitchToCnote}
+                style={{ flexShrink: 0, cursor: "pointer" }}
+              >
+                CNote
+              </Tag>
+
+              {/* README — pinned, no close (shown once mdFiles loaded) */}
+              {readmeFile && (
+                <Tag
+                  interactive
+                  minimal={selectedFile !== readmeFile}
+                  intent="none"
+                  onClick={() => handleFileSelect(readmeFile)}
+                  style={{ flexShrink: 0, cursor: "pointer" }}
+                >
+                  README
+                </Tag>
+              )}
+
+              {/* Closeable tabs */}
+              {closableTabs.map((file) => {
+                const name = file.split("/").pop()!;
+                const isActive = selectedFile === file;
+                return (
+                  <Tag
+                    key={file}
+                    interactive
+                    minimal={!isActive}
+                    intent="none"
+                    onRemove={(e) => {
+                      e.stopPropagation();
+                      handleCloseTab(file);
+                    }}
+                    onClick={() => handleFileSelect(file)}
+                    style={{ flexShrink: 0, cursor: "pointer" }}
+                  >
+                    {name}
+                  </Tag>
+                );
+              })}
+            </div>
+
+            {/* All MDs button — stays on right */}
             <Popover
               content={
                 <div
@@ -334,9 +389,10 @@ export function NotesPanel({
                 text="All MDs"
                 variant="outlined"
                 rightIcon="caret-down"
+                style={{ flexShrink: 0 }}
               />
             </Popover>
-          </div>
+          </>
         )}
       </div>
 
@@ -350,36 +406,6 @@ export function NotesPanel({
         </Callout>
       )}
 
-      {/* Selected file indicator */}
-      {selectedFile && !collapsed && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            marginBottom: 8,
-          }}
-        >
-          <Icon icon="document" size={12} />
-          <span
-            style={{
-              fontFamily: "var(--bp-typography-family-mono)",
-              fontSize: 12,
-              opacity: 0.7,
-            }}
-          >
-            {selectedFile}
-          </span>
-          <Button
-            variant="minimal"
-            small
-            icon="cross"
-            onClick={handleSwitchToCnote}
-            style={{ marginLeft: "auto" }}
-          />
-        </div>
-      )}
-
       {/* Editor — always mounted, hidden when collapsed */}
       <div style={{ display: collapsed ? "none" : "block" }}>
         <MarkdownEditor
@@ -387,9 +413,7 @@ export function NotesPanel({
           contentKey={contentKey}
           onSave={editorSave}
           placeholder={
-            selectedFile
-              ? `Editing ${selectedFile}...`
-              : "Session notes..."
+            selectedFile ? `Editing ${selectedFile}...` : "Session notes..."
           }
         />
       </div>
