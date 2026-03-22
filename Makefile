@@ -65,6 +65,10 @@ _setup-scripts:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/scripts/statusline.sh" \
 		DST="$(CLAUDE_DIR)/statusline.sh"
+	@chmod +x $(CLAUDE_LOCAL)/scripts/fetch_usage.py
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(CLAUDE_LOCAL)/scripts/fetch_usage.py" \
+		DST="$(CLAUDE_DIR)/fetch_usage.py"
 
 .PHONY: _setup-skills
 _setup-skills:
@@ -84,11 +88,11 @@ _setup-settings:
 		echo "    ✓ settings.json created from template"; \
 	else \
 		jq --slurpfile existing "$(CLAUDE_DIR)/settings.json" \
-			'del(._NOTE) * {permissions: $$existing[0].permissions}' \
+			'del(._NOTE) * {permissions: $$existing[0].permissions} * ($$existing[0] | {model, effortLevel, alwaysThinkingEnabled} | with_entries(select(.value != null)))' \
 			"$(CLAUDE_LOCAL)/config/settings.template.json" \
 			> /tmp/claude-settings-merged.json \
 		&& mv /tmp/claude-settings-merged.json "$(CLAUDE_DIR)/settings.json"; \
-		echo "    ✓ settings.json merged (template applied, permissions preserved)"; \
+		echo "    ✓ settings.json merged (template applied, permissions + model/effort preserved)"; \
 	fi
 
 .PHONY: _setup-gitignore
@@ -141,6 +145,7 @@ status:
 	@echo "  Scripts"
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/queue.ts"
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/statusline.sh"
+	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/fetch_usage.py"
 	@echo "  Gitignore"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitignore_global"
 	@echo "  Skills ($(shell ls $(CLAUDE_LOCAL)/skills/ | wc -l | xargs) — SourceRoot only)"
