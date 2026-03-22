@@ -21,11 +21,12 @@ outward — edit at either end, git always sees the change here.
 | `hooks/notify.ts` | `~/.claude/hooks/notify.ts` | All 4 hook events |
 | `scripts/queue.ts` | `~/.claude/queue.ts` | cq CLI |
 | `scripts/statusline.sh` | `~/.claude/statusline.sh` | 3-line statusline |
+| `scripts/fetch_usage.py` | `~/.claude/fetch_usage.py` | Claude.ai usage % fetcher (uv script) |
 | `skills/{name}/` | `~/SourceRoot/.claude/skills/{name}/` | SourceRoot-only |
 
 **Not symlinked:** `~/.claude/settings.json` — machine-specific permissions.
 `make setup` creates from template if missing, otherwise jq-merges:
-template wins on all keys (hooks, statusLine, plugins), permissions block preserved.
+template wins on structural keys (hooks, statusLine, plugins, env); permissions + model/effortLevel/alwaysThinkingEnabled preserved from live file.
 
 ## Rules
 
@@ -38,10 +39,35 @@ in `c()`. Not available in IuRoot — intentional. IuRoot uses per-project `.cla
 **settings.json changes:** update `config/settings.template.json`, then `make setup`
 to merge into the live file. Never edit the live settings.json for persistent changes.
 
+## Debug Logs
+
+Structured JSONL logs at `~/.claude/logs/YYYY-MM-DD.jsonl`. Written by `hooks/notify.ts` and `scripts/fetch_usage.py`. 3-day auto-cleanup on every invocation.
+
+**Query examples:**
+```bash
+# All events today
+cat ~/.claude/logs/$(date +%Y-%m-%d).jsonl | jq .
+
+# Hook stop decisions only
+cat ~/.claude/logs/$(date +%Y-%m-%d).jsonl | jq 'select(.event == "stop_decision")'
+
+# Question detection results (why queue fired or paused)
+cat ~/.claude/logs/$(date +%Y-%m-%d).jsonl | jq 'select(.event == "question_detect" or .event == "haiku_call" or .event == "haiku_skip")'
+
+# fetch_usage errors
+cat ~/.claude/logs/$(date +%Y-%m-%d).jsonl | jq 'select(.src == "fetch_usage")'
+```
+
+**Key events to check when debugging:**
+- Queue fires on a question → look for `question_detect` (check `reason`, `has_question_mark`) and `haiku_skip` (check `no_api_key`)
+- Haiku not called → `haiku_skip` with `reason: "no_api_key"` means `ANTHROPIC_API_KEY` not in hook env
+- fetch_usage broken → `fetch_error` with `type` field shows which exception class failed
+- Unexpected stop behavior → `stop_decision` shows exact decision taken
+
 ## Key Technical Facts
 
-- `cqueue.md` blocks separated by `\n---\n`. Block types: plain text (◆), `/slash` (⚡), `PAUSE` (⏸).
-- Stop hook: `writeSync(1, task)` + `process.exit(2)` injects next task. No `await` between them.
-- PAUSE exits with code 0 synchronously — no async notification call before exit.
+- `cqueue.md` blocks separated by `\n---\n`. Block types: plain text (◆), `/slash` (⚡), `STOP` (⏹).
+- Stop hook: JSON `{"decision":"block","reason":task}` to stdout + `process.exit(0)` continues session. Queue empties = natural stop.
+- STOP exits with code 0 synchronously — no async notification call before exit.
 - Skills have optional `model:` frontmatter (`haiku` for fast forks, default = sonnet).
 - `c()` in zshrc: sets `--plugin-dir` and `--dangerously-skip-permissions` per workspace.
