@@ -2,7 +2,7 @@
 
 # Claude Code Statusline — 2–3 line layout
 #
-# Line 1: Model · Context (usable) · Session lines · Total tokens · Duration
+# Line 1: Model · Context (usable) · Session lines · Total tokens · Duration · Usage (5h/wk/mo)
 # Line 2: CWD · Git branch & dirty flag
 # Line 3: Queue status — only shown when <git-root>/cqueue.md has tasks
 
@@ -70,6 +70,58 @@ else
   duration="${minutes}min"
 fi
 
+# ── Subscription usage (Claude.ai API, non-blocking cached) ────────────────────
+# fetch_usage.py extracts Chrome cookies + calls claude.ai/api/…/usage.
+# Cache TTL: 5 min. Background refresh on miss; stale value shown immediately.
+_USAGE_CACHE="/tmp/claude_sl/usage_api.json"
+_FETCH_SCRIPT="$HOME/.claude/fetch_usage.py"
+_now_s=$(date +%s)
+
+# Trigger background refresh when cache is stale or missing
+if [ -f "$_USAGE_CACHE" ]; then
+  _fetched_at=$(jq -r '.fetched_at // 0' "$_USAGE_CACHE" 2>/dev/null)
+else
+  _fetched_at=0
+fi
+if [ $(( _now_s - ${_fetched_at:-0} )) -gt 300 ]; then
+  ( /opt/homebrew/bin/uv run "$_FETCH_SCRIPT" >/dev/null 2>&1 ) &
+  disown 2>/dev/null
+fi
+
+usage_parts=""
+if [ -f "$_USAGE_CACHE" ] && jq -e '.error != null' "$_USAGE_CACHE" >/dev/null 2>&1; then
+  usage_parts="\033[33m⚠ claude.ai login${reset}"
+elif [ -f "$_USAGE_CACHE" ] && jq -e '.five_hour.utilization != null' "$_USAGE_CACHE" >/dev/null 2>&1; then
+  _5h_util=$(jq -r '.five_hour.utilization' "$_USAGE_CACHE")
+  _5h_reset=$(jq -r '.five_hour.resets_at_epoch // 0' "$_USAGE_CACHE")
+  _wk_util=$(jq -r '.seven_day.utilization // empty' "$_USAGE_CACHE")
+
+  _5h_pct=$(printf "%.0f" "$_5h_util" 2>/dev/null || echo "?")
+
+  # Color-code the 5h percentage
+  if [ "${_5h_pct:-0}" -lt 50 ]; then
+    _uc="\033[32m"
+  elif [ "${_5h_pct:-0}" -lt 75 ]; then
+    _uc="\033[33m"
+  else
+    _uc="\033[31m"
+  fi
+
+  # Minutes until 5h window resets
+  _mins_left=""
+  if [ "${_5h_reset:-0}" -gt "$_now_s" ]; then
+    _mins=$(( (_5h_reset - _now_s) / 60 ))
+    _mins_left=" ↺${_mins}m"
+  fi
+
+  usage_parts="${_uc}${_5h_pct}%${reset}/5h${_mins_left}"
+
+  if [ -n "$_wk_util" ]; then
+    _wk_pct=$(printf "%.0f" "$_wk_util" 2>/dev/null || echo "?")
+    usage_parts="${usage_parts} · ${_wk_pct}%/wk"
+  fi
+fi
+
 # ── Git ────────────────────────────────────────────────────────────────────────
 git_section=""
 if git -C "$cwd" rev-parse --git-dir >/dev/null 2>&1; then
@@ -106,8 +158,8 @@ if [ -n "$queue_file" ] && [ -f "$queue_file" ]; then
     # First task = everything before the first --- separator
     first_task=$(echo "$content" | sed '/^---$/,$d' | head -1)
 
-    if [ "$first_task" = "PAUSE" ]; then
-      queue_line="⏸ paused · ${queue_count} total"
+    if [ "$first_task" = "STOP" ]; then
+      queue_line="⏹ stopped · ${queue_count} total"
     elif echo "$first_task" | grep -q '^/'; then
       preview="${first_task:0:40}"
       if [ "$queue_count" -gt 1 ]; then
@@ -127,7 +179,9 @@ if [ -n "$queue_file" ] && [ -f "$queue_file" ]; then
 fi
 
 # ── Output ─────────────────────────────────────────────────────────────────────
-echo -e "${model} | ${used_k}k/${usable_k}k ${pct_colored} | +${lines_added} -${lines_removed} | ${tokens_fmt} | ${duration}"
+line1="${model} | ${used_k}k/${usable_k}k ${pct_colored} | +${lines_added} -${lines_removed} | ${tokens_fmt} | ${duration}"
+[ -n "$usage_parts" ] && line1="${line1} | ${usage_parts}"
+echo -e "$line1"
 echo -e "${cwd_display}${git_section}"
 [ -n "$queue_line" ] && echo -e "${queue_line}"
 exit 0

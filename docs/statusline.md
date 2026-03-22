@@ -26,6 +26,7 @@ Claude Sonnet 4.6 | 86k/170k 51% | +660 -52 | 308k | 23min
 - Lines changed: `+{added} -{removed}` (Claude's edits this session)
 - Total tokens (cumulative input + output), formatted as `308k` or `1.2M`
 - Session duration
+- Subscription usage: `26%/5h ↺23m · 14%/wk` — real plan percentages from Claude.ai API (cached, non-blocking)
 
 **Line 2** — Location:
 - CWD (home-shortened, worktree-aware: `WT·SE proj/path` for student-enrolment worktrees)
@@ -34,7 +35,7 @@ Claude Sonnet 4.6 | 86k/170k 51% | +660 -52 | 308k | 23min
 **Line 3** — Queue (only shown when `queue.md` is non-empty):
 - `⚡ /command · +N more` — slash command up next
 - `◆ task preview · +N more` — regular task up next
-- `⏸ paused · N total` — queue is paused
+- `⏹ stopped · N total` — queue is stopped
 
 ## Context Color Coding
 
@@ -45,6 +46,25 @@ Claude Sonnet 4.6 | 86k/170k 51% | +660 -52 | 308k | 23min
 | ≥ 75% | Red |
 
 "Usable" = `context_window_size - 30000` (30k reserved for autocompact buffer).
+
+## Usage Stats Implementation
+
+Data source: `https://claude.ai/api/organizations/{org_id}/usage` — the same endpoint the
+Claude.ai web UI uses. Returns real plan utilization percentages, not computed token counts.
+
+Auth: Chrome cookies (`sessionKey` + `cf_clearance`) extracted from macOS via:
+1. AES-128 key derived from `Chrome Safe Storage` Keychain entry (PBKDF2-SHA1, `saltysalt`, 1003 iters)
+2. Chrome SQLite cookie DB decrypted (v10 format: strip 3-byte prefix + 32-byte salt block)
+
+Script: `~/.claude/fetch_usage.py` (symlinked from `scripts/fetch_usage.py`), run via `uv run`.
+Cache: `/tmp/claude_sl/usage_api.json`, 5-min TTL, background refresh via `disown`.
+
+API response fields used:
+- `five_hour.utilization` — 5h rolling window % (color-coded green/yellow/red)
+- `five_hour.resets_at` — reset timestamp → converted to "↺Nm" countdown
+- `seven_day.utilization` — weekly plan % (all models)
+
+Org UUID read from `~/.claude/.claude.json` → `.oauthAccount.organizationUuid`.
 
 ## Known Gotchas
 
