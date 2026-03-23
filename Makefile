@@ -119,15 +119,7 @@ _setup-gitignore:
 .PHONY: _setup-browser
 _setup-browser:
 	@echo "  Browser debugging..."
-	@# Chrome for Testing — install if not present
-	@if find "$(HOME)/Library/Caches/ms-playwright" -name "Google Chrome for Testing" -type f 2>/dev/null | grep -q .; then \
-		echo "    · Chrome for Testing (ok)"; \
-	else \
-		echo "    Installing Chrome for Testing..."; \
-		npx playwright install chrome; \
-		echo "    ✓ Chrome for Testing installed"; \
-	fi
-	@# chrome-devtools MCP — register via claude mcp add (canonical, handles schema evolution)
+	@# chrome-devtools MCP — manages its own Chrome via Puppeteer, no manual browser needed
 	@if claude mcp list 2>/dev/null | grep -q "chrome-devtools"; then \
 		echo "    · chrome-devtools MCP (ok)"; \
 	else \
@@ -201,11 +193,6 @@ status:
 		$(MAKE) --no-print-directory _check DST="$(SOURCEROOT)/.claude/skills/$$name"; \
 	done
 	@echo "  Browser debugging"
-	@if find "$(HOME)/Library/Caches/ms-playwright" -name "Google Chrome for Testing" -type f 2>/dev/null | grep -q .; then \
-		echo "    ✓ Chrome for Testing"; \
-	else \
-		echo "    ✗ Chrome for Testing [missing — run make setup]"; \
-	fi
 	@if claude mcp list 2>/dev/null | grep -q "chrome-devtools"; then \
 		echo "    ✓ chrome-devtools MCP"; \
 	else \

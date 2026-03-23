@@ -60,32 +60,8 @@ alias gback="git reset --soft HEAD~1"
 alias sz="source ~/.zshrc"
 alias homelab="ssh homelab"
 alias vps="ssh vps"
-# Isolated Chrome for Testing instance (separate profile, port 9222, no extensions/logins)
-# Binary installed by: make setup  (npx playwright install chrome)
-chrome-debug() {
-  local binary
-  binary=$(find "$HOME/Library/Caches/ms-playwright" -name "Google Chrome for Testing" -type f 2>/dev/null | sort | tail -1)
-  if [[ -z "$binary" ]]; then
-    echo "chrome-debug: Chrome for Testing not found — run: make setup"
-    return 1
-  fi
-  "$binary" \
-    --remote-debugging-port=9222 \
-    --user-data-dir="$HOME/.chrome-debug-profile" \
-    --no-first-run \
-    --no-default-browser-check \
-    --disable-session-crashed-bubble \
-    --disable-infobars \
-    "$@" &>/dev/null &
-}
-
 # Claude Code with auto workspace detection + queue /clear restart loop
 c() {
-  # Auto-start Chrome for Testing in background (for chrome-devtools-mcp)
-  if ! nc -z 127.0.0.1 9222 2>/dev/null; then
-    chrome-debug
-  fi
-
   local restart_marker="$HOME/.claude/.queue-restart"
   local claude_args=("$@")
 
