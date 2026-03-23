@@ -10,6 +10,7 @@ input=$(cat)
 
 # ── Model ──────────────────────────────────────────────────────────────────────
 model=$(echo "$input" | jq -r '.model.display_name // "Unknown"')
+effort=$(jq -r '.effortLevel // "auto"' "$HOME/.claude/settings.json" 2>/dev/null || echo "auto")
 
 # ── Working directory ──────────────────────────────────────────────────────────
 cwd=$(echo "$input" | jq -r '.workspace.current_dir // "~"')
@@ -179,7 +180,7 @@ if [ -n "$queue_file" ] && [ -f "$queue_file" ]; then
 fi
 
 # ── Output ─────────────────────────────────────────────────────────────────────
-line1="${model} | ${used_k}k/${usable_k}k ${pct_colored} | +${lines_added} -${lines_removed} | ${tokens_fmt} | ${duration}"
+line1="${model} · ${effort} | ${used_k}k/${usable_k}k ${pct_colored} | +${lines_added} -${lines_removed} | ${tokens_fmt} | ${duration}"
 [ -n "$usage_parts" ] && line1="${line1} | ${usage_parts}"
 echo -e "$line1"
 echo -e "${cwd_display}${git_section}"

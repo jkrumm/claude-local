@@ -3,7 +3,7 @@
 ## Architecture
 
 React frontend (Vite) + Bun/Elysia backend, both running inside Docker.
-Served on `http://localhost:7705`.
+Served on `http://cqueue.local` (via localias proxy → port 7705).
 
 ## Development Commands
 
@@ -16,10 +16,10 @@ Served on `http://localhost:7705`.
 | `make shell` | Shell into container |
 
 **IMPORTANT:** The app is served from Docker (`docker compose`). Running `bun run build`
-locally does NOT update the running app on port 7705. Always use `make rebuild` to
+locally does NOT update the running app. Always use `make rebuild` to
 propagate code changes to the running instance.
 
 ## Validating UI Changes
 
-After `make rebuild`, reload `http://localhost:7705` in the browser to verify.
+After `make rebuild`, reload `http://cqueue.local` in the browser to verify.
 Use the Chrome MCP extension for visual validation via screenshots.

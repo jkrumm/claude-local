@@ -11,3 +11,4 @@ services:
     environment:
       - PERSONAL_REPOS_PATH=${PERSONAL_REPOS_PATH}
       - WORK_REPOS_PATH=${WORK_REPOS_PATH}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}

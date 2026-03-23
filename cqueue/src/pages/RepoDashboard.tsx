@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Alignment,
@@ -8,15 +8,20 @@ import {
   NavbarHeading,
   NonIdealState,
   Spinner,
-  Tag,
 } from "@blueprintjs/core";
 import { api } from "../lib/api";
-import { GitStatusBar } from "../components/GitStatusBar";
+import { GitPanel } from "../components/GitPanel";
 import { UsageTags } from "../components/UsageTags";
 import { QueuePanel } from "../components/QueuePanel";
 import { NotesPanel } from "../components/NotesPanel";
 import { useTheme } from "../main";
-import type { CompletedTask, QueueTask, RepoDashboardData } from "../types";
+import type {
+  CompletedTask,
+  GithubData,
+  GitStatus,
+  QueueTask,
+  RepoDashboardData,
+} from "../types";
 
 class DashboardErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -58,6 +63,9 @@ function RepoDashboardInner() {
   const [notesExternallyChanged, setNotesExternallyChanged] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [sseDisconnected, setSseDisconnected] = useState(false);
+  const [githubData, setGithubData] = useState<GithubData | null>(null);
+  const [githubLoading, setGithubLoading] = useState(false);
+  const [lastGithubRefresh, setLastGithubRefresh] = useState<Date | null>(null);
 
   const evtSourceRef = useRef<EventSource | null>(null);
   const isEditingRef = useRef(false);
@@ -97,6 +105,25 @@ function RepoDashboardInner() {
       setCompletedTasks(result.data.data as CompletedTask[]);
     }
   };
+
+  const fetchGithubData = useCallback(async (git: GitStatus) => {
+    if (!git.githubRepo) return;
+    setGithubLoading(true);
+    try {
+      const res = await fetch(
+        `/api/github?githubRepo=${encodeURIComponent(git.githubRepo)}&branch=${encodeURIComponent(git.branch)}`,
+      );
+      const json = (await res.json()) as { ok: boolean; data: GithubData };
+      if (json.ok) {
+        setGithubData(json.data);
+        setLastGithubRefresh(new Date());
+      }
+    } catch {
+      // GitHub data is optional — silently ignore failures
+    } finally {
+      setGithubLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!repoPath) return;
@@ -161,6 +188,16 @@ function RepoDashboardInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoPath]);
 
+  // GitHub polling — starts once git status resolves with a githubRepo
+  useEffect(() => {
+    const git = data?.git;
+    if (!git?.githubRepo) return;
+
+    fetchGithubData(git);
+    const interval = setInterval(() => fetchGithubData(git), 15000);
+    return () => clearInterval(interval);
+  }, [data?.git?.githubRepo, data?.git?.branch, fetchGithubData]);
+
   if (!repoPath) {
     return (
       <div style={{ padding: 40 }}>
@@ -198,49 +235,60 @@ function RepoDashboardInner() {
             icon="arrow-left"
             onClick={() => navigate("/")}
           />
-          <NavbarHeading style={{ fontFamily: "var(--bp-typography-family-mono)" }}>
+          <NavbarHeading
+            style={{ fontFamily: "var(--bp-typography-family-mono)" }}
+          >
             {data.repo.name}
           </NavbarHeading>
         </NavbarGroup>
         <NavbarGroup align={Alignment.END}>
           {sseDisconnected && (
-            <Tag intent="danger" minimal style={{ marginRight: 8 }}>
-              Disconnected
-            </Tag>
+            <div
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: "var(--bp5-intent-danger)",
+                marginRight: 8,
+                flexShrink: 0,
+              }}
+              title="Disconnected"
+            />
           )}
           <UsageTags />
-          <GitStatusBar git={data.git} repoName={data.repo.name} />
           <Button
             variant="minimal"
-            icon={mode === "light" ? "moon" : mode === "dark" ? "desktop" : "flash"}
+            icon={
+              mode === "light" ? "moon" : mode === "dark" ? "desktop" : "flash"
+            }
             onClick={toggle}
           />
         </NavbarGroup>
       </Navbar>
 
-      <div style={{ padding: 24 }}>
-        <p
-          style={{
-            fontFamily: "var(--bp-typography-family-mono)",
-            opacity: 0.5,
-            fontSize: 12,
-            marginBottom: 24,
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 24,
+          padding: 24,
+        }}
+      >
+        <GitPanel
+          gitStatus={data.git}
+          githubData={githubData}
+          githubLoading={githubLoading}
+          lastGithubRefresh={lastGithubRefresh}
+          onRefresh={() => data.git && fetchGithubData(data.git)}
+        />
+        <QueuePanel
+          tasks={tasks}
+          repoPath={repoPath}
+          completedTasks={completedTasks}
+          onTasksChange={(updated) => {
+            setTasks(updated);
           }}
-        >
-          {repoPath}
-        </p>
-
-        <div style={{ marginBottom: 32 }}>
-          <QueuePanel
-            tasks={tasks}
-            repoPath={repoPath}
-            completedTasks={completedTasks}
-            onTasksChange={(updated) => {
-              setTasks(updated);
-            }}
-          />
-        </div>
-
+        />
         <NotesPanel
           notes={notes}
           repoPath={repoPath}

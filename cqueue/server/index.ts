@@ -8,6 +8,7 @@ import { eventsRoutes } from "./routes/events";
 import { markdownRoutes } from "./routes/markdown";
 import { completedRoutes } from "./routes/completed";
 import { usageRoutes } from "./routes/usage";
+import { githubRoutes } from "./routes/github";
 
 const indexHtml = readFileSync("dist/index.html", "utf-8");
 
@@ -20,6 +21,7 @@ const app = new Elysia()
   .use(markdownRoutes)
   .use(completedRoutes)
   .use(usageRoutes)
+  .use(githubRoutes)
   .use(staticPlugin({ assets: "dist/assets", prefix: "/assets" }))
   .onError(({ code, set }) => {
     if (code === "NOT_FOUND") {

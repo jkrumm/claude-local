@@ -1,3 +1,16 @@
+export interface GitFile {
+  status: "M" | "A" | "D" | "?" | "R";
+  path: string;
+  staged: boolean;
+}
+
+export interface GitCommit {
+  sha: string;
+  subject: string;
+  body: string;
+  relativeTime: string;
+}
+
 export interface GitStatus {
   branch: string;
   ahead: number;
@@ -5,6 +18,14 @@ export interface GitStatus {
   insertions: number;
   deletions: number;
   stagedCount: number;
+  mainBranch: string;
+  changedFiles: GitFile[];
+  branchCommits: GitCommit[];
+  stashCount: number;
+  lastTag: string | null;
+  distanceFromTag: number;
+  remoteUrl: string | null;
+  githubRepo: string | null;
 }
 
 function run(args: string[]): string | null {
@@ -15,6 +36,66 @@ function run(args: string[]): string | null {
   } catch {
     return null;
   }
+}
+
+// Like run() but without trimming — needed for git status --porcelain where
+// leading spaces are meaningful status characters (unstaged file indicator).
+function runRaw(args: string[]): string | null {
+  try {
+    const result = Bun.spawnSync(["git", ...args], { stderr: "ignore" });
+    if (result.exitCode !== 0) return null;
+    return new TextDecoder().decode(result.stdout);
+  } catch {
+    return null;
+  }
+}
+
+function parseGithubRepo(remoteUrl: string): string | null {
+  const httpsMatch = remoteUrl.match(/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/);
+  if (httpsMatch) return httpsMatch[1] ?? null;
+  const sshMatch = remoteUrl.match(/github\.com:([^/]+\/[^/]+?)(?:\.git)?$/);
+  if (sshMatch) return sshMatch[1] ?? null;
+  return null;
+}
+
+function parseChangedFiles(output: string | null): GitFile[] {
+  if (!output) return [];
+  return output
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const x = line[0] ?? " ";
+      const y = line[1] ?? " ";
+      const path = line.slice(3);
+      const staged = x !== " " && x !== "?";
+      const relevantChar = staged ? x : y;
+      let status: GitFile["status"] = "?";
+      if (relevantChar === "M") status = "M";
+      else if (relevantChar === "A") status = "A";
+      else if (relevantChar === "D") status = "D";
+      else if (relevantChar === "R") status = "R";
+      return { status, path, staged };
+    });
+}
+
+const LOG_SEP = "---GITRECORD---";
+
+function parseCommits(output: string | null): GitCommit[] {
+  if (!output) return [];
+  return output
+    .split(`\n${LOG_SEP}`)
+    .map((r) => r.trim())
+    .filter((r) => r && r !== LOG_SEP)
+    .map((record) => {
+      const lines = record.split("\n");
+      return {
+        sha: lines[0]?.trim() ?? "",
+        subject: lines[1]?.trim() ?? "",
+        relativeTime: lines[2]?.trim() ?? "",
+        body: lines.slice(3).join("\n").trim(),
+      };
+    })
+    .filter((c) => c.sha);
 }
 
 export function getGitStatus(repoPath: string): GitStatus | null {
@@ -47,17 +128,76 @@ export function getGitStatus(repoPath: string): GitStatus | null {
     deletions = delMatch ? parseInt(delMatch[1], 10) : 0;
   }
 
-  const stagedOutput = run([
-    "-C",
-    repoPath,
-    "diff",
-    "--cached",
-    "--name-only",
-  ]);
+  const stagedOutput = run(["-C", repoPath, "diff", "--cached", "--name-only"]);
   const stagedCount =
     stagedOutput && stagedOutput.length > 0
       ? stagedOutput.split("\n").filter(Boolean).length
       : 0;
 
-  return { branch, ahead, behind, insertions, deletions, stagedCount };
+  // Main branch detection
+  const symbolicRef = run([
+    "-C",
+    repoPath,
+    "symbolic-ref",
+    "refs/remotes/origin/HEAD",
+  ]);
+  const mainBranch = symbolicRef
+    ? (symbolicRef.split("/").pop() ?? "main")
+    : "main";
+
+  // Changed files — use runRaw to preserve leading spaces (unstaged status chars)
+  const statusOutput = runRaw(["-C", repoPath, "status", "--porcelain"]);
+  const changedFiles = parseChangedFiles(statusOutput);
+
+  // Commits on branch vs main
+  const logOutput = run([
+    "-C",
+    repoPath,
+    "log",
+    `${mainBranch}..HEAD`,
+    `--format=%h%n%s%n%ar%n%b%n${LOG_SEP}`,
+    "--",
+  ]);
+  const branchCommits = parseCommits(logOutput);
+
+  // Stash count
+  const stashOutput = run(["-C", repoPath, "stash", "list"]);
+  const stashCount = stashOutput
+    ? stashOutput.split("\n").filter(Boolean).length
+    : 0;
+
+  // Last tag
+  const lastTag = run(["-C", repoPath, "describe", "--tags", "--abbrev=0"]);
+  let distanceFromTag = 0;
+  if (lastTag) {
+    const distStr = run([
+      "-C",
+      repoPath,
+      "rev-list",
+      `${lastTag}..HEAD`,
+      "--count",
+    ]);
+    distanceFromTag = distStr ? parseInt(distStr, 10) || 0 : 0;
+  }
+
+  // Remote URL + GitHub repo
+  const remoteUrl = run(["-C", repoPath, "remote", "get-url", "origin"]);
+  const githubRepo = remoteUrl ? parseGithubRepo(remoteUrl) : null;
+
+  return {
+    branch,
+    ahead,
+    behind,
+    insertions,
+    deletions,
+    stagedCount,
+    mainBranch,
+    changedFiles,
+    branchCommits,
+    stashCount,
+    lastTag,
+    distanceFromTag,
+    remoteUrl,
+    githubRepo,
+  };
 }
