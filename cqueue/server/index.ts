@@ -26,6 +26,7 @@ const app = new Elysia()
   .onError(({ code, set }) => {
     if (code === "NOT_FOUND") {
       set.headers["content-type"] = "text/html; charset=utf-8";
+      set.headers["cache-control"] = "no-cache";
       return indexHtml;
     }
   })

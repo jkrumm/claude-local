@@ -345,9 +345,11 @@ function StatusRow({
       {pr && (
         <>
           <Divider style={{ height: 16, margin: "0 2px" }} />
-          <Tag minimal icon="git-pull-request">
-            #{pr.number} · {truncate(pr.title, 40)}
-          </Tag>
+          <Tooltip content={pr.title} placement="bottom">
+            <Tag minimal icon="git-pull-request">
+              #{pr.number} · {truncate(pr.title, 22)}
+            </Tag>
+          </Tooltip>
           {pr.checks.total > 0 && (
             <Tag
               intent={ciIntent}
@@ -369,7 +371,11 @@ function StatusRow({
               minimal
               icon={reviewIntent === Intent.SUCCESS ? "endorsed" : "comment"}
             >
-              {reviewLabel}
+              {pr?.reviewDecision === "APPROVED"
+                ? "Approved"
+                : pr?.reviewDecision === "CHANGES_REQUESTED"
+                  ? "Changes"
+                  : "Review"}
             </Tag>
           )}
           <AnchorButton
@@ -378,7 +384,7 @@ function StatusRow({
             small
             href={pr.url}
             target="_blank"
-            style={{ padding: "0 4px" }}
+            style={{ padding: "0 2px" }}
           />
         </>
       )}
@@ -403,30 +409,28 @@ function StatusRow({
             interactionKind="click"
             placement="bottom-start"
           >
-            <Button variant="minimal" style={{ padding: "2px 6px" }}>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                {modified > 0 && (
-                  <Tag intent={Intent.WARNING} minimal>
-                    Modified {modified}
-                  </Tag>
-                )}
-                {added > 0 && (
-                  <Tag intent={Intent.SUCCESS} minimal>
-                    Added {added}
-                  </Tag>
-                )}
-                {deleted > 0 && (
-                  <Tag intent={Intent.DANGER} minimal>
-                    Deleted {deleted}
-                  </Tag>
-                )}
-                {untracked > 0 && (
-                  <Tag minimal>
-                    Untracked {untracked}
-                  </Tag>
-                )}
-              </div>
-            </Button>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
+              {modified > 0 && (
+                <Tag intent={Intent.WARNING} minimal>
+                  M {modified}
+                </Tag>
+              )}
+              {added > 0 && (
+                <Tag intent={Intent.SUCCESS} minimal>
+                  A {added}
+                </Tag>
+              )}
+              {deleted > 0 && (
+                <Tag intent={Intent.DANGER} minimal>
+                  D {deleted}
+                </Tag>
+              )}
+              {untracked > 0 && (
+                <Tag minimal>
+                  ? {untracked}
+                </Tag>
+              )}
+            </div>
           </Popover>
         </>
       )}
@@ -670,26 +674,26 @@ function RunsSection({
           {githubData.latestRelease && (
             <div style={{ fontSize: 12, opacity: 0.55, marginBottom: 8 }}>
               Latest:{" "}
-              <AnchorButton
-                variant="minimal"
-                small
+              <a
                 href={githubData.latestRelease.url}
                 target="_blank"
+                rel="noreferrer"
                 style={{
-                  padding: 0,
                   fontFamily: "var(--bp-typography-family-mono)",
-                  fontSize: 12,
+                  color: "inherit",
+                  textDecoration: "underline",
+                  textDecorationColor: "rgba(0,0,0,0.25)",
                 }}
               >
                 {githubData.latestRelease.tagName}
-              </AnchorButton>
+              </a>
               {" · "}
               {timeAgo(githubData.latestRelease.publishedAt)}
             </div>
           )}
           <Button
             intent={Intent.PRIMARY}
-            icon="send-to"
+            icon="flash"
             small
             loading={triggering}
             onClick={() => setConfirmOpen(true)}
@@ -752,22 +756,17 @@ export function GitPanel({
         lastGithubRefresh={lastGithubRefresh}
         onRefresh={onRefresh}
       />
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: showGithubColumn ? "65fr 35fr" : "1fr",
-          gap: 24,
-        }}
-      >
-        <CommitsSection gitStatus={gitStatus} />
-        {showGithubColumn && (
+      <CommitsSection gitStatus={gitStatus} />
+      {showGithubColumn && (
+        <>
+          <Divider style={{ margin: "12px 0" }} />
           <RunsSection
             githubData={githubData!}
             gitStatus={gitStatus}
             githubRepo={gitStatus.githubRepo!}
           />
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }
