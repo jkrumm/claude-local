@@ -443,6 +443,7 @@ function ActionButton({ label, intent, disabled, tooltip, popoverContent, onClic
   const btn = (
     <Button
       fill
+      outlined={!intent}
       small
       intent={intent}
       disabled={disabled}
@@ -453,22 +454,26 @@ function ActionButton({ label, intent, disabled, tooltip, popoverContent, onClic
     </Button>
   );
 
-  const wrapped = tooltip ? <Tooltip content={tooltip} placement="top" targetTagName="div">{btn}</Tooltip> : btn;
+  const wrapped = tooltip ? (
+    <Tooltip content={tooltip} placement="top" targetTagName="div" targetProps={{ style: { flex: 1, minWidth: 0 } }}>
+      {btn}
+    </Tooltip>
+  ) : (
+    <div style={{ flex: 1, minWidth: 0 }}>{btn}</div>
+  );
 
-  if (!popoverContent) return <div style={{ flex: 1 }}>{wrapped}</div>;
+  if (!popoverContent) return wrapped;
 
   return (
-    <div style={{ flex: 1 }}>
-      <Popover
-        isOpen={open}
-        onClose={() => setOpen(false)}
-        content={React.cloneElement(popoverContent, { onClose: () => setOpen(false) })}
-        interactionKind="click"
-        placement="top-start"
-      >
-        {wrapped}
-      </Popover>
-    </div>
+    <Popover
+      isOpen={open}
+      onClose={() => setOpen(false)}
+      content={React.cloneElement(popoverContent, { onClose: () => setOpen(false) })}
+      interactionKind="click"
+      placement="top-start"
+    >
+      {wrapped}
+    </Popover>
   );
 }
 
@@ -489,7 +494,7 @@ function ActionsSection({ gitStatus, githubData }: { gitStatus: GitStatus; githu
   return (
     <div>
       <SectionLabel>Actions</SectionLabel>
-      <div style={{ display: "flex", gap: 6, alignItems: "stretch", width: "100%" }}>
+      <div style={{ display: "flex", gap: 5, alignItems: "stretch", width: "100%" }}>
 
         <ActionButton
           label="New Branch"
