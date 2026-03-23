@@ -1,14 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import {
-  AnchorButton,
-  Button,
-  Divider,
-  Icon,
-  Intent,
-  Popover,
-  Tag,
-  Tooltip,
-} from "@blueprintjs/core";
+import { AnchorButton, Button, H6, Icon, Intent, Popover, Tag, Tooltip } from "@blueprintjs/core";
 import type { GitFile, GitCommit, GitStatus, GithubData, WorkflowRun, Worktree } from "../types";
 
 interface Props {
@@ -37,14 +28,11 @@ function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max - 1) + "…" : s;
 }
 
-const SECTION_LABEL: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  opacity: 0.45,
-  marginBottom: 6,
-};
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <H6 style={{ margin: "0 0 6px", opacity: 0.65, fontSize: 12 }}>{children}</H6>
+  );
+}
 
 const mono: React.CSSProperties = {
   fontFamily: "var(--bp-typography-family-mono)",
@@ -174,7 +162,7 @@ function LocalSection({ gitStatus }: { gitStatus: GitStatus }) {
 
   return (
     <div style={{ flex: "0 0 auto", minWidth: 0 }}>
-      <div style={SECTION_LABEL}>Local</div>
+      <SectionLabel>Local</SectionLabel>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
         <Tooltip content={`Current branch (main: ${mainBranch})`} placement="bottom">
           <Tag minimal icon="git-branch" style={mono}>{branch}</Tag>
@@ -209,7 +197,7 @@ function WorktreesSection({ worktrees }: { worktrees: Worktree[] }) {
 
   const content = (
     <div style={{ padding: "8px 12px", minWidth: 200 }}>
-      <div style={{ ...SECTION_LABEL, marginBottom: 8 }}>Worktrees</div>
+      <SectionLabel>Worktrees</SectionLabel>
       {worktrees.map((w) => (
         <div key={w.path} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
           <Icon icon={w.isMain ? "home" : "git-branch"} size={12} style={{ opacity: 0.55 }} />
@@ -222,7 +210,7 @@ function WorktreesSection({ worktrees }: { worktrees: Worktree[] }) {
 
   return (
     <div style={{ flex: "0 0 auto" }}>
-      <div style={SECTION_LABEL}>Worktrees</div>
+      <SectionLabel>Worktrees</SectionLabel>
       <Popover content={content} interactionKind="click" placement="bottom-start">
         <div style={{ display: "flex", gap: 5, alignItems: "center", cursor: "pointer" }}>
           <Tag minimal icon="layers">{worktrees.length}</Tag>
@@ -263,7 +251,7 @@ function PRsSection({ githubData, gitStatus }: { githubData: GithubData | null; 
 
   return (
     <div style={{ flex: "0 0 auto", minWidth: 0 }}>
-      <div style={SECTION_LABEL}>PRs</div>
+      <SectionLabel>PRs</SectionLabel>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
         {currentPR && (
           <>
@@ -296,7 +284,7 @@ function VersionSection({ gitStatus, githubData }: { gitStatus: GitStatus; githu
 
   return (
     <div style={{ flex: "0 0 auto" }}>
-      <div style={SECTION_LABEL}>Version</div>
+      <SectionLabel>Version</SectionLabel>
       <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
         <Tooltip content={releaseUrl ? "Latest release" : "Latest tag"} placement="bottom">
           {releaseUrl ? (
@@ -343,7 +331,7 @@ function HistorySection({ gitStatus }: { gitStatus: GitStatus }) {
 
   return (
     <div style={{ flex: "1 1 0", minWidth: 0 }}>
-      <div style={SECTION_LABEL}>History</div>
+      <SectionLabel>History</SectionLabel>
       {rows.length === 0 ? (
         <div style={{ fontSize: 12, opacity: 0.4, display: "flex", alignItems: "center", gap: 6 }}>
           <Icon icon="tick-circle" size={12} />
@@ -389,7 +377,7 @@ function WorkflowsSection({ githubData, gitStatus, githubLoading, lastGithubRefr
   lastGithubRefresh: Date | null;
   onRefresh: () => void;
 }) {
-  if (!gitStatus.githubRepo) return null;
+  if (!gitStatus.githubRepo || !githubData || githubData.workflowRuns.length === 0) return null;
 
   function runIcon(run: WorkflowRun) {
     if (run.status !== "completed") return <Icon icon="time" size={12} style={{ opacity: 0.6 }} />;
@@ -400,30 +388,21 @@ function WorkflowsSection({ githubData, gitStatus, githubLoading, lastGithubRefr
   return (
     <div style={{ flex: "0 0 auto", width: 260 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-        <span style={SECTION_LABEL}>Workflows</span>
-        {gitStatus.githubRepo && (
-          <div style={{ marginLeft: "auto" }}>
-            <StatusDot lastRefresh={lastGithubRefresh} githubLoading={githubLoading} onRefresh={onRefresh} />
-          </div>
-        )}
+        <SectionLabel>Workflows</SectionLabel>
+        <div style={{ marginLeft: "auto", marginBottom: 6 }}>
+          <StatusDot lastRefresh={lastGithubRefresh} githubLoading={githubLoading} onRefresh={onRefresh} />
+        </div>
       </div>
-      {!githubData || githubData.workflowRuns.length === 0 ? (
-        <div style={{ fontSize: 12, opacity: 0.4, display: "flex", alignItems: "center", gap: 6 }}>
-          <Icon icon="time" size={12} />
-          No recent runs
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {githubData.workflowRuns.map((run) => (
-            <div key={run.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              {runIcon(run)}
-              <span style={{ fontSize: 12, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{truncate(run.name, 22)}</span>
-              <span style={{ fontSize: 10, opacity: 0.4, whiteSpace: "nowrap" }}>{timeAgo(run.createdAt)}</span>
-              <AnchorButton variant="minimal" icon="share" small href={run.url} target="_blank" style={{ padding: "0 2px", flexShrink: 0 }} />
-            </div>
-          ))}
-        </div>
-      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {githubData.workflowRuns.map((run) => (
+          <div key={run.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {runIcon(run)}
+            <span style={{ fontSize: 12, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{truncate(run.name, 22)}</span>
+            <span style={{ fontSize: 10, opacity: 0.4, whiteSpace: "nowrap" }}>{timeAgo(run.createdAt)}</span>
+            <AnchorButton variant="minimal" icon="share" small href={run.url} target="_blank" style={{ padding: "0 2px", flexShrink: 0 }} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -434,7 +413,7 @@ function BranchNameForm({ label, onSubmit, onClose }: { label: string; onSubmit:
   const [value, setValue] = useState("");
   return (
     <div style={{ padding: 16, minWidth: 240 }}>
-      <div style={{ ...SECTION_LABEL, marginBottom: 8 }}>{label}</div>
+      <SectionLabel>{label}</SectionLabel>
       <input
         autoFocus
         value={value}
@@ -451,10 +430,9 @@ function BranchNameForm({ label, onSubmit, onClose }: { label: string; onSubmit:
   );
 }
 
-function ActionButton({ label, intent, icon, disabled, tooltip, popoverContent, onClick }: {
+function ActionButton({ label, intent, disabled, tooltip, popoverContent, onClick }: {
   label: string;
   intent?: Intent;
-  icon?: string;
   disabled?: boolean;
   tooltip?: string;
   popoverContent?: React.ReactElement;
@@ -464,6 +442,7 @@ function ActionButton({ label, intent, icon, disabled, tooltip, popoverContent, 
 
   const btn = (
     <Button
+      fill
       small
       intent={intent}
       disabled={disabled}
@@ -474,20 +453,22 @@ function ActionButton({ label, intent, icon, disabled, tooltip, popoverContent, 
     </Button>
   );
 
-  const wrapped = tooltip ? <Tooltip content={tooltip} placement="top">{btn}</Tooltip> : btn;
+  const wrapped = tooltip ? <Tooltip content={tooltip} placement="top" targetTagName="div">{btn}</Tooltip> : btn;
 
-  if (!popoverContent) return wrapped;
+  if (!popoverContent) return <div style={{ flex: 1 }}>{wrapped}</div>;
 
   return (
-    <Popover
-      isOpen={open}
-      onClose={() => setOpen(false)}
-      content={React.cloneElement(popoverContent, { onClose: () => setOpen(false) })}
-      interactionKind="click"
-      placement="top-start"
-    >
-      {wrapped}
-    </Popover>
+    <div style={{ flex: 1 }}>
+      <Popover
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        content={React.cloneElement(popoverContent, { onClose: () => setOpen(false) })}
+        interactionKind="click"
+        placement="top-start"
+      >
+        {wrapped}
+      </Popover>
+    </div>
   );
 }
 
@@ -507,53 +488,39 @@ function ActionsSection({ gitStatus, githubData }: { gitStatus: GitStatus; githu
 
   return (
     <div>
-      <div style={SECTION_LABEL}>Actions</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+      <SectionLabel>Actions</SectionLabel>
+      <div style={{ display: "flex", gap: 6, alignItems: "stretch", width: "100%" }}>
 
-        {/* New Branch */}
         <ActionButton
           label="New Branch"
           tooltip="Create a new branch from current HEAD"
           popoverContent={
-            <BranchNameForm
-              label="New Branch Name"
-              onSubmit={(name) => console.log("new-branch", name)}
-              onClose={() => {}}
-            />
+            <BranchNameForm label="New Branch Name" onSubmit={(name) => console.log("new-branch", name)} onClose={() => {}} />
           }
         />
 
-        {/* New Worktree */}
         <ActionButton
           label="New Worktree"
           tooltip="Create a new worktree on a branch"
           popoverContent={
-            <BranchNameForm
-              label="New Worktree Branch"
-              onSubmit={(name) => console.log("new-worktree", name)}
-              onClose={() => {}}
-            />
+            <BranchNameForm label="New Worktree Branch" onSubmit={(name) => console.log("new-worktree", name)} onClose={() => {}} />
           }
         />
 
-        <Divider style={{ height: 20, margin: "0 2px" }} />
-
-        {/* Rebase */}
         <ActionButton
           label={rebaseCount > 0 ? `Rebase (${rebaseCount})` : "Rebase"}
-          tooltip={rebaseCount > 0 ? `Rebase onto ${mainBranch} — ${rebaseCount} new commit${rebaseCount !== 1 ? "s" : ""}` : `Branch is up to date with ${mainBranch}`}
+          tooltip={rebaseCount > 0 ? `Rebase onto ${mainBranch} — ${rebaseCount} new commit${rebaseCount !== 1 ? "s" : ""}` : `Up to date with ${mainBranch}`}
           disabled={onMain || rebaseCount === 0}
           onClick={() => console.log("rebase")}
         />
 
-        {/* Push */}
         <ActionButton
           label={pushCount > 0 ? `Push (${pushCount})` : "Push"}
-          tooltip={pushCount > 0 ? `Push ${pushCount} commit${pushCount !== 1 ? "s" : ""} to remote/${branch}` : "Nothing to push"}
+          tooltip={pushCount > 0 ? `Push ${pushCount} commit${pushCount !== 1 ? "s" : ""} → ${branch}` : "Nothing to push"}
           disabled={pushCount === 0}
           popoverContent={
             <div style={{ padding: 16, minWidth: 220 }}>
-              <div style={{ ...SECTION_LABEL, marginBottom: 8 }}>Push to remote</div>
+              <SectionLabel>Push to remote</SectionLabel>
               <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>
                 {pushCount} commit{pushCount !== 1 ? "s" : ""} → <span style={mono}>{branch}</span>
               </div>
@@ -562,9 +529,6 @@ function ActionsSection({ gitStatus, githubData }: { gitStatus: GitStatus; githu
           }
         />
 
-        <Divider style={{ height: 20, margin: "0 2px" }} />
-
-        {/* GitCleanup */}
         <ActionButton
           label="GitCleanup"
           tooltip="Squash and group noisy commits into logical units"
@@ -572,21 +536,19 @@ function ActionsSection({ gitStatus, githubData }: { gitStatus: GitStatus; githu
           onClick={() => console.log("git-cleanup")}
         />
 
-        {/* Validate */}
         <ActionButton
           label="Validate"
           intent={Intent.SUCCESS}
           tooltip="Run format, lint, typecheck, and tests"
           popoverContent={
             <div style={{ padding: 16, minWidth: 280 }}>
-              <div style={{ ...SECTION_LABEL, marginBottom: 8 }}>Validate</div>
+              <SectionLabel>Validate</SectionLabel>
               <div style={{ fontSize: 12, opacity: 0.55, marginBottom: 10 }}>format · lint · tsc · unit tests</div>
               <Button small intent={Intent.SUCCESS} onClick={() => console.log("validate")}>Run Validation</Button>
             </div>
           }
         />
 
-        {/* Review */}
         <ActionButton
           label="Review"
           intent={Intent.SUCCESS}
@@ -594,9 +556,6 @@ function ActionsSection({ gitStatus, githubData }: { gitStatus: GitStatus; githu
           onClick={() => console.log("review")}
         />
 
-        <Divider style={{ height: 20, margin: "0 2px" }} />
-
-        {/* Create PR */}
         <ActionButton
           label="Create PR"
           disabled={onMain || !!pr}
@@ -604,14 +563,13 @@ function ActionsSection({ gitStatus, githubData }: { gitStatus: GitStatus; githu
           onClick={() => console.log("create-pr")}
         />
 
-        {/* Merge */}
         {pr && (
           <ActionButton
             label={`Merge #${pr.number}`}
             tooltip={`Merge PR #${pr.number}: ${truncate(pr.title, 30)}`}
             popoverContent={
               <div style={{ padding: 16, minWidth: 220 }}>
-                <div style={{ ...SECTION_LABEL, marginBottom: 8 }}>Merge PR</div>
+                <SectionLabel>Merge PR</SectionLabel>
                 <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>
                   #{pr.number} {truncate(pr.title, 32)}
                 </div>
@@ -621,7 +579,6 @@ function ActionsSection({ gitStatus, githubData }: { gitStatus: GitStatus; githu
           />
         )}
 
-        {/* Release */}
         {releaseCount > 0 && (
           <ActionButton
             label={`Release (${releaseCount})`}
@@ -629,7 +586,7 @@ function ActionsSection({ gitStatus, githubData }: { gitStatus: GitStatus; githu
             tooltip={`Trigger release — ${releaseCount} commit${releaseCount !== 1 ? "s" : ""} since ${gitStatus.lastTag}`}
             popoverContent={
               <div style={{ padding: 16, minWidth: 220 }}>
-                <div style={{ ...SECTION_LABEL, marginBottom: 8 }}>Trigger Release</div>
+                <SectionLabel>Trigger Release</SectionLabel>
                 <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>
                   {releaseCount} commit{releaseCount !== 1 ? "s" : ""} since <span style={mono}>{gitStatus.lastTag}</span>
                 </div>
@@ -650,51 +607,33 @@ export function GitPanel({ gitStatus, githubData, githubLoading, lastGithubRefre
   if (!gitStatus) return null;
 
   return (
-    <div style={{ padding: "14px 16px", borderRadius: 4, border: "1px solid var(--bp5-card-border-color, rgba(17,20,24,.15))", display: "flex", flexDirection: "column", gap: 14 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
 
       {/* Row 1: Status sections */}
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "flex-start" }}>
         <LocalSection gitStatus={gitStatus} />
         {gitStatus.worktrees.length > 1 && (
-          <>
-            <Divider style={{ height: "auto", margin: "0" }} />
-            <WorktreesSection worktrees={gitStatus.worktrees} />
-          </>
+          <WorktreesSection worktrees={gitStatus.worktrees} />
         )}
         {githubData && (githubData.currentPR || githubData.openPRs.length > 0) && (
-          <>
-            <Divider style={{ height: "auto", margin: "0" }} />
-            <PRsSection githubData={githubData} gitStatus={gitStatus} />
-          </>
+          <PRsSection githubData={githubData} gitStatus={gitStatus} />
         )}
         {gitStatus.lastTag && (
-          <>
-            <Divider style={{ height: "auto", margin: "0" }} />
-            <VersionSection gitStatus={gitStatus} githubData={githubData} />
-          </>
+          <VersionSection gitStatus={gitStatus} githubData={githubData} />
         )}
       </div>
-
-      <Divider style={{ margin: "0" }} />
 
       {/* Row 2: History + Workflows */}
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
         <HistorySection gitStatus={gitStatus} />
-        {gitStatus.githubRepo && (
-          <>
-            <Divider style={{ height: "auto", margin: "0" }} />
-            <WorkflowsSection
-              githubData={githubData}
-              gitStatus={gitStatus}
-              githubLoading={githubLoading}
-              lastGithubRefresh={lastGithubRefresh}
-              onRefresh={onRefresh}
-            />
-          </>
-        )}
+        <WorkflowsSection
+          githubData={githubData}
+          gitStatus={gitStatus}
+          githubLoading={githubLoading}
+          lastGithubRefresh={lastGithubRefresh}
+          onRefresh={onRefresh}
+        />
       </div>
-
-      <Divider style={{ margin: "0" }} />
 
       {/* Row 3: Actions */}
       <ActionsSection gitStatus={gitStatus} githubData={githubData} />
