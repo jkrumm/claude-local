@@ -231,15 +231,9 @@ Use for: visual screenshots at multiple viewports · multi-step UI flows · quic
 3. When a network call is involved → verify request/response in DevTools before declaring done
 4. After fixing a bug → re-validate the exact scenario in browser
 
-### Chrome for Testing (optional upgrade)
+### Chrome for Testing
 
-For a cleaner browser binary (no Google account sync, no auto-updates):
-```bash
-npx playwright install chrome  # one-time install
-# Binary path: ~/Library/Caches/ms-playwright/chrome-*/chrome-mac/Google Chrome for Testing.app
-```
-
-Use this binary instead of regular Chrome if available — identical to real Chrome, purpose-built for automation.
+Installed by `make setup` into `~/Library/Caches/ms-playwright/`. Purpose-built for automation — no Google account sync, no auto-updates, same rendering as real Chrome. The `c()` launcher auto-starts it in the background so it is always ready when Claude Code starts.
 
 ---
 

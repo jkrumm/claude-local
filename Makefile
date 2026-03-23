@@ -118,24 +118,28 @@ _setup-gitignore:
 
 .PHONY: _setup-browser
 _setup-browser:
-	@echo "  Browser debugging (Chrome DevTools MCP)..."
+	@echo "  Browser debugging..."
+	@# Chrome for Testing — install if not present
+	@if find "$(HOME)/Library/Caches/ms-playwright" -name "Google Chrome for Testing" -type f 2>/dev/null | grep -q .; then \
+		echo "    · Chrome for Testing (ok)"; \
+	else \
+		echo "    Installing Chrome for Testing..."; \
+		npx playwright install chrome; \
+		echo "    ✓ Chrome for Testing installed"; \
+	fi
+	@# chrome-devtools MCP entry (comes from settings merge above, just verify)
 	@if jq -e '.mcpServers["chrome-devtools"]' "$(CLAUDE_DIR)/settings.json" > /dev/null 2>&1; then \
 		echo "    · chrome-devtools MCP (ok)"; \
 	else \
-		echo "    ✗ chrome-devtools MCP missing — run make setup to add via template merge"; \
+		echo "    ✗ chrome-devtools MCP missing — settings merge may have failed"; \
 	fi
+	@# Permission — patch into live settings if missing (fresh machines preserve template on first run)
 	@if jq -e '.permissions.allow | contains(["mcp__chrome-devtools__*"])' "$(CLAUDE_DIR)/settings.json" > /dev/null 2>&1; then \
 		echo "    · mcp__chrome-devtools__* permission (ok)"; \
 	else \
 		jq '.permissions.allow += ["mcp__chrome-devtools__*"]' "$(CLAUDE_DIR)/settings.json" > /tmp/claude-browser-perm.json \
 		&& mv /tmp/claude-browser-perm.json "$(CLAUDE_DIR)/settings.json"; \
-		echo "    ✓ mcp__chrome-devtools__* permission added to live settings"; \
-	fi
-	@echo "    · chrome-debug alias (via zshrc symlink)"
-	@if ! command -v npx > /dev/null 2>&1; then \
-		echo "    ✗ npx not found — install Node.js for Chrome for Testing support"; \
-	else \
-		echo "    · npx available (run: npx playwright install chrome — for Chrome for Testing)"; \
+		echo "    ✓ mcp__chrome-devtools__* permission added"; \
 	fi
 
 .PHONY: _link
@@ -196,6 +200,11 @@ status:
 		$(MAKE) --no-print-directory _check DST="$(SOURCEROOT)/.claude/skills/$$name"; \
 	done
 	@echo "  Browser debugging"
+	@if find "$(HOME)/Library/Caches/ms-playwright" -name "Google Chrome for Testing" -type f 2>/dev/null | grep -q .; then \
+		echo "    ✓ Chrome for Testing"; \
+	else \
+		echo "    ✗ Chrome for Testing [missing — run make setup]"; \
+	fi
 	@if jq -e '.mcpServers["chrome-devtools"]' "$(CLAUDE_DIR)/settings.json" > /dev/null 2>&1; then \
 		echo "    ✓ chrome-devtools MCP (in settings.json)"; \
 	else \
