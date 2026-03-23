@@ -1,9 +1,9 @@
 import type { RepoInfo } from "../server/lib/repo-scanner";
 import type { QueueTask } from "../server/lib/parse-queue";
-import type { GitStatus, GitFile, GitCommit } from "../server/lib/git";
+import type { GitStatus, GitFile, GitCommit, Worktree } from "../server/lib/git";
 import type { CompletedTask } from "../server/lib/db";
 
-export type { RepoInfo, QueueTask, GitStatus, GitFile, GitCommit, CompletedTask };
+export type { RepoInfo, QueueTask, GitStatus, GitFile, GitCommit, Worktree, CompletedTask };
 
 export interface RepoDashboardData {
   repo: RepoInfo;
@@ -32,6 +32,7 @@ export interface WorkflowRun {
 
 export interface GithubData {
   currentPR: PullRequest | null;
+  openPRs: { number: number; title: string; url: string }[];
   workflowRuns: WorkflowRun[];
   latestRelease: { tagName: string; publishedAt: string; url: string } | null;
   hasReleaseWorkflow: boolean;

@@ -11,6 +11,12 @@ export interface GitCommit {
   relativeTime: string;
 }
 
+export interface Worktree {
+  path: string;
+  branch: string;
+  isMain: boolean;
+}
+
 export interface GitStatus {
   branch: string;
   ahead: number;
@@ -21,6 +27,8 @@ export interface GitStatus {
   mainBranch: string;
   changedFiles: GitFile[];
   branchCommits: GitCommit[];
+  masterCommits: GitCommit[];
+  worktrees: Worktree[];
   stashCount: number;
   lastTag: string | null;
   distanceFromTag: number;
@@ -180,6 +188,38 @@ export function getGitStatus(repoPath: string): GitStatus | null {
     distanceFromTag = distStr ? parseInt(distStr, 10) || 0 : 0;
   }
 
+  // Recent commits on main branch
+  const masterLogOutput = run([
+    "-C",
+    repoPath,
+    "log",
+    mainBranch,
+    "-n",
+    "10",
+    `--format=%h%n%s%n%ar%n%b%n${LOG_SEP}`,
+    "--",
+  ]);
+  const masterCommits = parseCommits(masterLogOutput);
+
+  // Worktrees
+  const worktreeOutput = run(["-C", repoPath, "worktree", "list", "--porcelain"]);
+  const worktrees: Worktree[] = [];
+  if (worktreeOutput) {
+    const blocks = worktreeOutput.split("\n\n").filter(Boolean);
+    const mainWorktreePath = blocks[0]?.match(/^worktree (.+)/m)?.[1] ?? null;
+    for (const block of blocks) {
+      const pathMatch = block.match(/^worktree (.+)/m);
+      const branchMatch = block.match(/^branch refs\/heads\/(.+)/m);
+      if (pathMatch && branchMatch) {
+        worktrees.push({
+          path: pathMatch[1]!,
+          branch: branchMatch[1]!,
+          isMain: pathMatch[1] === mainWorktreePath,
+        });
+      }
+    }
+  }
+
   // Remote URL + GitHub repo
   const remoteUrl = run(["-C", repoPath, "remote", "get-url", "origin"]);
   const githubRepo = remoteUrl ? parseGithubRepo(remoteUrl) : null;
@@ -194,6 +234,8 @@ export function getGitStatus(repoPath: string): GitStatus | null {
     mainBranch,
     changedFiles,
     branchCommits,
+    masterCommits,
+    worktrees,
     stashCount,
     lastTag,
     distanceFromTag,

@@ -23,6 +23,7 @@ export interface WorkflowRun {
 
 export interface GithubData {
   currentPR: PullRequest | null;
+  openPRs: { number: number; title: string; url: string }[];
   workflowRuns: WorkflowRun[];
   latestRelease: { tagName: string; publishedAt: string; url: string } | null;
   hasReleaseWorkflow: boolean;
@@ -36,9 +37,10 @@ export async function getGithubData(
   if (!octokit) return null;
 
   try {
-    const [prsResult, runsResult, releaseResult, workflowResult] =
+    const [prsResult, allPrsResult, runsResult, releaseResult, workflowResult] =
       await Promise.allSettled([
         octokit.pulls.list({ owner, repo, state: "open", head: `${owner}:${branch}` }),
+        octokit.pulls.list({ owner, repo, state: "open", per_page: 10 }),
         octokit.actions.listWorkflowRunsForRepo({ owner, repo, per_page: 5 }),
         octokit.repos.getLatestRelease({ owner, repo }),
         octokit.repos.getContent({
@@ -130,7 +132,16 @@ export async function getGithubData(
 
     const hasReleaseWorkflow = workflowResult.status === "fulfilled";
 
-    return { currentPR, workflowRuns, latestRelease, hasReleaseWorkflow };
+    const openPRs =
+      allPrsResult.status === "fulfilled"
+        ? allPrsResult.value.data.map((pr) => ({
+            number: pr.number,
+            title: pr.title,
+            url: pr.html_url,
+          }))
+        : [];
+
+    return { currentPR, openPRs, workflowRuns, latestRelease, hasReleaseWorkflow };
   } catch (err) {
     console.error("GitHub API error:", err);
     return null;
