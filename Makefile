@@ -127,11 +127,12 @@ _setup-browser:
 		npx playwright install chrome; \
 		echo "    ✓ Chrome for Testing installed"; \
 	fi
-	@# chrome-devtools MCP entry (comes from settings merge above, just verify)
-	@if jq -e '.mcpServers["chrome-devtools"]' "$(CLAUDE_DIR)/settings.json" > /dev/null 2>&1; then \
+	@# chrome-devtools MCP — register via claude mcp add (canonical, handles schema evolution)
+	@if claude mcp list 2>/dev/null | grep -q "chrome-devtools"; then \
 		echo "    · chrome-devtools MCP (ok)"; \
 	else \
-		echo "    ✗ chrome-devtools MCP missing — settings merge may have failed"; \
+		claude mcp add chrome-devtools --scope user -- npx -y chrome-devtools-mcp@latest; \
+		echo "    ✓ chrome-devtools MCP registered"; \
 	fi
 	@# Permission — patch into live settings if missing (fresh machines preserve template on first run)
 	@if jq -e '.permissions.allow | contains(["mcp__chrome-devtools__*"])' "$(CLAUDE_DIR)/settings.json" > /dev/null 2>&1; then \
@@ -205,8 +206,8 @@ status:
 	else \
 		echo "    ✗ Chrome for Testing [missing — run make setup]"; \
 	fi
-	@if jq -e '.mcpServers["chrome-devtools"]' "$(CLAUDE_DIR)/settings.json" > /dev/null 2>&1; then \
-		echo "    ✓ chrome-devtools MCP (in settings.json)"; \
+	@if claude mcp list 2>/dev/null | grep -q "chrome-devtools"; then \
+		echo "    ✓ chrome-devtools MCP"; \
 	else \
 		echo "    ✗ chrome-devtools MCP [missing — run make setup]"; \
 	fi
