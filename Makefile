@@ -18,6 +18,7 @@ setup:
 	@$(MAKE) --no-print-directory _setup-skills
 	@$(MAKE) --no-print-directory _setup-settings
 	@$(MAKE) --no-print-directory _setup-gitignore
+	@$(MAKE) --no-print-directory _setup-browser
 	@echo ""
 	@echo "  Done. Run 'make status' to verify."
 	@echo ""
@@ -43,6 +44,17 @@ _setup-config:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/config/gitconfig-work" \
 		DST="$(HOME)/.gitconfig-work"
+	@LOCALIAS_SRC="$(CLAUDE_LOCAL)/config/localias.yaml"; \
+	 LOCALIAS_DST="$(HOME)/Library/Application Support/localias.yaml"; \
+	 if [ -L "$$LOCALIAS_DST" ] && [ "$$(readlink "$$LOCALIAS_DST")" = "$$LOCALIAS_SRC" ]; then \
+	   echo "    · localias.yaml (ok)"; \
+	 else \
+	   if [ -e "$$LOCALIAS_DST" ] && [ ! -L "$$LOCALIAS_DST" ]; then \
+	     mv "$$LOCALIAS_DST" "$$LOCALIAS_DST.bak"; \
+	   fi; \
+	   ln -sfn "$$LOCALIAS_SRC" "$$LOCALIAS_DST"; \
+	   echo "    ✓ localias.yaml"; \
+	 fi
 
 .PHONY: _setup-hooks
 _setup-hooks:
@@ -88,7 +100,7 @@ _setup-settings:
 		echo "    ✓ settings.json created from template"; \
 	else \
 		jq --slurpfile existing "$(CLAUDE_DIR)/settings.json" \
-			'del(._NOTE) * {permissions: $$existing[0].permissions} * ($$existing[0] | {model, effortLevel, alwaysThinkingEnabled} | with_entries(select(.value != null)))' \
+			'del(._NOTE) * {permissions: $$existing[0].permissions} * ($$existing[0] | {model, effortLevel, alwaysThinkingEnabled} | with_entries(select(.value != null))) * {mcpServers: (($$existing[0].mcpServers // {}) + .mcpServers)}' \
 			"$(CLAUDE_LOCAL)/config/settings.template.json" \
 			> /tmp/claude-settings-merged.json \
 		&& mv /tmp/claude-settings-merged.json "$(CLAUDE_DIR)/settings.json"; \
@@ -103,6 +115,28 @@ _setup-gitignore:
 		DST="$(HOME)/.gitignore_global"
 	@git config --global core.excludesfile "$(HOME)/.gitignore_global"
 	@echo "    ✓ git config core.excludesfile"
+
+.PHONY: _setup-browser
+_setup-browser:
+	@echo "  Browser debugging (Chrome DevTools MCP)..."
+	@if jq -e '.mcpServers["chrome-devtools"]' "$(CLAUDE_DIR)/settings.json" > /dev/null 2>&1; then \
+		echo "    · chrome-devtools MCP (ok)"; \
+	else \
+		echo "    ✗ chrome-devtools MCP missing — run make setup to add via template merge"; \
+	fi
+	@if jq -e '.permissions.allow | contains(["mcp__chrome-devtools__*"])' "$(CLAUDE_DIR)/settings.json" > /dev/null 2>&1; then \
+		echo "    · mcp__chrome-devtools__* permission (ok)"; \
+	else \
+		jq '.permissions.allow += ["mcp__chrome-devtools__*"]' "$(CLAUDE_DIR)/settings.json" > /tmp/claude-browser-perm.json \
+		&& mv /tmp/claude-browser-perm.json "$(CLAUDE_DIR)/settings.json"; \
+		echo "    ✓ mcp__chrome-devtools__* permission added to live settings"; \
+	fi
+	@echo "    · chrome-debug alias (via zshrc symlink)"
+	@if ! command -v npx > /dev/null 2>&1; then \
+		echo "    ✗ npx not found — install Node.js for Chrome for Testing support"; \
+	else \
+		echo "    · npx available (run: npx playwright install chrome — for Chrome for Testing)"; \
+	fi
 
 .PHONY: _link
 _link:
@@ -133,6 +167,14 @@ status:
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitconfig"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitconfig-personal"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitconfig-work"
+	@LOCALIAS_DST="$(HOME)/Library/Application Support/localias.yaml"; \
+	 if [ -L "$$LOCALIAS_DST" ] && [ -e "$$LOCALIAS_DST" ]; then \
+	   echo "    ✓ localias.yaml"; \
+	 elif [ -L "$$LOCALIAS_DST" ]; then \
+	   echo "    ✗ localias.yaml [BROKEN]"; \
+	 else \
+	   echo "    ✗ localias.yaml [real file — run make setup]"; \
+	 fi
 	@echo "  Settings"
 	@if [ -f "$(CLAUDE_DIR)/settings.json" ]; then \
 		echo "    ✓ settings.json (hooks + statusline wired)"; \
@@ -153,6 +195,17 @@ status:
 		name=$$(basename "$$skill"); \
 		$(MAKE) --no-print-directory _check DST="$(SOURCEROOT)/.claude/skills/$$name"; \
 	done
+	@echo "  Browser debugging"
+	@if jq -e '.mcpServers["chrome-devtools"]' "$(CLAUDE_DIR)/settings.json" > /dev/null 2>&1; then \
+		echo "    ✓ chrome-devtools MCP (in settings.json)"; \
+	else \
+		echo "    ✗ chrome-devtools MCP [missing — run make setup]"; \
+	fi
+	@if jq -e '.permissions.allow | contains(["mcp__chrome-devtools__*"])' "$(CLAUDE_DIR)/settings.json" > /dev/null 2>&1; then \
+		echo "    ✓ mcp__chrome-devtools__* permission"; \
+	else \
+		echo "    ✗ mcp__chrome-devtools__* permission [missing]"; \
+	fi
 	@echo ""
 
 .PHONY: _check
@@ -182,7 +235,7 @@ github-config-dry:
 	@DRY_RUN=1 $(CLAUDE_LOCAL)/scripts/github-config.sh
 
 # ============================================================================
-# cqueue — web dashboard
+# cqueue — web dashboard (http://cqueue.local)
 # ============================================================================
 
 .PHONY: up
@@ -223,7 +276,7 @@ help:
 	@echo "  make github-config   Apply branch protection + merge settings to all repos"
 	@echo "  make github-config-dry  Preview without applying"
 	@echo ""
-	@echo "  make up         Start cqueue dashboard  (localhost:7705)"
+	@echo "  make up         Start cqueue dashboard  (http://cqueue.local)"
 	@echo "  make down       Stop cqueue"
 	@echo "  make rebuild    Force-recreate cqueue container"
 	@echo "  make logs       Tail cqueue logs"

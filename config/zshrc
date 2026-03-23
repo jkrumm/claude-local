@@ -60,6 +60,8 @@ alias gback="git reset --soft HEAD~1"
 alias sz="source ~/.zshrc"
 alias homelab="ssh homelab"
 alias vps="ssh vps"
+# Isolated Chrome instance for debugging (separate profile, no extensions/logins, port 9222)
+alias chrome-debug='/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir=$HOME/.chrome-debug-profile --no-first-run --no-default-browser-check'
 
 # Claude Code with auto workspace detection + queue /clear restart loop
 c() {

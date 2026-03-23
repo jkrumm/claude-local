@@ -2,8 +2,16 @@
   "env": {
     "CLAUDE_CODE_ENABLE_TELEMETRY": "0"
   },
+  "mcpServers": {
+    "chrome-devtools": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest"]
+    }
+  },
   "permissions": {
     "allow": [
+      "mcp__chrome-devtools__*",
       "Bash(bun run *)",
       "Bash(bun add *)",
       "Bash(bun remove *)",

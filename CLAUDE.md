@@ -18,6 +18,7 @@ outward — edit at either end, git always sees the change here.
 | `config/gitconfig-personal` | `~/.gitconfig-personal` | jkrumm@pm.me + 1Password signing |
 | `config/gitconfig-work` | `~/.gitconfig-work` | johannes.krumm@iu.org + 1Password signing |
 | `config/gitignore_global` | `~/.gitignore_global` | cqueue.md, cnotes.md |
+| `config/localias.yaml` | `~/Library/Application Support/localias.yaml` | localias proxy config (cqueue.local → 7705) |
 | `hooks/notify.ts` | `~/.claude/hooks/notify.ts` | All 4 hook events |
 | `scripts/queue.ts` | `~/.claude/queue.ts` | cq CLI |
 | `scripts/statusline.sh` | `~/.claude/statusline.sh` | 3-line statusline |

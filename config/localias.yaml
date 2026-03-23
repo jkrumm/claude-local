@@ -1,0 +1,15 @@
+# localias config — version controlled in claude-local
+#
+# alias: port
+#
+# Prefixing with http:// disables HTTPS redirect (required for apps with
+# hardcoded localhost references running in Docker or local dev servers).
+#
+# Ports are defined per-project in docker-compose.yml or vite.config.ts.
+#
+http://rollhook.local: 7700
+http://rollhook-marketing.local: 7701
+http://rollhook-dashboard.local: 7702
+http://cqueue.local: 7705
+http://basalt.local: 7710
+http://basalt-example.local: 7711
