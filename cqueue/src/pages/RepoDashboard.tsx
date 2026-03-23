@@ -106,6 +106,14 @@ function RepoDashboardInner() {
     }
   };
 
+  const fetchGitStatus = useCallback(async (path: string) => {
+    const result = await api.api.repo.get({ query: { path } }).catch(() => null);
+    if (result?.data?.ok) {
+      const d = result.data.data as RepoDashboardData;
+      setData((prev) => (prev ? { ...prev, git: d.git } : prev));
+    }
+  }, []);
+
   const fetchGithubData = useCallback(async (git: GitStatus) => {
     if (!git.githubRepo) return;
     setGithubLoading(true);
@@ -188,15 +196,20 @@ function RepoDashboardInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoPath]);
 
-  // GitHub polling — starts once git status resolves with a githubRepo
+  // Local git + GitHub polling every 15s
   useEffect(() => {
+    if (!repoPath) return;
     const git = data?.git;
-    if (!git?.githubRepo) return;
 
-    fetchGithubData(git);
-    const interval = setInterval(() => fetchGithubData(git), 15000);
+    if (git?.githubRepo) fetchGithubData(git);
+    fetchGitStatus(repoPath);
+
+    const interval = setInterval(() => {
+      fetchGitStatus(repoPath);
+      if (git?.githubRepo) fetchGithubData(git);
+    }, 15000);
     return () => clearInterval(interval);
-  }, [data?.git?.githubRepo, data?.git?.branch, fetchGithubData]);
+  }, [repoPath, data?.git?.githubRepo, data?.git?.branch, fetchGithubData, fetchGitStatus]);
 
   if (!repoPath) {
     return (
