@@ -73,7 +73,9 @@ export function DiagramPanel({ repoPath }: Props) {
   const [diagrams, setDiagrams] = useState<DiagramMeta[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeDiagram, setActiveDiagram] = useState<string | null>(null);
-  const [diagramContent, setDiagramContent] = useState<string>("");
+  const [openDiagrams, setOpenDiagrams] = useState<string[]>([]);
+  const [diagramContents, setDiagramContents] = useState<Record<string, string>>({});
+  const [diagBrowserOpen, setDiagBrowserOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [svgVersions, setSvgVersions] = useState<Record<string, number>>({});
 
@@ -112,23 +114,44 @@ export function DiagramPanel({ repoPath }: Props) {
 
   const openDiagram = useCallback(
     async (name: string) => {
+      // Already active — nothing to do
       if (name === activeDiagram) return;
+      // Already open in another tab — just switch
+      if (openDiagrams.includes(name)) {
+        setActiveDiagram(name);
+        setDiagBrowserOpen(false);
+        return;
+      }
+      // New tab: fetch content, then activate
       const res = await api.api.diagrams.file
         .get({ query: { path: repoPath, name } })
         .catch(() => null);
       if (res?.data?.ok) {
+        setDiagramContents((prev) => ({ ...prev, [name]: res.data.data as string }));
+        setOpenDiagrams((prev) => [...prev, name]);
         setActiveDiagram(name);
-        setDiagramContent(res.data.data as string);
         setSaveStatus("idle");
+        setDiagBrowserOpen(false);
       }
     },
-    [activeDiagram, repoPath],
+    [activeDiagram, openDiagrams, repoPath],
   );
+
+  const closeTab = (name: string) => {
+    const newOpen = openDiagrams.filter((n) => n !== name);
+    setOpenDiagrams(newOpen);
+    setDiagramContents((prev) => { const { [name]: _, ...rest } = prev; return rest; });
+    if (activeDiagram === name) {
+      const idx = openDiagrams.indexOf(name);
+      setActiveDiagram(newOpen[idx] ?? newOpen[idx - 1] ?? null);
+    }
+  };
 
   // ── Save handler (called by DiagramEditor) ──────────────────────────────────
 
   const handleSave = useCallback(
     async (name: string, excalidraw: string, svg: string) => {
+      setDiagramContents((prev) => ({ ...prev, [name]: excalidraw }));
       await api.api.diagrams.file.put(
         { excalidraw, svg },
         { query: { path: repoPath, name } },
@@ -188,6 +211,11 @@ export function DiagramPanel({ repoPath }: Props) {
         { query: { path: repoPath } },
       );
       setDiagrams((prev) => prev.map((d) => (d.name === name ? { ...d, name: trimmed } : d)));
+      setOpenDiagrams((prev) => prev.map((n) => (n === name ? trimmed : n)));
+      setDiagramContents((prev) => {
+        const { [name]: content, ...rest } = prev;
+        return content !== undefined ? { ...rest, [trimmed]: content } : rest;
+      });
       if (activeDiagram === name) setActiveDiagram(trimmed);
     },
     [repoPath, activeDiagram],
@@ -199,10 +227,15 @@ export function DiagramPanel({ repoPath }: Props) {
     async (name: string) => {
       await api.api.diagrams.file.delete({ query: { path: repoPath, name } });
       setDiagrams((prev) => prev.filter((d) => d.name !== name));
-      if (activeDiagram === name) {
-        setActiveDiagram(null);
-        setDiagramContent("");
-      }
+      setDiagramContents((prev) => { const { [name]: _, ...rest } = prev; return rest; });
+      setOpenDiagrams((prev) => {
+        const newOpen = prev.filter((n) => n !== name);
+        if (activeDiagram === name) {
+          const idx = prev.indexOf(name);
+          setActiveDiagram(newOpen[idx] ?? newOpen[idx - 1] ?? null);
+        }
+        return newOpen;
+      });
     },
     [repoPath, activeDiagram],
   );
@@ -385,6 +418,47 @@ export function DiagramPanel({ repoPath }: Props) {
 
             <div style={{ flex: 1 }} />
 
+            {/* Diagram browser — only when a diagram is open */}
+            {activeDiagram !== null && (
+              <Popover
+                isOpen={diagBrowserOpen}
+                onInteraction={(next) => setDiagBrowserOpen(next)}
+                placement="bottom-end"
+                content={
+                  <div style={{ padding: 4, width: 200, maxHeight: 280, overflowY: "auto" }}>
+                    {diagrams.map((d) => (
+                      <div
+                        key={d.name}
+                        onClick={() => void openDiagram(d.name)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          padding: "5px 8px", cursor: "pointer", borderRadius: 3,
+                          background: openDiagrams.includes(d.name) ? "var(--bp-surface-bg-hover)" : undefined,
+                          fontSize: 12,
+                        }}
+                      >
+                        {d.hasSvg ? (
+                          <img
+                            src={`/api/diagrams/svg?path=${encodeURIComponent(repoPath)}&name=${encodeURIComponent(d.name)}&v=${svgVersions[d.name] ?? d.modifiedAt}`}
+                            style={{ width: 28, height: 20, objectFit: "contain", background: "#fff", borderRadius: 2, flexShrink: 0 }}
+                            alt={d.name}
+                          />
+                        ) : (
+                          <Icon icon="diagram-tree" size={14} color="var(--bp-typography-color-muted)" style={{ flexShrink: 0 }} />
+                        )}
+                        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</span>
+                        {activeDiagram === d.name && <Icon icon="dot" size={10} color="var(--bp-intent-primary-default-color)" />}
+                      </div>
+                    ))}
+                  </div>
+                }
+              >
+                <Tooltip content="Switch diagram" placement="bottom" disabled={diagBrowserOpen}>
+                  <Button variant="minimal" small icon="diagram-tree" style={{ flexShrink: 0 }} />
+                </Tooltip>
+              </Popover>
+            )}
+
             {/* Focus mode (hide other panels) */}
             <Tooltip
               content={appFullscreen ? "Exit focus mode" : "Focus mode — hide other panels"}
@@ -426,60 +500,42 @@ export function DiagramPanel({ repoPath }: Props) {
               : { display: "flex", flexDirection: "column", gap: 12 }
           }
         >
-          {/* Diagram grid — always visible */}
-          {loading && diagrams.length === 0 ? (
-            <div style={{ display: "flex", justifyContent: "center", padding: 16 }}>
-              <Spinner size={20} />
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(3, 1fr)",
-                gap: 8,
-              }}
-            >
-              {diagrams.map((d) => (
-                <DiagramCard
-                  key={d.name}
-                  diagram={d}
-                  repoPath={repoPath}
-                  isActive={activeDiagram === d.name}
-                  svgVersion={svgVersions[d.name] ?? d.modifiedAt}
-                  onOpen={openDiagram}
-                  onRename={(name, newName) => void handleRename(name, newName)}
-                  onDelete={(name) => void handleDelete(name)}
-                  onCopyPath={handleCopySvgPath}
-                />
-              ))}
-              {/* New diagram card */}
-              <Card
-                interactive
-                onClick={() => {
-                  setNewName("");
-                  setNewNameError("");
-                  setNewDialogOpen(true);
-                }}
-                style={{
-                  padding: 8,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                  cursor: "pointer",
-                  border: "1.5px dashed var(--bp-surface-border-color-default)",
-                  boxShadow: "none",
-                  minHeight: 108,
-                  background: "transparent",
-                }}
-              >
-                <Icon icon="plus" size={20} color="var(--bp-typography-color-muted)" />
-                <span style={{ fontSize: 11, color: "var(--bp-typography-color-muted)" }}>
-                  New Diagram
-                </span>
-              </Card>
-            </div>
+          {/* Diagram grid — only when no diagram is open */}
+          {activeDiagram === null && (
+            loading && diagrams.length === 0 ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: 16 }}>
+                <Spinner size={20} />
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                {diagrams.map((d) => (
+                  <DiagramCard
+                    key={d.name}
+                    diagram={d}
+                    repoPath={repoPath}
+                    isActive={false}
+                    svgVersion={svgVersions[d.name] ?? d.modifiedAt}
+                    onOpen={openDiagram}
+                    onRename={(name, newName) => void handleRename(name, newName)}
+                    onDelete={(name) => void handleDelete(name)}
+                    onCopyPath={handleCopySvgPath}
+                  />
+                ))}
+                <Card
+                  interactive
+                  onClick={() => { setNewName(""); setNewNameError(""); setNewDialogOpen(true); }}
+                  style={{
+                    padding: 8, display: "flex", flexDirection: "column",
+                    alignItems: "center", justifyContent: "center", gap: 6,
+                    cursor: "pointer", border: "1.5px dashed var(--bp-surface-border-color-default)",
+                    boxShadow: "none", minHeight: 108, background: "transparent",
+                  }}
+                >
+                  <Icon icon="plus" size={20} color="var(--bp-typography-color-muted)" />
+                  <span style={{ fontSize: 11, color: "var(--bp-typography-color-muted)" }}>New Diagram</span>
+                </Card>
+              </div>
+            )
           )}
 
           {/* Active diagram editor */}
@@ -491,31 +547,47 @@ export function DiagramPanel({ repoPath }: Props) {
                   : { display: "flex", flexDirection: "column" }
               }
             >
-              {/* Editor sub-header */}
+              {/* Tab strip */}
               <div
                 style={{
                   display: "flex",
-                  alignItems: "center",
-                  gap: 6,
+                  alignItems: "flex-end",
+                  borderBottom: "1px solid var(--bp-surface-border-color-default)",
                   marginBottom: 4,
                   flexShrink: 0,
+                  overflowX: "auto",
                 }}
               >
-                <Icon
-                  icon="diagram-tree"
-                  size={12}
-                  color="var(--bp-typography-color-muted)"
-                />
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontFamily: "var(--bp-typography-family-mono)",
-                    fontWeight: 600,
-                    flex: 1,
-                  }}
-                >
-                  {activeDiagram}
-                </span>
+                {openDiagrams.map((name) => (
+                  <div
+                    key={name}
+                    onClick={() => setActiveDiagram(name)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 4,
+                      padding: "4px 10px 4px",
+                      cursor: "pointer", flexShrink: 0,
+                      borderBottom: name === activeDiagram
+                        ? "2px solid var(--bp-intent-primary-default-color)"
+                        : "2px solid transparent",
+                      color: name === activeDiagram
+                        ? "var(--bp-typography-color-default)"
+                        : "var(--bp-typography-color-muted)",
+                      userSelect: "none",
+                    }}
+                  >
+                    <span style={{ fontSize: 11, fontFamily: "var(--bp-typography-family-mono)" }}>
+                      docs/diagrams/{name}.svg
+                    </span>
+                    <span
+                      onClick={(e) => { e.stopPropagation(); closeTab(name); }}
+                      style={{ cursor: "pointer", fontSize: 14, lineHeight: 1, opacity: 0.5, marginLeft: 2 }}
+                    >×</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Action buttons row */}
+              <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4, flexShrink: 0 }}>
                 <Tooltip content="Copy SVG path" placement="bottom">
                   <Button
                     small
@@ -606,7 +678,7 @@ export function DiagramPanel({ repoPath }: Props) {
                 <DiagramEditor
                   key={activeDiagram}
                   name={activeDiagram}
-                  initialData={diagramContent}
+                  initialData={diagramContents[activeDiagram] ?? ""}
                   isDark={isDark}
                   onSave={handleSave}
                   onStatusChange={setSaveStatus}
