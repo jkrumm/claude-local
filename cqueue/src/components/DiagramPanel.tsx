@@ -57,6 +57,15 @@ function showToast(message: string) {
   }
 }
 
+// Safari uses webkit-prefixed fullscreen API
+const fsElement = () =>
+  document.fullscreenElement ??
+  (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement;
+
+const fsExit = () =>
+  (document.exitFullscreen ?? (document as Document & { webkitExitFullscreen?: () => Promise<void> }).webkitExitFullscreen)
+    ?.call(document);
+
 export function DiagramPanel({ repoPath }: Props) {
   const { isDark } = useTheme();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -263,34 +272,41 @@ export function DiagramPanel({ repoPath }: Props) {
   // ── App fullscreen (focus mode) ─────────────────────────────────────────────
 
   const toggleAppFullscreen = () => {
-    if (document.fullscreenElement) void document.exitFullscreen();
+    if (fsElement()) void fsExit();
     setAppFullscreen((prev) => !prev);
   };
 
   // ── Browser fullscreen ──────────────────────────────────────────────────────
 
   const toggleBrowserFullscreen = useCallback(() => {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen();
+    if (fsElement()) {
+      void fsExit();
       return;
     }
     const el = panelRef.current;
     if (!el) return;
     // Must remain synchronous to preserve user-gesture context
-    el.requestFullscreen({ navigationUI: "hide" }).catch((err: unknown) => {
+    // Safari uses webkitRequestFullscreen
+    const req = (el as HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> })
+      .requestFullscreen ?? (el as { webkitRequestFullscreen?: () => Promise<void> }).webkitRequestFullscreen;
+    if (!req) return;
+    req.call(el).catch((err: unknown) => {
       console.warn("Fullscreen request failed:", err);
     });
   }, []);
 
   useEffect(() => {
     const handler = () => {
-      const isFs = !!document.fullscreenElement;
+      const isFs = !!fsElement();
       setBrowserFullscreen(isFs);
-      // When exiting browser fullscreen (ESC), also clear app fullscreen overlay
       if (!isFs) setAppFullscreen(false);
     };
     document.addEventListener("fullscreenchange", handler);
-    return () => document.removeEventListener("fullscreenchange", handler);
+    document.addEventListener("webkitfullscreenchange", handler);
+    return () => {
+      document.removeEventListener("fullscreenchange", handler);
+      document.removeEventListener("webkitfullscreenchange", handler);
+    };
   }, []);
 
   // ── Status dot ──────────────────────────────────────────────────────────────
