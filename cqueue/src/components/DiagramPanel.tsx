@@ -52,14 +52,28 @@ function showToast(message: string) {
   }
 }
 
-// Safari uses webkit-prefixed fullscreen API
-const fsElement = () =>
-  document.fullscreenElement ??
-  (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement;
+type DocWithWebkit = Document & {
+  webkitFullscreenElement?: Element;
+  webkitExitFullscreen?: () => Promise<void>;
+};
+type ElWithWebkit = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void>;
+};
 
-const fsExit = () =>
-  (document.exitFullscreen ?? (document as Document & { webkitExitFullscreen?: () => Promise<void> }).webkitExitFullscreen)
-    ?.call(document);
+const fsElement = () =>
+  document.fullscreenElement ?? (document as DocWithWebkit).webkitFullscreenElement;
+
+const fsEnter = (el: HTMLElement) => {
+  if (el.requestFullscreen) return el.requestFullscreen();
+  if ((el as ElWithWebkit).webkitRequestFullscreen) return (el as ElWithWebkit).webkitRequestFullscreen!();
+  return Promise.reject(new Error("Fullscreen not supported"));
+};
+
+const fsExit = () => {
+  if (document.exitFullscreen) return document.exitFullscreen();
+  if ((document as DocWithWebkit).webkitExitFullscreen) return (document as DocWithWebkit).webkitExitFullscreen!();
+  return Promise.resolve();
+};
 
 export function DiagramPanel({ repoPath }: Props) {
   const { isDark } = useTheme();
@@ -349,14 +363,8 @@ export function DiagramPanel({ repoPath }: Props) {
       void fsExit();
       return;
     }
-    const el = panelRef.current;
-    if (!el) return;
-    // Must remain synchronous to preserve user-gesture context
-    // Safari uses webkitRequestFullscreen
-    const req = (el as HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> })
-      .requestFullscreen ?? (el as { webkitRequestFullscreen?: () => Promise<void> }).webkitRequestFullscreen;
-    if (!req) return;
-    req.call(el).catch((err: unknown) => {
+    // Target document.documentElement — fullscreening a panel div fails in some browsers
+    void fsEnter(document.documentElement).catch((err: unknown) => {
       console.warn("Fullscreen request failed:", err);
     });
   }, []);
