@@ -555,19 +555,28 @@ export function DiagramPanel({ repoPath }: Props) {
             />
           )}
 
-          {/* Prompt when diagrams exist but none is active */}
+          {/* Grid shown inline when diagrams exist but none is active */}
           {diagrams.length > 0 && activeDiagram === null && (
             <div
               style={{
-                padding: "20px 0",
-                textAlign: "center",
-                color: "var(--bp-typography-color-muted)",
-                fontSize: 13,
+                display: "grid",
+                gridTemplateColumns: "repeat(3, 1fr)",
+                gap: 8,
               }}
             >
-              Open a diagram using the{" "}
-              <strong>{diagrams.length} diagram{diagrams.length !== 1 ? "s" : ""}</strong>{" "}
-              button above
+              {diagrams.map((d) => (
+                <DiagramCard
+                  key={d.name}
+                  diagram={d}
+                  repoPath={repoPath}
+                  isActive={false}
+                  svgVersion={svgVersions[d.name] ?? d.modifiedAt}
+                  onOpen={openDiagram}
+                  onRename={startRename}
+                  onDelete={(name) => setDeleteTarget(name)}
+                  onCopyPath={handleCopySvgPath}
+                />
+              ))}
             </div>
           )}
 

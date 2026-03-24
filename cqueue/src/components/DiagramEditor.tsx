@@ -105,7 +105,8 @@ export function DiagramEditor({
       setTimeout(() => {
         if (statusRef.current === "synced") setStatus("idle");
       }, 2000);
-    } catch {
+    } catch (err) {
+      console.error("[DiagramEditor] save failed:", err);
       setStatus("dirty");
     }
   }, [name, setStatus]);
