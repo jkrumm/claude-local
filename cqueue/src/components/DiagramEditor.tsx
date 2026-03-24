@@ -119,7 +119,7 @@ export function DiagramEditor({
     debounceRef.current = setTimeout(() => {
       debounceRef.current = null;
       void doSave();
-    }, 10_000);
+    }, 3_000);
   }, [doSave]);
 
   const handleChange = useCallback(
