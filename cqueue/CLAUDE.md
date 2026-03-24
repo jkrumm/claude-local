@@ -38,6 +38,15 @@ tail -f /tmp/cqueue.err
 
 The LaunchAgent starts automatically on login and restarts on crash.
 
+## Fullscreen (kiosk mode)
+
+The DiagramPanel fullscreen button tries the native browser Fullscreen API first.
+In WebKit-based browsers (e.g. CMUX) that don't expose it, the frontend calls
+`GET /api/open-kiosk?url=<current-url>` — the Elysia backend spawns Chrome with
+`--kiosk --user-data-dir=/tmp/cqueue-kiosk` on the host. Tries regular Chrome,
+Chromium, then Playwright Chrome for Testing. Falls back to CSS focus mode if
+no binary is found. **Exit kiosk:** `Cmd+Q`.
+
 ## Validating UI Changes
 
 In dev: changes reflect immediately via Vite HMR at the dev server port.

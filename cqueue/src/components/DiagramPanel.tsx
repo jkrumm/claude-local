@@ -368,10 +368,10 @@ export function DiagramPanel({ repoPath }: Props) {
     }
     void fsEnter(document.documentElement).catch(() => {
       // WKWebView / embedded Safari don't expose the Fullscreen API.
-      // Try host-side kiosk launcher (run: kiosk-launcher in terminal).
-      // Falls back to CSS focus mode if launcher is not running.
+      // Ask the cqueue backend to spawn Chrome --kiosk on the host.
+      // Falls back to CSS focus mode if Chrome binary not found.
       const url = encodeURIComponent(window.location.href);
-      void fetch(`http://localhost:7706/open?url=${url}`)
+      void fetch(`/api/open-kiosk?url=${url}`)
         .then((r) => { if (!r.ok) setAppFullscreen(true); })
         .catch(() => setAppFullscreen(true));
     });

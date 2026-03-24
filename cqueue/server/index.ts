@@ -11,6 +11,7 @@ import { usageRoutes } from "./routes/usage";
 import { githubRoutes } from "./routes/github";
 import { diagramsRoutes } from "./routes/diagrams";
 import { actionsRoutes } from "./routes/actions";
+import { kioskRoute } from "./routes/kiosk";
 
 const isDev = !existsSync("dist/index.html");
 const indexHtml = isDev ? null : readFileSync("dist/index.html", "utf-8");
@@ -26,7 +27,8 @@ const app = new Elysia()
   .use(usageRoutes)
   .use(githubRoutes)
   .use(diagramsRoutes)
-  .use(actionsRoutes);
+  .use(actionsRoutes)
+  .use(kioskRoute);
 
 if (!isDev) {
   app

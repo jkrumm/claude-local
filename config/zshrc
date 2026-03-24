@@ -58,7 +58,6 @@ alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 # MY ALIASES
 # =========
 alias gback="git reset --soft HEAD~1"
-alias kiosk-launcher="bun run ~/.claude/fullscreen-launcher.ts"
 alias sz="source ~/.zshrc"
 alias homelab="ssh homelab"
 alias vps="ssh vps"

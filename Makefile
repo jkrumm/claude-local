@@ -92,9 +92,6 @@ _setup-scripts:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/scripts/fetch_usage.py" \
 		DST="$(CLAUDE_DIR)/fetch_usage.py"
-	@$(MAKE) --no-print-directory _link \
-		SRC="$(CLAUDE_LOCAL)/scripts/fullscreen-launcher.ts" \
-		DST="$(CLAUDE_DIR)/fullscreen-launcher.ts"
 
 .PHONY: _setup-skills
 _setup-skills:
@@ -205,7 +202,6 @@ status:
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/queue.ts"
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/statusline.sh"
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/fetch_usage.py"
-	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/fullscreen-launcher.ts"
 	@echo "  Gitignore"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitignore_global"
 	@echo "  Skills ($(shell ls $(CLAUDE_LOCAL)/skills/ | wc -l | xargs) — SourceRoot only)"
