@@ -62,6 +62,11 @@ body.bp6-dark {
   display: none;
 }
 
+/* Excalidraw — hide default scroll-to-fit animation flicker on load */
+.excalidraw .App-menu_top {
+  user-select: none;
+}
+
 /* Compact markdown file tree */
 .md-file-tree .bp6-tree-node-content {
   height: 26px;

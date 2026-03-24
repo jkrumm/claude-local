@@ -14,6 +14,7 @@ import { GitPanel } from "../components/GitPanel";
 import { UsageTags } from "../components/UsageTags";
 import { QueuePanel } from "../components/QueuePanel";
 import { NotesPanel } from "../components/NotesPanel";
+import { DiagramPanel } from "../components/DiagramPanel";
 import { useTheme } from "../main";
 import type {
   CompletedTask,
@@ -311,6 +312,7 @@ function RepoDashboardInner() {
           externallyChanged={notesExternallyChanged}
           onExternalChangeAck={() => setNotesExternallyChanged(false)}
         />
+        <DiagramPanel repoPath={repoPath} />
       </div>
     </div>
   );

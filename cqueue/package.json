@@ -19,6 +19,7 @@
     "@dnd-kit/utilities": "3.2.2",
     "@elysiajs/eden": "^1.4.8",
     "@elysiajs/static": "1.4.7",
+    "@excalidraw/excalidraw": "^0.18.0",
     "@lezer/highlight": "^1.2.3",
     "@octokit/rest": "^22.0.1",
     "@uiw/codemirror-themes": "^4.25.8",
