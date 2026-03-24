@@ -306,13 +306,13 @@ function RepoDashboardInner() {
             setTasks(updated);
           }}
         />
+        <DiagramPanel repoPath={repoPath} />
         <NotesPanel
           notes={notes}
           repoPath={repoPath}
           externallyChanged={notesExternallyChanged}
           onExternalChangeAck={() => setNotesExternallyChanged(false)}
         />
-        <DiagramPanel repoPath={repoPath} />
       </div>
     </div>
   );

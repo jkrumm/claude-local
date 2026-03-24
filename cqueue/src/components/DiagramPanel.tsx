@@ -8,12 +8,7 @@ import {
   DialogFooter,
   Icon,
   InputGroup,
-  Menu,
-  MenuDivider,
-  MenuItem,
-  NonIdealState,
   OverlayToaster,
-  Popover,
   Spinner,
   Tooltip,
 } from "@blueprintjs/core";
@@ -82,9 +77,6 @@ export function DiagramPanel({ repoPath }: Props) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [svgVersions, setSvgVersions] = useState<Record<string, number>>({});
 
-  // File browser popover
-  const [browserOpen, setBrowserOpen] = useState(false);
-
   // Fullscreen state
   const [appFullscreen, setAppFullscreen] = useState(false);
   const [browserFullscreen, setBrowserFullscreen] = useState(false);
@@ -119,7 +111,6 @@ export function DiagramPanel({ repoPath }: Props) {
 
   const openDiagram = useCallback(
     async (name: string) => {
-      setBrowserOpen(false);
       if (name === activeDiagram) return;
       const res = await api.api.diagrams.file
         .get({ query: { path: repoPath, name } })
@@ -312,22 +303,16 @@ export function DiagramPanel({ repoPath }: Props) {
   // ── Status dot ──────────────────────────────────────────────────────────────
 
   const dotColor =
-    saveStatus === "dirty"
-      ? "#FFC940"
-      : saveStatus === "saving"
-        ? "#4C90F0"
-        : saveStatus === "synced"
-          ? "#72CA9B"
-          : "var(--bp-typography-color-muted)";
+    saveStatus === "synced"
+      ? "#72CA9B"
+      : "var(--bp-typography-color-muted)";
 
   const dotTooltip =
-    saveStatus === "dirty"
-      ? "Unsaved changes — saves in 3s or on tab switch"
+    saveStatus === "synced"
+      ? "Saved — SVG exported"
       : saveStatus === "saving"
         ? "Saving diagram and exporting SVG…"
-        : saveStatus === "synced"
-          ? "Saved — SVG exported"
-          : "Up to date";
+        : "Up to date";
 
   // ── Panel styles ─────────────────────────────────────────────────────────────
 
@@ -366,76 +351,6 @@ export function DiagramPanel({ repoPath }: Props) {
     ...appFullscreenStyle,
     ...browserFullscreenStyle,
   };
-
-  // ── Diagram browser popover content ──────────────────────────────────────────
-
-  const browserPopoverContent = (
-    <div
-      style={{
-        padding: 8,
-        width: 432,
-        maxHeight: 420,
-        overflowY: "auto",
-      }}
-    >
-      {loading && diagrams.length === 0 ? (
-        <div style={{ display: "flex", justifyContent: "center", padding: 16 }}>
-          <Spinner size={20} />
-        </div>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: 8,
-          }}
-        >
-          {diagrams.map((d) => (
-            <DiagramCard
-              key={d.name}
-              diagram={d}
-              repoPath={repoPath}
-              isActive={activeDiagram === d.name}
-              svgVersion={svgVersions[d.name] ?? d.modifiedAt}
-              onOpen={openDiagram}
-              onRename={startRename}
-              onDelete={(name) => setDeleteTarget(name)}
-              onCopyPath={handleCopySvgPath}
-            />
-          ))}
-
-          {/* New diagram card */}
-          <Card
-            interactive
-            onClick={() => {
-              setBrowserOpen(false);
-              setNewName("");
-              setNewNameError("");
-              setNewDialogOpen(true);
-            }}
-            style={{
-              padding: 8,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              cursor: "pointer",
-              border: "1.5px dashed var(--bp-surface-border-color-default)",
-              boxShadow: "none",
-              minHeight: 108,
-              background: "transparent",
-            }}
-          >
-            <Icon icon="plus" size={20} color="var(--bp-typography-color-muted)" />
-            <span style={{ fontSize: 11, color: "var(--bp-typography-color-muted)" }}>
-              New Diagram
-            </span>
-          </Card>
-        </div>
-      )}
-    </div>
-  );
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -484,29 +399,6 @@ export function DiagramPanel({ repoPath }: Props) {
 
             <div style={{ flex: 1 }} />
 
-            {/* File browser popover button */}
-            <Popover
-              content={browserPopoverContent}
-              placement="bottom-end"
-              minimal
-              isOpen={browserOpen}
-              onInteraction={(next) => setBrowserOpen(next)}
-            >
-              <Button
-                small
-                variant="outlined"
-                rightIcon="caret-down"
-                text={
-                  loading
-                    ? "Loading…"
-                    : diagrams.length === 0
-                      ? "No diagrams"
-                      : `${diagrams.length} diagram${diagrams.length !== 1 ? "s" : ""}`
-                }
-                style={{ flexShrink: 0 }}
-              />
-            </Popover>
-
             {/* Focus mode (hide other panels) */}
             <Tooltip
               content={appFullscreen ? "Exit focus mode" : "Focus mode — hide other panels"}
@@ -535,19 +427,6 @@ export function DiagramPanel({ repoPath }: Props) {
               />
             </Tooltip>
 
-            {/* New diagram */}
-            <Button
-              small
-              variant="outlined"
-              icon="plus"
-              text="New"
-              onClick={() => {
-                setNewName("");
-                setNewNameError("");
-                setNewDialogOpen(true);
-              }}
-              style={{ flexShrink: 0 }}
-            />
           </>
         )}
       </div>
@@ -561,18 +440,12 @@ export function DiagramPanel({ repoPath }: Props) {
               : { display: "flex", flexDirection: "column", gap: 12 }
           }
         >
-          {/* Empty state — no diagrams */}
-          {!loading && diagrams.length === 0 && (
-            <NonIdealState
-              icon="diagram-tree"
-              title="No diagrams yet"
-              description='Click "New" to create your first diagram'
-              style={{ padding: "16px 0" }}
-            />
-          )}
-
-          {/* Grid shown inline when diagrams exist but none is active */}
-          {diagrams.length > 0 && activeDiagram === null && (
+          {/* Diagram grid — always visible */}
+          {loading && diagrams.length === 0 ? (
+            <div style={{ display: "flex", justifyContent: "center", padding: 16 }}>
+              <Spinner size={20} />
+            </div>
+          ) : (
             <div
               style={{
                 display: "grid",
@@ -585,7 +458,7 @@ export function DiagramPanel({ repoPath }: Props) {
                   key={d.name}
                   diagram={d}
                   repoPath={repoPath}
-                  isActive={false}
+                  isActive={activeDiagram === d.name}
                   svgVersion={svgVersions[d.name] ?? d.modifiedAt}
                   onOpen={openDiagram}
                   onRename={startRename}
@@ -593,6 +466,33 @@ export function DiagramPanel({ repoPath }: Props) {
                   onCopyPath={handleCopySvgPath}
                 />
               ))}
+              {/* New diagram card */}
+              <Card
+                interactive
+                onClick={() => {
+                  setNewName("");
+                  setNewNameError("");
+                  setNewDialogOpen(true);
+                }}
+                style={{
+                  padding: 8,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  cursor: "pointer",
+                  border: "1.5px dashed var(--bp-surface-border-color-default)",
+                  boxShadow: "none",
+                  minHeight: 108,
+                  background: "transparent",
+                }}
+              >
+                <Icon icon="plus" size={20} color="var(--bp-typography-color-muted)" />
+                <span style={{ fontSize: 11, color: "var(--bp-typography-color-muted)" }}>
+                  New Diagram
+                </span>
+              </Card>
             </div>
           )}
 
@@ -630,14 +530,34 @@ export function DiagramPanel({ repoPath }: Props) {
                 >
                   {activeDiagram}
                 </span>
-                <Button
-                  small
-                  variant="minimal"
-                  icon="clipboard"
-                  text="Copy SVG path"
-                  onClick={() => handleCopySvgPath(activeDiagram)}
-                  style={{ flexShrink: 0 }}
-                />
+                <Tooltip content="Copy SVG path" placement="bottom">
+                  <Button
+                    small
+                    variant="minimal"
+                    icon="clipboard"
+                    onClick={() => handleCopySvgPath(activeDiagram)}
+                    style={{ flexShrink: 0 }}
+                  />
+                </Tooltip>
+                <Tooltip content="Rename diagram" placement="bottom">
+                  <Button
+                    small
+                    variant="minimal"
+                    icon="edit"
+                    onClick={() => startRename(activeDiagram)}
+                    style={{ flexShrink: 0 }}
+                  />
+                </Tooltip>
+                <Tooltip content="Delete diagram" placement="bottom">
+                  <Button
+                    small
+                    variant="minimal"
+                    icon="trash"
+                    intent="danger"
+                    onClick={() => setDeleteTarget(activeDiagram)}
+                    style={{ flexShrink: 0 }}
+                  />
+                </Tooltip>
               </div>
 
               {/* Canvas container */}
@@ -813,12 +733,15 @@ function DiagramCard({
   onCopyPath,
 }: DiagramCardProps) {
   const { name, hasSvg } = diagram;
+  const [isHovered, setIsHovered] = useState(false);
   const thumbnailSrc = `/api/diagrams/svg?path=${encodeURIComponent(repoPath)}&name=${encodeURIComponent(name)}&v=${svgVersion}`;
 
   return (
     <Card
       interactive
       onClick={() => onOpen(name)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       style={{
         padding: 8,
         cursor: "pointer",
@@ -846,6 +769,7 @@ function DiagramCard({
       >
         {hasSvg ? (
           <img
+            key={svgVersion}
             src={thumbnailSrc}
             style={{ width: "100%", height: "100%", objectFit: "contain" }}
             alt={name}
@@ -855,8 +779,8 @@ function DiagramCard({
         )}
       </div>
 
-      {/* Name + kebab menu */}
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      {/* Name + hover action buttons */}
+      <div style={{ display: "flex", alignItems: "center", gap: 2, minHeight: 20 }}>
         <span
           style={{
             fontSize: 11,
@@ -870,48 +794,47 @@ function DiagramCard({
         >
           {name}
         </span>
-        <Popover
-          content={
-            <Menu small>
-              <MenuItem
-                icon="edit"
-                text="Rename"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRename(name);
-                }}
-              />
-              <MenuItem
+        {isHovered && (
+          <>
+            <Tooltip content="Copy SVG path" placement="bottom">
+              <Button
+                small
+                variant="minimal"
                 icon="clipboard"
-                text="Copy SVG path"
+                style={{ flexShrink: 0, minWidth: 20, minHeight: 20, padding: 2 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   onCopyPath(name);
                 }}
               />
-              <MenuDivider />
-              <MenuItem
+            </Tooltip>
+            <Tooltip content="Rename" placement="bottom">
+              <Button
+                small
+                variant="minimal"
+                icon="edit"
+                style={{ flexShrink: 0, minWidth: 20, minHeight: 20, padding: 2 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRename(name);
+                }}
+              />
+            </Tooltip>
+            <Tooltip content="Delete" placement="bottom">
+              <Button
+                small
+                variant="minimal"
                 icon="trash"
-                text="Delete"
                 intent="danger"
+                style={{ flexShrink: 0, minWidth: 20, minHeight: 20, padding: 2 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(name);
                 }}
               />
-            </Menu>
-          }
-          placement="bottom-end"
-          minimal
-        >
-          <Button
-            icon="more"
-            variant="minimal"
-            small
-            style={{ flexShrink: 0, minWidth: 20, minHeight: 20, padding: 2 }}
-            onClick={(e) => e.stopPropagation()}
-          />
-        </Popover>
+            </Tooltip>
+          </>
+        )}
       </div>
     </Card>
   );
