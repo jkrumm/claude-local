@@ -1,9 +1,7 @@
 dev:
-	@echo "Clearing ports :7705 and :7706..."
 	@lsof -ti :7705 | xargs kill -9 2>/dev/null; true
 	@lsof -ti :7706 | xargs kill -9 2>/dev/null; true
-	@echo "Starting dev: Vite on :7705 (HMR) + API on :7706..."
-	@PORT=7706 bun --watch server/index.ts & bun run dev:client
+	@trap 'kill 0' INT; PORT=7706 bun run dev:server & bun run dev:client; wait
 
 start: build
 	@lsof -ti :7705 | xargs kill -9 2>/dev/null; true
