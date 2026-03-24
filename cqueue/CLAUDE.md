@@ -24,16 +24,12 @@ make start  # Prod: Elysia serves everything on :7705
 ## Production (always-on)
 
 ```bash
-# One-time: build frontend + install LaunchAgent
-make build
-make install-agent
+make install-agent   # one-time: build + install + start LaunchAgent
+make reload          # after code changes: build + kickstart
+make uninstall-agent # remove LaunchAgent
 
-# Reload after code changes
-make build && launchctl kickstart -k gui/$(id -u)/com.jkrumm.cqueue
-
-# Logs
-tail -f /tmp/cqueue.log
-tail -f /tmp/cqueue.err
+tail -f /tmp/cqueue.log   # stdout
+tail -f /tmp/cqueue.err   # stderr
 ```
 
 The LaunchAgent starts automatically on login and restarts on crash.
@@ -53,10 +49,3 @@ In dev: changes reflect immediately via Vite HMR at the dev server port.
 In prod: `make build` + reload `http://cqueue.local` in browser.
 Use the Chrome MCP extension for visual validation via screenshots.
 
-## LaunchAgent (always-on, when ready)
-
-```bash
-make build && make install-agent   # install + start
-make uninstall-agent               # remove
-tail -f /tmp/cqueue.log            # logs
-```

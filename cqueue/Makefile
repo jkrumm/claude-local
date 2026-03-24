@@ -5,14 +5,18 @@ dev:
 	@echo "Starting dev: Vite on :7705 (HMR) + API on :7706..."
 	@PORT=7706 bun --watch server/index.ts & bun run dev:client
 
-start:
+start: build
 	@lsof -ti :7705 | xargs kill -9 2>/dev/null; true
 	bun server/index.ts
 
 build:
 	bun run build
 
-install-agent:
+reload: build
+	launchctl kickstart -k gui/$$(id -u)/com.jkrumm.cqueue
+	@echo "cqueue reloaded"
+
+install-agent: build
 	cp com.jkrumm.cqueue.plist ~/Library/LaunchAgents/
 	launchctl load ~/Library/LaunchAgents/com.jkrumm.cqueue.plist
 	@echo "cqueue LaunchAgent installed and started"
@@ -22,4 +26,4 @@ uninstall-agent:
 	rm ~/Library/LaunchAgents/com.jkrumm.cqueue.plist
 	@echo "cqueue LaunchAgent removed"
 
-.PHONY: dev start build install-agent uninstall-agent
+.PHONY: dev start build reload install-agent uninstall-agent
