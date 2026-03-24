@@ -111,7 +111,13 @@ export function DiagramPanel({ repoPath }: Props) {
     fetchDiagrams();
   }, [fetchDiagrams]);
 
-  // Persist active diagram per repo (only write, never delete — avoids clearing on mount before restore)
+  // Persist open tabs + active diagram (only write, never delete — avoids clearing on mount before restore)
+  useEffect(() => {
+    if (openDiagrams.length > 0) {
+      localStorage.setItem(`${storagePrefix}:openDiagrams`, JSON.stringify(openDiagrams));
+    }
+  }, [openDiagrams, storagePrefix]);
+
   useEffect(() => {
     if (activeDiagram !== null) {
       localStorage.setItem(`${storagePrefix}:activeDiagram`, activeDiagram);
@@ -155,15 +161,47 @@ export function DiagramPanel({ repoPath }: Props) {
     }
   };
 
-  // Restore last active diagram after initial diagrams load (must be after openDiagram)
+  // Restore open tabs + active diagram after initial load (must be after openDiagram)
   useEffect(() => {
     if (hasRestoredRef.current || diagrams.length === 0) return;
     hasRestoredRef.current = true;
-    const saved = localStorage.getItem(`${storagePrefix}:activeDiagram`);
-    if (saved && diagrams.some((d) => d.name === saved)) {
-      void openDiagram(saved);
-    }
-  }, [diagrams, storagePrefix, openDiagram]);
+
+    const savedActive = localStorage.getItem(`${storagePrefix}:activeDiagram`);
+    const savedOpenRaw = localStorage.getItem(`${storagePrefix}:openDiagrams`);
+    const savedOpen: string[] = savedOpenRaw ? (JSON.parse(savedOpenRaw) as string[]) : [];
+
+    const validOpen = savedOpen.filter((n) => diagrams.some((d) => d.name === n));
+    const validActive = savedActive && diagrams.some((d) => d.name === savedActive) ? savedActive : null;
+
+    // Ensure active tab is included in the open list
+    const toOpen = validActive && !validOpen.includes(validActive)
+      ? [...validOpen, validActive]
+      : validOpen;
+
+    if (toOpen.length === 0) return;
+
+    void Promise.all(
+      toOpen.map((name) =>
+        api.api.diagrams.file
+          .get({ query: { path: repoPath, name } })
+          .then((res) => (res?.data?.ok ? { name, content: res.data.data as string } : null))
+          .catch(() => null),
+      ),
+    ).then((results) => {
+      const loaded = results.filter((r): r is { name: string; content: string } => r !== null);
+      if (loaded.length === 0) return;
+      const contents: Record<string, string> = {};
+      const openNames: string[] = [];
+      for (const { name, content } of loaded) {
+        contents[name] = content;
+        openNames.push(name);
+      }
+      setDiagramContents(contents);
+      setOpenDiagrams(openNames);
+      setActiveDiagram(validActive && openNames.includes(validActive) ? validActive : openNames[0]);
+      setSaveStatus("idle");
+    });
+  }, [diagrams, storagePrefix, repoPath]);
 
   // ── Save handler (called by DiagramEditor) ──────────────────────────────────
 
