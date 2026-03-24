@@ -292,7 +292,10 @@ function RepoDashboardInner() {
           githubData={githubData}
           githubLoading={githubLoading}
           lastGithubRefresh={lastGithubRefresh}
-          onRefresh={() => data.git && fetchGithubData(data.git)}
+          onRefresh={() => {
+            void fetchGitStatus(repoPath);
+            if (data.git) void fetchGithubData(data.git);
+          }}
         />
         <QueuePanel
           tasks={tasks}

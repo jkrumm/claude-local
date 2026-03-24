@@ -107,6 +107,9 @@ function parseCommits(output: string | null): GitCommit[] {
 }
 
 export function getGitStatus(repoPath: string): GitStatus | null {
+  // Update remote tracking refs so ahead/behind, tags, and history are current
+  run(["-C", repoPath, "fetch", "--quiet", "--prune"]);
+
   const branch = run(["-C", repoPath, "rev-parse", "--abbrev-ref", "HEAD"]);
   if (!branch) return null;
 

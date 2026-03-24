@@ -370,12 +370,9 @@ function HistorySection({ gitStatus }: { gitStatus: GitStatus }) {
 
 // ─── Row 2 right: Workflows ──────────────────────────────────────────────────
 
-function WorkflowsSection({ githubData, gitStatus, githubLoading, lastGithubRefresh, onRefresh }: {
+function WorkflowsSection({ githubData, gitStatus }: {
   githubData: GithubData | null;
   gitStatus: GitStatus;
-  githubLoading: boolean;
-  lastGithubRefresh: Date | null;
-  onRefresh: () => void;
 }) {
   if (!gitStatus.githubRepo || !githubData || githubData.workflowRuns.length === 0) return null;
 
@@ -387,12 +384,7 @@ function WorkflowsSection({ githubData, gitStatus, githubLoading, lastGithubRefr
 
   return (
     <div style={{ flex: "0 0 auto", width: 260 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-        <SectionLabel>Workflows</SectionLabel>
-        <div style={{ marginLeft: "auto", marginBottom: 6 }}>
-          <StatusDot lastRefresh={lastGithubRefresh} githubLoading={githubLoading} onRefresh={onRefresh} />
-        </div>
-      </div>
+      <SectionLabel>Workflows</SectionLabel>
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {githubData.workflowRuns.map((run) => (
           <div key={run.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -626,6 +618,11 @@ export function GitPanel({ gitStatus, githubData, githubLoading, lastGithubRefre
         {gitStatus.lastTag && (
           <VersionSection gitStatus={gitStatus} githubData={githubData} />
         )}
+        {gitStatus.githubRepo && (
+          <div style={{ marginLeft: "auto", alignSelf: "center" }}>
+            <StatusDot lastRefresh={lastGithubRefresh} githubLoading={githubLoading} onRefresh={onRefresh} />
+          </div>
+        )}
       </div>
 
       {/* Row 2: History + Workflows */}
@@ -634,9 +631,6 @@ export function GitPanel({ gitStatus, githubData, githubLoading, lastGithubRefre
         <WorkflowsSection
           githubData={githubData}
           gitStatus={gitStatus}
-          githubLoading={githubLoading}
-          lastGithubRefresh={lastGithubRefresh}
-          onRefresh={onRefresh}
         />
       </div>
 
