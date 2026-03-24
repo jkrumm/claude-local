@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Alert,
   Button,
   Card,
   Dialog,
@@ -9,6 +8,7 @@ import {
   Icon,
   InputGroup,
   OverlayToaster,
+  Popover,
   Spinner,
   Tooltip,
 } from "@blueprintjs/core";
@@ -81,14 +81,15 @@ export function DiagramPanel({ repoPath }: Props) {
   const [appFullscreen, setAppFullscreen] = useState(false);
   const [browserFullscreen, setBrowserFullscreen] = useState(false);
 
-  // Dialog / alert state
+  // New diagram dialog state
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newNameError, setNewNameError] = useState("");
-  const [renameTarget, setRenameTarget] = useState<string | null>(null);
-  const [renameName, setRenameName] = useState("");
-  const [renameError, setRenameError] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  // Sub-header inline rename/delete state
+  const [subRenameOpen, setSubRenameOpen] = useState(false);
+  const [subRenameValue, setSubRenameValue] = useState("");
+  const [subDeleteOpen, setSubDeleteOpen] = useState(false);
 
   const isFullscreen = appFullscreen || browserFullscreen;
 
@@ -178,75 +179,60 @@ export function DiagramPanel({ repoPath }: Props) {
 
   // ── Rename ──────────────────────────────────────────────────────────────────
 
-  const startRename = (name: string) => {
-    setRenameTarget(name);
-    setRenameName(name);
-    setRenameError("");
-  };
-
-  const handleRename = async () => {
-    if (!renameTarget) return;
-    const newNameTrimmed = renameName.trim();
-    const otherNames = diagrams.map((d) => d.name).filter((n) => n !== renameTarget);
-    const error = validateName(newNameTrimmed, otherNames);
-    if (error) {
-      setRenameError(error);
-      return;
-    }
-
-    await api.api.diagrams.rename.post(
-      { name: renameTarget, newName: newNameTrimmed },
-      { query: { path: repoPath } },
-    );
-
-    setDiagrams((prev) =>
-      prev.map((d) => (d.name === renameTarget ? { ...d, name: newNameTrimmed } : d)),
-    );
-    if (activeDiagram === renameTarget) setActiveDiagram(newNameTrimmed);
-    setRenameTarget(null);
-    setRenameName("");
-    setRenameError("");
-  };
+  const handleRename = useCallback(
+    async (name: string, newName: string) => {
+      const trimmed = newName.trim();
+      if (!trimmed || trimmed === name) return;
+      await api.api.diagrams.rename.post(
+        { name, newName: trimmed },
+        { query: { path: repoPath } },
+      );
+      setDiagrams((prev) => prev.map((d) => (d.name === name ? { ...d, name: trimmed } : d)));
+      if (activeDiagram === name) setActiveDiagram(trimmed);
+    },
+    [repoPath, activeDiagram],
+  );
 
   // ── Delete ──────────────────────────────────────────────────────────────────
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    await api.api.diagrams.file.delete({
-      query: { path: repoPath, name: deleteTarget },
-    });
-    setDiagrams((prev) => prev.filter((d) => d.name !== deleteTarget));
-    if (activeDiagram === deleteTarget) {
-      setActiveDiagram(null);
-      setDiagramContent("");
-    }
-    setDeleteTarget(null);
-  };
+  const handleDelete = useCallback(
+    async (name: string) => {
+      await api.api.diagrams.file.delete({ query: { path: repoPath, name } });
+      setDiagrams((prev) => prev.filter((d) => d.name !== name));
+      if (activeDiagram === name) {
+        setActiveDiagram(null);
+        setDiagramContent("");
+      }
+    },
+    [repoPath, activeDiagram],
+  );
 
   // ── Copy SVG path ───────────────────────────────────────────────────────────
 
   const handleCopySvgPath = (name: string) => {
     const path = `docs/diagrams/${name}.svg`;
-    const onSuccess = () => showToast(`Copied: ${path}`);
-
-    if (navigator.clipboard) {
-      // HTTPS / localhost context
-      void navigator.clipboard.writeText(path).then(onSuccess);
-    } else {
-      // Fallback for HTTP (cqueue.local served without TLS)
+    const copyFallback = () => {
       const ta = document.createElement("textarea");
       ta.value = path;
-      ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+      ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
       document.body.appendChild(ta);
       ta.focus();
       ta.select();
       try {
-        document.execCommand("copy");
-        onSuccess();
+        const ok = document.execCommand("copy");
+        showToast(ok ? `Copied: ${path}` : "Copy failed");
       } catch {
-        showToast("Copy failed — check browser permissions");
+        showToast("Copy failed");
       }
       document.body.removeChild(ta);
+    };
+
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(path)
+        .then(() => showToast(`Copied: ${path}`))
+        .catch(copyFallback);
+    } else {
+      copyFallback();
     }
   };
 
@@ -461,8 +447,8 @@ export function DiagramPanel({ repoPath }: Props) {
                   isActive={activeDiagram === d.name}
                   svgVersion={svgVersions[d.name] ?? d.modifiedAt}
                   onOpen={openDiagram}
-                  onRename={startRename}
-                  onDelete={(name) => setDeleteTarget(name)}
+                  onRename={(name, newName) => void handleRename(name, newName)}
+                  onDelete={(name) => void handleDelete(name)}
                   onCopyPath={handleCopySvgPath}
                 />
               ))}
@@ -539,25 +525,63 @@ export function DiagramPanel({ repoPath }: Props) {
                     style={{ flexShrink: 0 }}
                   />
                 </Tooltip>
-                <Tooltip content="Rename diagram" placement="bottom">
-                  <Button
-                    small
-                    variant="minimal"
-                    icon="edit"
-                    onClick={() => startRename(activeDiagram)}
-                    style={{ flexShrink: 0 }}
-                  />
-                </Tooltip>
-                <Tooltip content="Delete diagram" placement="bottom">
-                  <Button
-                    small
-                    variant="minimal"
-                    icon="trash"
-                    intent="danger"
-                    onClick={() => setDeleteTarget(activeDiagram)}
-                    style={{ flexShrink: 0 }}
-                  />
-                </Tooltip>
+                <Popover
+                  isOpen={subRenameOpen}
+                  onInteraction={(next) => { if (!next) setSubRenameOpen(false); }}
+                  placement="bottom-end"
+                  content={
+                    <div style={{ padding: 12, width: 220 }}>
+                      <InputGroup
+                        small
+                        autoFocus
+                        value={subRenameValue}
+                        onChange={(e) => setSubRenameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { void handleRename(activeDiagram, subRenameValue); setSubRenameOpen(false); }
+                          if (e.key === "Escape") setSubRenameOpen(false);
+                        }}
+                      />
+                      <div style={{ marginTop: 8, display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                        <Button small text="Cancel" onClick={() => setSubRenameOpen(false)} />
+                        <Button small intent="primary" text="Rename" onClick={() => { void handleRename(activeDiagram, subRenameValue); setSubRenameOpen(false); }} />
+                      </div>
+                    </div>
+                  }
+                >
+                  <Tooltip content="Rename" placement="bottom" disabled={subRenameOpen}>
+                    <Button
+                      small
+                      variant="minimal"
+                      icon="edit"
+                      onClick={() => { setSubRenameValue(activeDiagram); setSubRenameOpen(true); }}
+                      style={{ flexShrink: 0 }}
+                    />
+                  </Tooltip>
+                </Popover>
+                <Popover
+                  isOpen={subDeleteOpen}
+                  onInteraction={(next) => { if (!next) setSubDeleteOpen(false); }}
+                  placement="bottom-end"
+                  content={
+                    <div style={{ padding: 12 }}>
+                      <p style={{ margin: "0 0 8px", fontSize: 13 }}>Delete "{activeDiagram}"?</p>
+                      <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                        <Button small text="Cancel" onClick={() => setSubDeleteOpen(false)} />
+                        <Button small text="Delete" onClick={() => { void handleDelete(activeDiagram); setSubDeleteOpen(false); }} />
+                      </div>
+                    </div>
+                  }
+                >
+                  <Tooltip content="Delete" placement="bottom" disabled={subDeleteOpen}>
+                    <Button
+                      small
+                      variant="minimal"
+                      icon="trash"
+                      onClick={() => setSubDeleteOpen(true)}
+                      style={{ flexShrink: 0 }}
+                    />
+                  </Tooltip>
+                </Popover>
               </div>
 
               {/* Canvas container */}
@@ -641,70 +665,6 @@ export function DiagramPanel({ repoPath }: Props) {
         />
       </Dialog>
 
-      {/* Rename Dialog */}
-      <Dialog
-        isOpen={renameTarget !== null}
-        onClose={() => setRenameTarget(null)}
-        title="Rename Diagram"
-        style={{ width: 360 }}
-      >
-        <DialogBody>
-          <InputGroup
-            autoFocus
-            placeholder="New name"
-            value={renameName}
-            onChange={(e) => {
-              setRenameName(e.target.value);
-              setRenameError("");
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void handleRename();
-            }}
-            intent={renameError ? "danger" : "none"}
-          />
-          {renameError && (
-            <p
-              style={{
-                color: "var(--bp-intent-danger-default-color)",
-                fontSize: 12,
-                margin: "6px 0 0",
-              }}
-            >
-              {renameError}
-            </p>
-          )}
-        </DialogBody>
-        <DialogFooter
-          actions={
-            <>
-              <Button text="Cancel" onClick={() => setRenameTarget(null)} />
-              <Button
-                intent="primary"
-                text="Rename"
-                onClick={() => void handleRename()}
-                disabled={!renameName.trim()}
-              />
-            </>
-          }
-        />
-      </Dialog>
-
-      {/* Delete Confirmation */}
-      <Alert
-        isOpen={deleteTarget !== null}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => void handleDelete()}
-        intent="danger"
-        confirmButtonText="Delete"
-        cancelButtonText="Cancel"
-        icon="trash"
-      >
-        <p>
-          Delete <strong>{deleteTarget}</strong>? This removes both the{" "}
-          <code>.excalidraw</code> and <code>.svg</code> files and cannot be
-          undone.
-        </p>
-      </Alert>
     </div>
   );
 }
@@ -717,7 +677,7 @@ interface DiagramCardProps {
   isActive: boolean;
   svgVersion: number;
   onOpen: (name: string) => void;
-  onRename: (name: string) => void;
+  onRename: (name: string, newName: string) => void;
   onDelete: (name: string) => void;
   onCopyPath: (name: string) => void;
 }
@@ -734,7 +694,22 @@ function DiagramCard({
 }: DiagramCardProps) {
   const { name, hasSvg } = diagram;
   const [isHovered, setIsHovered] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const [renameError, setRenameError] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const showActions = isHovered || renameOpen || deleteOpen;
   const thumbnailSrc = `/api/diagrams/svg?path=${encodeURIComponent(repoPath)}&name=${encodeURIComponent(name)}&v=${svgVersion}`;
+
+  const doRename = () => {
+    const trimmed = renameValue.trim();
+    if (!trimmed) { setRenameError("Name required"); return; }
+    if (!/^[a-zA-Z0-9 \-_]+$/.test(trimmed)) { setRenameError("Letters, numbers, spaces, - _ only"); return; }
+    onRename(name, trimmed);
+    setRenameOpen(false);
+    setRenameError("");
+  };
 
   return (
     <Card
@@ -794,7 +769,7 @@ function DiagramCard({
         >
           {name}
         </span>
-        {isHovered && (
+        {showActions && (
           <>
             <Tooltip content="Copy SVG path" placement="bottom">
               <Button
@@ -802,37 +777,72 @@ function DiagramCard({
                 variant="minimal"
                 icon="clipboard"
                 style={{ flexShrink: 0, minWidth: 20, minHeight: 20, padding: 2 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCopyPath(name);
-                }}
+                onClick={(e) => { e.stopPropagation(); onCopyPath(name); }}
               />
             </Tooltip>
-            <Tooltip content="Rename" placement="bottom">
-              <Button
-                small
-                variant="minimal"
-                icon="edit"
-                style={{ flexShrink: 0, minWidth: 20, minHeight: 20, padding: 2 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRename(name);
-                }}
-              />
-            </Tooltip>
-            <Tooltip content="Delete" placement="bottom">
-              <Button
-                small
-                variant="minimal"
-                icon="trash"
-                intent="danger"
-                style={{ flexShrink: 0, minWidth: 20, minHeight: 20, padding: 2 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(name);
-                }}
-              />
-            </Tooltip>
+            <Popover
+              isOpen={renameOpen}
+              onInteraction={(next) => { if (!next) { setRenameOpen(false); setRenameError(""); } }}
+              placement="bottom-end"
+              content={
+                <div onClick={(e) => e.stopPropagation()} style={{ padding: 12, width: 220 }}>
+                  <InputGroup
+                    small
+                    autoFocus
+                    value={renameValue}
+                    intent={renameError ? "danger" : "none"}
+                    onChange={(e) => { setRenameValue(e.target.value); setRenameError(""); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") doRename();
+                      if (e.key === "Escape") { setRenameOpen(false); setRenameError(""); }
+                    }}
+                  />
+                  {renameError && (
+                    <p style={{ color: "var(--bp-intent-danger-default-color)", fontSize: 11, margin: "4px 0 0" }}>
+                      {renameError}
+                    </p>
+                  )}
+                  <div style={{ marginTop: 8, display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                    <Button small text="Cancel" onClick={(e) => { e.stopPropagation(); setRenameOpen(false); setRenameError(""); }} />
+                    <Button small intent="primary" text="Rename" onClick={(e) => { e.stopPropagation(); doRename(); }} />
+                  </div>
+                </div>
+              }
+            >
+              <Tooltip content="Rename" placement="bottom" disabled={renameOpen}>
+                <Button
+                  small
+                  variant="minimal"
+                  icon="edit"
+                  style={{ flexShrink: 0, minWidth: 20, minHeight: 20, padding: 2 }}
+                  onClick={(e) => { e.stopPropagation(); setRenameValue(name); setRenameOpen(true); }}
+                />
+              </Tooltip>
+            </Popover>
+            <Popover
+              isOpen={deleteOpen}
+              onInteraction={(next) => { if (!next) setDeleteOpen(false); }}
+              placement="bottom-end"
+              content={
+                <div onClick={(e) => e.stopPropagation()} style={{ padding: 12 }}>
+                  <p style={{ margin: "0 0 8px", fontSize: 13 }}>Delete "{name}"?</p>
+                  <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                    <Button small text="Cancel" onClick={(e) => { e.stopPropagation(); setDeleteOpen(false); }} />
+                    <Button small text="Delete" onClick={(e) => { e.stopPropagation(); onDelete(name); setDeleteOpen(false); }} />
+                  </div>
+                </div>
+              }
+            >
+              <Tooltip content="Delete" placement="bottom" disabled={deleteOpen}>
+                <Button
+                  small
+                  variant="minimal"
+                  icon="trash"
+                  style={{ flexShrink: 0, minWidth: 20, minHeight: 20, padding: 2 }}
+                  onClick={(e) => { e.stopPropagation(); setDeleteOpen(true); }}
+                />
+              </Tooltip>
+            </Popover>
           </>
         )}
       </div>
