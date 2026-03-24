@@ -580,7 +580,7 @@ export function DiagramPanel({ repoPath }: Props) {
                         />
                       ))}
                       <Card
-                        interactive
+
                         onClick={() => { setNewName(""); setNewNameError(""); setNewDialogOpen(true); setDiagBrowserOpen(false); }}
                         style={{
                           padding: 8, display: "flex", flexDirection: "column",
@@ -858,7 +858,6 @@ function DiagramCard({
 
   return (
     <Card
-      interactive
       onClick={() => onOpen(name)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
