@@ -100,6 +100,7 @@ All available skills in this project:
 | `/web-design` | Web Interface Guidelines (Vercel) | **fork** | UI/UX review, accessibility audit |
 | `/homelab-api` | HomeLab API reference — endpoints, auth, date handling | **fork** | Working with api.jkrumm.com |
 | `/excalidraw-diagram` | Create Excalidraw diagrams that argue visually | main | Visualizing workflows, architectures, concepts |
+| `/read-drawing` | Read and interpret Excalidraw diagrams for context | main | When given a .excalidraw or .svg path to understand its content |
 | `/pencil-design` | Pencil MCP design workflow with basalt-ui tokens | main | Creating/editing .pen design files |
 
 **Note:** For codebase exploration, ask Claude directly and it will use the built-in Explore agent.
