@@ -402,7 +402,7 @@ export function DiagramPanel({ repoPath }: Props) {
   const appFullscreenStyle: React.CSSProperties = appFullscreen
     ? {
         position: "fixed",
-        top: 50,
+        top: 0,
         left: 0,
         right: 0,
         bottom: 0,
