@@ -64,6 +64,7 @@ const fsExit = () =>
 export function DiagramPanel({ repoPath }: Props) {
   const { isDark } = useTheme();
   const panelRef = useRef<HTMLDivElement>(null);
+  const hasRestoredRef = useRef(false);
   const storagePrefix = `cqueue:${repoPath}`;
 
   // Panel state
@@ -109,6 +110,25 @@ export function DiagramPanel({ repoPath }: Props) {
   useEffect(() => {
     fetchDiagrams();
   }, [fetchDiagrams]);
+
+  // Restore last active diagram after initial diagrams load
+  useEffect(() => {
+    if (hasRestoredRef.current || diagrams.length === 0) return;
+    hasRestoredRef.current = true;
+    const saved = localStorage.getItem(`${storagePrefix}:activeDiagram`);
+    if (saved && diagrams.some((d) => d.name === saved)) {
+      void openDiagram(saved);
+    }
+  }, [diagrams, storagePrefix, openDiagram]);
+
+  // Persist active diagram per repo
+  useEffect(() => {
+    if (activeDiagram !== null) {
+      localStorage.setItem(`${storagePrefix}:activeDiagram`, activeDiagram);
+    } else {
+      localStorage.removeItem(`${storagePrefix}:activeDiagram`);
+    }
+  }, [activeDiagram, storagePrefix]);
 
   // ── Open diagram ────────────────────────────────────────────────────────────
 
@@ -418,6 +438,89 @@ export function DiagramPanel({ repoPath }: Props) {
 
             <div style={{ flex: 1 }} />
 
+            {/* Per-diagram actions — copy, rename, delete */}
+            {activeDiagram !== null && (
+              <>
+                <Tooltip content="Copy SVG path" placement="bottom">
+                  <Button
+                    small
+                    variant="minimal"
+                    icon="clipboard"
+                    onClick={() => handleCopySvgPath(activeDiagram)}
+                    style={{ flexShrink: 0 }}
+                  />
+                </Tooltip>
+                <Popover
+                  isOpen={subRenameOpen}
+                  onInteraction={(next) => { if (!next) setSubRenameOpen(false); }}
+                  placement="bottom-end"
+                  content={
+                    <div style={{ padding: 12, width: 220 }}>
+                      <InputGroup
+                        small
+                        autoFocus
+                        value={subRenameValue}
+                        onChange={(e) => setSubRenameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { void handleRename(activeDiagram, subRenameValue); setSubRenameOpen(false); }
+                          if (e.key === "Escape") setSubRenameOpen(false);
+                        }}
+                      />
+                      <div style={{ marginTop: 8, display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                        <Button small text="Cancel" onClick={() => setSubRenameOpen(false)} />
+                        <Button small intent="primary" text="Rename" onClick={() => { void handleRename(activeDiagram, subRenameValue); setSubRenameOpen(false); }} />
+                      </div>
+                    </div>
+                  }
+                >
+                  <Tooltip content="Rename" placement="bottom" disabled={subRenameOpen}>
+                    <Button
+                      small
+                      variant="minimal"
+                      icon="edit"
+                      onClick={() => { setSubRenameValue(activeDiagram); setSubRenameOpen(true); }}
+                      style={{ flexShrink: 0 }}
+                    />
+                  </Tooltip>
+                </Popover>
+                <Popover
+                  isOpen={subDeleteOpen}
+                  onInteraction={(next) => { if (!next) setSubDeleteOpen(false); }}
+                  placement="bottom-end"
+                  content={
+                    <div style={{ padding: 12 }}>
+                      <p style={{ margin: "0 0 8px", fontSize: 13 }}>Delete "{activeDiagram}"?</p>
+                      <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                        <Button small text="Cancel" onClick={() => setSubDeleteOpen(false)} />
+                        <Button small text="Delete" onClick={() => { void handleDelete(activeDiagram); setSubDeleteOpen(false); }} />
+                      </div>
+                    </div>
+                  }
+                >
+                  <Tooltip content="Delete" placement="bottom" disabled={subDeleteOpen}>
+                    <Button
+                      small
+                      variant="minimal"
+                      icon="trash"
+                      onClick={() => setSubDeleteOpen(true)}
+                      style={{ flexShrink: 0 }}
+                    />
+                  </Tooltip>
+                </Popover>
+              </>
+            )}
+
+            {/* New diagram */}
+            <Tooltip content="New diagram" placement="bottom">
+              <Button
+                small
+                variant="minimal"
+                icon="plus"
+                onClick={() => { setNewName(""); setNewNameError(""); setNewDialogOpen(true); }}
+                style={{ flexShrink: 0 }}
+              />
+            </Tooltip>
+
             {/* Diagram browser — only when a diagram is open */}
             {activeDiagram !== null && (
               <Popover
@@ -584,76 +687,6 @@ export function DiagramPanel({ repoPath }: Props) {
                     >×</span>
                   </div>
                 ))}
-              </div>
-
-              {/* Action buttons row */}
-              <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4, flexShrink: 0 }}>
-                <Tooltip content="Copy SVG path" placement="bottom">
-                  <Button
-                    small
-                    variant="minimal"
-                    icon="clipboard"
-                    onClick={() => handleCopySvgPath(activeDiagram)}
-                    style={{ flexShrink: 0 }}
-                  />
-                </Tooltip>
-                <Popover
-                  isOpen={subRenameOpen}
-                  onInteraction={(next) => { if (!next) setSubRenameOpen(false); }}
-                  placement="bottom-end"
-                  content={
-                    <div style={{ padding: 12, width: 220 }}>
-                      <InputGroup
-                        small
-                        autoFocus
-                        value={subRenameValue}
-                        onChange={(e) => setSubRenameValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") { void handleRename(activeDiagram, subRenameValue); setSubRenameOpen(false); }
-                          if (e.key === "Escape") setSubRenameOpen(false);
-                        }}
-                      />
-                      <div style={{ marginTop: 8, display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                        <Button small text="Cancel" onClick={() => setSubRenameOpen(false)} />
-                        <Button small intent="primary" text="Rename" onClick={() => { void handleRename(activeDiagram, subRenameValue); setSubRenameOpen(false); }} />
-                      </div>
-                    </div>
-                  }
-                >
-                  <Tooltip content="Rename" placement="bottom" disabled={subRenameOpen}>
-                    <Button
-                      small
-                      variant="minimal"
-                      icon="edit"
-                      onClick={() => { setSubRenameValue(activeDiagram); setSubRenameOpen(true); }}
-                      style={{ flexShrink: 0 }}
-                    />
-                  </Tooltip>
-                </Popover>
-                <Popover
-                  isOpen={subDeleteOpen}
-                  onInteraction={(next) => { if (!next) setSubDeleteOpen(false); }}
-                  placement="bottom-end"
-                  content={
-                    <div style={{ padding: 12 }}>
-                      <p style={{ margin: "0 0 8px", fontSize: 13 }}>Delete "{activeDiagram}"?</p>
-                      <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                        <Button small text="Cancel" onClick={() => setSubDeleteOpen(false)} />
-                        <Button small text="Delete" onClick={() => { void handleDelete(activeDiagram); setSubDeleteOpen(false); }} />
-                      </div>
-                    </div>
-                  }
-                >
-                  <Tooltip content="Delete" placement="bottom" disabled={subDeleteOpen}>
-                    <Button
-                      small
-                      variant="minimal"
-                      icon="trash"
-                      onClick={() => setSubDeleteOpen(true)}
-                      style={{ flexShrink: 0 }}
-                    />
-                  </Tooltip>
-                </Popover>
               </div>
 
               {/* Canvas container */}
