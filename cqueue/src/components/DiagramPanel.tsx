@@ -111,16 +111,6 @@ export function DiagramPanel({ repoPath }: Props) {
     fetchDiagrams();
   }, [fetchDiagrams]);
 
-  // Restore last active diagram after initial diagrams load
-  useEffect(() => {
-    if (hasRestoredRef.current || diagrams.length === 0) return;
-    hasRestoredRef.current = true;
-    const saved = localStorage.getItem(`${storagePrefix}:activeDiagram`);
-    if (saved && diagrams.some((d) => d.name === saved)) {
-      void openDiagram(saved);
-    }
-  }, [diagrams, storagePrefix, openDiagram]);
-
   // Persist active diagram per repo
   useEffect(() => {
     if (activeDiagram !== null) {
@@ -166,6 +156,16 @@ export function DiagramPanel({ repoPath }: Props) {
       setActiveDiagram(newOpen[idx] ?? newOpen[idx - 1] ?? null);
     }
   };
+
+  // Restore last active diagram after initial diagrams load (must be after openDiagram)
+  useEffect(() => {
+    if (hasRestoredRef.current || diagrams.length === 0) return;
+    hasRestoredRef.current = true;
+    const saved = localStorage.getItem(`${storagePrefix}:activeDiagram`);
+    if (saved && diagrams.some((d) => d.name === saved)) {
+      void openDiagram(saved);
+    }
+  }, [diagrams, storagePrefix, openDiagram]);
 
   // ── Save handler (called by DiagramEditor) ──────────────────────────────────
 
