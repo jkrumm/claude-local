@@ -111,12 +111,10 @@ export function DiagramPanel({ repoPath }: Props) {
     fetchDiagrams();
   }, [fetchDiagrams]);
 
-  // Persist active diagram per repo
+  // Persist active diagram per repo (only write, never delete — avoids clearing on mount before restore)
   useEffect(() => {
     if (activeDiagram !== null) {
       localStorage.setItem(`${storagePrefix}:activeDiagram`, activeDiagram);
-    } else {
-      localStorage.removeItem(`${storagePrefix}:activeDiagram`);
     }
   }, [activeDiagram, storagePrefix]);
 
