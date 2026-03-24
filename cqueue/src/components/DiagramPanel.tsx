@@ -564,31 +564,35 @@ export function DiagramPanel({ repoPath }: Props) {
                 onInteraction={(next) => setDiagBrowserOpen(next)}
                 placement="bottom-end"
                 content={
-                  <div style={{ padding: 4, width: 200, maxHeight: 280, overflowY: "auto" }}>
-                    {diagrams.map((d) => (
-                      <div
-                        key={d.name}
-                        onClick={() => void openDiagram(d.name)}
+                  <div style={{ padding: 8, width: 380, maxHeight: 420, overflowY: "auto" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                      {diagrams.map((d) => (
+                        <DiagramCard
+                          key={d.name}
+                          diagram={d}
+                          repoPath={repoPath}
+                          isActive={d.name === activeDiagram}
+                          svgVersion={svgVersions[d.name] ?? d.modifiedAt}
+                          onOpen={(name) => { void openDiagram(name); setDiagBrowserOpen(false); }}
+                          onRename={(name, newName) => void handleRename(name, newName)}
+                          onDelete={(name) => void handleDelete(name)}
+                          onCopyPath={handleCopySvgPath}
+                        />
+                      ))}
+                      <Card
+                        interactive
+                        onClick={() => { setNewName(""); setNewNameError(""); setNewDialogOpen(true); setDiagBrowserOpen(false); }}
                         style={{
-                          display: "flex", alignItems: "center", gap: 8,
-                          padding: "5px 8px", cursor: "pointer", borderRadius: 3,
-                          background: openDiagrams.includes(d.name) ? "var(--bp-surface-bg-hover)" : undefined,
-                          fontSize: 12,
+                          padding: 8, display: "flex", flexDirection: "column",
+                          alignItems: "center", justifyContent: "center", gap: 6,
+                          cursor: "pointer", border: "1.5px dashed var(--bp-surface-border-color-default)",
+                          boxShadow: "none", minHeight: 108, background: "transparent",
                         }}
                       >
-                        {d.hasSvg ? (
-                          <img
-                            src={`/api/diagrams/svg?path=${encodeURIComponent(repoPath)}&name=${encodeURIComponent(d.name)}&v=${svgVersions[d.name] ?? d.modifiedAt}`}
-                            style={{ width: 28, height: 20, objectFit: "contain", background: "#fff", borderRadius: 2, flexShrink: 0 }}
-                            alt={d.name}
-                          />
-                        ) : (
-                          <Icon icon="diagram-tree" size={14} color="var(--bp-typography-color-muted)" style={{ flexShrink: 0 }} />
-                        )}
-                        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</span>
-                        {activeDiagram === d.name && <Icon icon="dot" size={10} color="var(--bp-intent-primary-default-color)" />}
-                      </div>
-                    ))}
+                        <Icon icon="plus" size={20} color="var(--bp-typography-color-muted)" />
+                        <span style={{ fontSize: 11, color: "var(--bp-typography-color-muted)" }}>New Diagram</span>
+                      </Card>
+                    </div>
                   </div>
                 }
               >
