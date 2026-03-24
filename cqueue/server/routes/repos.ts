@@ -4,7 +4,7 @@ import { join } from "path";
 import { scanRepos } from "../lib/repo-scanner";
 import { parseQueue } from "../lib/parse-queue";
 import { getGitStatus } from "../lib/git";
-import { toContainerPath } from "../lib/workspace";
+import { toContainerPath, toDisplayPath } from "../lib/workspace";
 
 async function ensureFile(filePath: string): Promise<string> {
   if (!existsSync(filePath)) {
@@ -36,6 +36,15 @@ export const reposRoutes = new Elysia({ prefix: "/api" })
 
     const queue = parseQueue(queueRaw);
     const git = getGitStatus(containerPath);
+
+    // Normalise worktree paths to display paths so frontend can pass them back
+    // to API endpoints directly (e.g. /api/actions/chain { worktreePath })
+    if (git) {
+      git.worktrees = git.worktrees.map((wt) => ({
+        ...wt,
+        path: toDisplayPath(wt.path),
+      }));
+    }
 
     const repo = {
       name: path.split("/").pop() ?? path,

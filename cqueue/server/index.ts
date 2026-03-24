@@ -1,6 +1,6 @@
 import { Elysia } from "elysia";
 import { staticPlugin } from "@elysiajs/static";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { reposRoutes } from "./routes/repos";
 import { queueRoutes } from "./routes/queue";
 import { notesRoutes } from "./routes/notes";
@@ -10,8 +10,10 @@ import { completedRoutes } from "./routes/completed";
 import { usageRoutes } from "./routes/usage";
 import { githubRoutes } from "./routes/github";
 import { diagramsRoutes } from "./routes/diagrams";
+import { actionsRoutes } from "./routes/actions";
 
-const indexHtml = readFileSync("dist/index.html", "utf-8");
+const isDev = !existsSync("dist/index.html");
+const indexHtml = isDev ? null : readFileSync("dist/index.html", "utf-8");
 
 const app = new Elysia()
   .get("/health", () => ({ ok: true }))
@@ -24,16 +26,27 @@ const app = new Elysia()
   .use(usageRoutes)
   .use(githubRoutes)
   .use(diagramsRoutes)
-  .use(staticPlugin({ assets: "dist/assets", prefix: "/assets" }))
-  .onError(({ code, set }) => {
-    if (code === "NOT_FOUND") {
-      set.headers["content-type"] = "text/html; charset=utf-8";
-      set.headers["cache-control"] = "no-cache";
-      return indexHtml;
-    }
-  })
-  .listen(7705);
+  .use(actionsRoutes);
 
-console.log("cqueue server running on port 7705");
+if (!isDev) {
+  app
+    .use(staticPlugin({ assets: "dist/assets", prefix: "/assets" }))
+    .onError(({ code, set }) => {
+      if (code === "NOT_FOUND") {
+        set.headers["content-type"] = "text/html; charset=utf-8";
+        set.headers["cache-control"] = "no-cache";
+        return indexHtml;
+      }
+    });
+}
+
+const PORT = parseInt(process.env.PORT ?? "7705");
+app.listen(PORT);
+
+console.log(
+  isDev
+    ? `cqueue API running on :${PORT} (dev — frontend at :7705 via Vite)`
+    : `cqueue running on :${PORT}`,
+);
 
 export type App = typeof app;

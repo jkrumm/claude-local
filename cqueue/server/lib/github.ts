@@ -1,7 +1,12 @@
 import { Octokit } from "@octokit/rest";
 
+// Silence the built-in request-log plugin — 404s for repos without releases
+// are expected and handled via allSettled; real errors bubble to our catch.
 const octokit = process.env.GITHUB_TOKEN
-  ? new Octokit({ auth: process.env.GITHUB_TOKEN })
+  ? new Octokit({
+      auth: process.env.GITHUB_TOKEN,
+      log: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
+    })
   : null;
 
 export interface PullRequest {

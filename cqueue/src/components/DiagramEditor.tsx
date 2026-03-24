@@ -13,10 +13,13 @@ interface Props {
 }
 
 const ExcalidrawComponent = React.lazy(() =>
-  import("./ExcalidrawLazy").catch(() => {
+  import("./ExcalidrawLazy").catch((err) => {
     // Chunk hash changed after a rebuild — reload to pick up the new build
-    window.location.reload();
-    return new Promise<never>(() => {});
+    if (import.meta.env.PROD) {
+      window.location.reload();
+      return new Promise<never>(() => {});
+    }
+    throw err;
   }),
 );
 

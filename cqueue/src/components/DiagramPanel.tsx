@@ -123,6 +123,9 @@ export function DiagramPanel({ repoPath }: Props) {
 
   useEffect(() => {
     fetchDiagrams();
+    // Preload Excalidraw in background — 582 kB chunk parses while user reads
+    // the panel, so it's ready by the time they click a diagram.
+    void import("./ExcalidrawLazy");
   }, [fetchDiagrams]);
 
   // Persist open tabs + active diagram (only write, never delete — avoids clearing on mount before restore)

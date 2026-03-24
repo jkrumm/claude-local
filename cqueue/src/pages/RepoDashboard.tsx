@@ -179,7 +179,7 @@ function RepoDashboardInner() {
 
     connect();
 
-    // Polling fallback — fs.watch inside Docker doesn't detect host file changes
+    // Polling fallback for SSE gaps
     const pollInterval = setInterval(() => {
       if (!isEditingRef.current) {
         fetchQueue(repoPath);
@@ -289,6 +289,7 @@ function RepoDashboardInner() {
         }}
       >
         <GitPanel
+          repoPath={repoPath}
           gitStatus={data.git}
           githubData={githubData}
           githubLoading={githubLoading}

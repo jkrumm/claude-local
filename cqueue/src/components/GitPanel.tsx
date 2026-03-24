@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
-import { AnchorButton, Button, H6, Icon, Intent, Popover, Tag, Tooltip } from "@blueprintjs/core";
+import { AnchorButton, Button, Callout, H6, Icon, Intent, Popover, Tag, Tooltip } from "@blueprintjs/core";
 import type { GitFile, GitCommit, GitStatus, GithubData, WorkflowRun, Worktree } from "../types";
+import { ChainDrawer } from "./ChainDrawer";
 
 interface Props {
+  repoPath: string;
   gitStatus: GitStatus | null;
   githubData: GithubData | null;
   githubLoading: boolean;
@@ -469,59 +471,191 @@ function ActionButton({ label, intent, disabled, tooltip, popoverContent, onClic
   );
 }
 
-function ActionsSection({ gitStatus, githubData }: { gitStatus: GitStatus; githubData: GithubData | null }) {
-  const { ahead, behind, branch, mainBranch, distanceFromTag } = gitStatus;
+// ─── Worktree selector ────────────────────────────────────────────────────────
+
+function WorktreeSelector({
+  worktrees,
+  repoPath,
+  selected,
+  onSelect,
+}: {
+  worktrees: Worktree[];
+  repoPath: string;
+  selected: string;
+  onSelect: (path: string) => void;
+}) {
+  // If only main worktree, nothing to select
+  if (worktrees.length <= 1) return null;
+
+  return (
+    <div style={{ display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap" }}>
+      {worktrees.map((wt) => {
+        const isSelected = selected === wt.path || (wt.isMain && selected === repoPath);
+        return (
+          <Tooltip
+            key={wt.path}
+            content={
+              <div style={{ ...mono, fontSize: 11 }}>
+                <div>{wt.path}</div>
+                <div style={{ opacity: 0.6 }}>{wt.isMain ? "main worktree" : "worktree"}</div>
+              </div>
+            }
+            placement="top"
+          >
+            <Button
+              small
+              outlined={!isSelected}
+              intent={isSelected ? Intent.PRIMARY : undefined}
+              onClick={() => onSelect(wt.path)}
+              style={{ ...mono, fontSize: 11 }}
+            >
+              {wt.isMain ? "main" : truncate(wt.branch, 22)}
+            </Button>
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Actions ─────────────────────────────────────────────────────────────────
+
+function ActionsSection({
+  repoPath,
+  gitStatus,
+  githubData,
+}: {
+  repoPath: string;
+  gitStatus: GitStatus;
+  githubData: GithubData | null;
+}) {
+  const { ahead, behind, branch, mainBranch } = gitStatus;
   const onMain = branch === mainBranch;
   const pr = githubData?.currentPR ?? null;
 
-  // Rebase: how many commits on main that this branch is behind
-  const rebaseCount = behind;
+  // Default target: worktree matching current branch, or first worktree, or repoPath
+  const defaultTarget =
+    gitStatus.worktrees.find((wt) => wt.branch === branch)?.path ??
+    gitStatus.worktrees[0]?.path ??
+    repoPath;
 
-  // Push: ahead commits to remote
-  const pushCount = ahead;
+  const [selectedPath, setSelectedPath] = useState(defaultTarget);
+  const [chainJob, setChainJob] = useState<{ jobId: string; skill: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  // Release: unreleased commits count
-  const releaseCount = gitStatus.distanceFromTag;
+  function showError(msg: string) {
+    setError(msg);
+    setTimeout(() => setError(null), 5000);
+  }
+
+  async function runChain(skill: string) {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/actions/chain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skill, worktreePath: selectedPath }),
+      });
+      const json = (await res.json()) as { ok: boolean; jobId?: string; error?: string };
+      if (json.ok && json.jobId) {
+        setChainJob({ jobId: json.jobId, skill });
+      } else {
+        showError(json.error ?? "Failed to start job");
+      }
+    } catch (e) {
+      showError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runGitOp(op: string, name?: string) {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/actions/git", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ op, worktreePath: selectedPath, name }),
+      });
+      const json = (await res.json()) as { ok: boolean; error?: string };
+      if (!json.ok) showError(json.error ?? `${op} failed`);
+    } catch (e) {
+      showError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div>
       <SectionLabel>Actions</SectionLabel>
-      <div style={{ display: "flex", gap: 5, alignItems: "stretch", width: "100%" }}>
+
+      <WorktreeSelector
+        worktrees={gitStatus.worktrees}
+        repoPath={repoPath}
+        selected={selectedPath}
+        onSelect={setSelectedPath}
+      />
+
+      {error && (
+        <Callout intent={Intent.DANGER} style={{ marginBottom: 8, padding: "6px 10px", fontSize: 12 }}>
+          {error}
+        </Callout>
+      )}
+
+      <div style={{ display: "flex", gap: 5, alignItems: "stretch", width: "100%", flexWrap: "wrap" }}>
 
         <ActionButton
           label="New Branch"
-          tooltip="Create a new branch from current HEAD"
+          tooltip="Create a new branch from origin/default"
+          disabled={busy}
           popoverContent={
-            <BranchNameForm label="New Branch Name" onSubmit={(name) => console.log("new-branch", name)} onClose={() => {}} />
+            <BranchNameForm
+              label="New Branch Name"
+              onSubmit={(name) => { void runGitOp("new-branch", name); }}
+              onClose={() => {}}
+            />
           }
         />
 
         <ActionButton
           label="New Worktree"
-          tooltip="Create a new worktree on a branch"
+          tooltip="Create a new worktree via wtp"
+          disabled={busy}
           popoverContent={
-            <BranchNameForm label="New Worktree Branch" onSubmit={(name) => console.log("new-worktree", name)} onClose={() => {}} />
+            <BranchNameForm
+              label="Worktree Branch Name"
+              onSubmit={(name) => { void runGitOp("new-worktree", name); }}
+              onClose={() => {}}
+            />
           }
         />
 
         <ActionButton
-          label={rebaseCount > 0 ? `Rebase (${rebaseCount})` : "Rebase"}
-          tooltip={rebaseCount > 0 ? `Rebase onto ${mainBranch} — ${rebaseCount} new commit${rebaseCount !== 1 ? "s" : ""}` : `Up to date with ${mainBranch}`}
-          disabled={onMain || rebaseCount === 0}
-          onClick={() => console.log("rebase")}
+          label={behind > 0 ? `Rebase (${behind})` : "Rebase"}
+          tooltip={
+            behind > 0
+              ? `Rebase onto ${mainBranch} — ${behind} new commit${behind !== 1 ? "s" : ""}`
+              : `Already up to date with ${mainBranch}`
+          }
+          disabled={onMain || behind === 0 || busy}
+          onClick={() => { void runGitOp("rebase"); }}
         />
 
         <ActionButton
-          label={pushCount > 0 ? `Push (${pushCount})` : "Push"}
-          tooltip={pushCount > 0 ? `Push ${pushCount} commit${pushCount !== 1 ? "s" : ""} → ${branch}` : "Nothing to push"}
-          disabled={pushCount === 0}
+          label={ahead > 0 ? `Push (${ahead})` : "Push"}
+          tooltip={ahead > 0 ? `Push ${ahead} commit${ahead !== 1 ? "s" : ""} → ${branch}` : "Nothing to push"}
+          disabled={ahead === 0 || busy}
           popoverContent={
             <div style={{ padding: 16, minWidth: 220 }}>
               <SectionLabel>Push to remote</SectionLabel>
               <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>
-                {pushCount} commit{pushCount !== 1 ? "s" : ""} → <span style={mono}>{branch}</span>
+                {ahead} commit{ahead !== 1 ? "s" : ""} → <span style={mono}>{branch}</span>
               </div>
-              <Button small intent={Intent.PRIMARY} onClick={() => console.log("push")}>Push</Button>
+              <Button small intent={Intent.PRIMARY} onClick={() => { void runGitOp("push"); }}>
+                Push
+              </Button>
             </div>
           }
         />
@@ -529,78 +663,83 @@ function ActionsSection({ gitStatus, githubData }: { gitStatus: GitStatus; githu
         <ActionButton
           label="GitCleanup"
           tooltip="Squash and group noisy commits into logical units"
-          disabled={onMain}
-          onClick={() => console.log("git-cleanup")}
+          disabled={onMain || busy}
+          onClick={() => { void runChain("/git-cleanup"); }}
         />
 
         <ActionButton
           label="Validate"
           intent={Intent.SUCCESS}
           tooltip="Run format, lint, typecheck, and tests"
-          popoverContent={
-            <div style={{ padding: 16, minWidth: 280 }}>
-              <SectionLabel>Validate</SectionLabel>
-              <div style={{ fontSize: 12, opacity: 0.55, marginBottom: 10 }}>format · lint · tsc · unit tests</div>
-              <Button small intent={Intent.SUCCESS} onClick={() => console.log("validate")}>Run Validation</Button>
-            </div>
-          }
+          disabled={busy}
+          onClick={() => { void runChain("/code-quality"); }}
         />
 
         <ActionButton
           label="Review"
           intent={Intent.SUCCESS}
-          tooltip="Run code review"
-          onClick={() => console.log("review")}
+          tooltip="AI code review of branch changes"
+          disabled={busy}
+          onClick={() => { void runChain("/review"); }}
         />
 
         <ActionButton
           label="Create PR"
-          disabled={onMain || !!pr}
-          tooltip={pr ? `PR #${pr.number} already open` : "Create a pull request for this branch"}
-          onClick={() => console.log("create-pr")}
+          disabled={onMain || !!pr || busy}
+          tooltip={pr ? `PR #${pr.number} already open` : onMain ? "Switch to a feature branch first" : "Run full PR chain: validate → review → create PR"}
+          onClick={() => { void runChain("/pr create"); }}
         />
 
         {pr && (
           <ActionButton
             label={`Merge #${pr.number}`}
             tooltip={`Merge PR #${pr.number}: ${truncate(pr.title, 30)}`}
+            disabled={busy}
             popoverContent={
               <div style={{ padding: 16, minWidth: 220 }}>
                 <SectionLabel>Merge PR</SectionLabel>
                 <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>
                   #{pr.number} {truncate(pr.title, 32)}
                 </div>
-                <Button small intent={Intent.PRIMARY} onClick={() => console.log("merge", pr.number)}>Merge</Button>
+                <Button small intent={Intent.PRIMARY} onClick={() => { void runChain("/pr merge"); }}>
+                  Merge
+                </Button>
               </div>
             }
           />
         )}
 
-        {releaseCount > 0 && (
+        {gitStatus.distanceFromTag > 0 && (
           <ActionButton
-            label={`Release (${releaseCount})`}
+            label={`Release (${gitStatus.distanceFromTag})`}
             intent={Intent.PRIMARY}
-            tooltip={`Trigger release — ${releaseCount} commit${releaseCount !== 1 ? "s" : ""} since ${gitStatus.lastTag}`}
+            tooltip={`${gitStatus.distanceFromTag} commit${gitStatus.distanceFromTag !== 1 ? "s" : ""} since ${gitStatus.lastTag} — release skill not yet implemented`}
+            disabled
             popoverContent={
               <div style={{ padding: 16, minWidth: 220 }}>
-                <SectionLabel>Trigger Release</SectionLabel>
-                <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>
-                  {releaseCount} commit{releaseCount !== 1 ? "s" : ""} since <span style={mono}>{gitStatus.lastTag}</span>
+                <SectionLabel>Release</SectionLabel>
+                <div style={{ fontSize: 12, opacity: 0.7 }}>
+                  Release skill coming soon — see cnotes todo #1.
                 </div>
-                <Button small intent={Intent.PRIMARY} icon="flash" onClick={() => console.log("release")}>Trigger Release</Button>
               </div>
             }
           />
         )}
 
       </div>
+
+      <ChainDrawer
+        jobId={chainJob?.jobId ?? null}
+        skill={chainJob?.skill ?? ""}
+        onClose={() => setChainJob(null)}
+      />
     </div>
   );
 }
 
-// ─── Main GitPanel ───────────────────────────────────────────────────────────
+// ─── Main GitPanel ────────────────────────────────────────────────────────────
 
-export function GitPanel({ gitStatus, githubData, githubLoading, lastGithubRefresh, onRefresh }: Props) {
+export function GitPanel({ repoPath, gitStatus, githubData, githubLoading, lastGithubRefresh, onRefresh }: Props) {
   if (!gitStatus) return null;
 
   return (
@@ -628,14 +767,11 @@ export function GitPanel({ gitStatus, githubData, githubLoading, lastGithubRefre
       {/* Row 2: History + Workflows */}
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
         <HistorySection gitStatus={gitStatus} />
-        <WorkflowsSection
-          githubData={githubData}
-          gitStatus={gitStatus}
-        />
+        <WorkflowsSection githubData={githubData} gitStatus={gitStatus} />
       </div>
 
       {/* Row 3: Actions */}
-      <ActionsSection gitStatus={gitStatus} githubData={githubData} />
+      <ActionsSection repoPath={repoPath} gitStatus={gitStatus} githubData={githubData} />
 
     </div>
   );

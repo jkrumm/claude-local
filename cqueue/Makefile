@@ -1,16 +1,25 @@
-up:
-	docker compose up -d --build
+dev:
+	@echo "Clearing ports :7705 and :7706..."
+	@lsof -ti :7705 | xargs kill -9 2>/dev/null; true
+	@lsof -ti :7706 | xargs kill -9 2>/dev/null; true
+	@echo "Starting dev: Vite on :7705 (HMR) + API on :7706..."
+	@PORT=7706 bun --watch server/index.ts & bun run dev:client
 
-down:
-	docker compose down
+start:
+	@lsof -ti :7705 | xargs kill -9 2>/dev/null; true
+	bun server/index.ts
 
-rebuild:
-	docker compose up -d --build --force-recreate
+build:
+	bun run build
 
-logs:
-	docker compose logs -f
+install-agent:
+	cp com.jkrumm.cqueue.plist ~/Library/LaunchAgents/
+	launchctl load ~/Library/LaunchAgents/com.jkrumm.cqueue.plist
+	@echo "cqueue LaunchAgent installed and started"
 
-shell:
-	docker compose exec cqueue sh
+uninstall-agent:
+	launchctl unload ~/Library/LaunchAgents/com.jkrumm.cqueue.plist
+	rm ~/Library/LaunchAgents/com.jkrumm.cqueue.plist
+	@echo "cqueue LaunchAgent removed"
 
-.PHONY: up down rebuild logs shell
+.PHONY: dev start build install-agent uninstall-agent
