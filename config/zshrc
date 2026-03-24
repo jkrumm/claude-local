@@ -67,11 +67,11 @@ c() {
 
   while true; do
     if [[ "$PWD" == "$HOME/SourceRoot"* ]]; then
-      ENABLE_TOOL_SEARCH=true claude --dangerously-skip-permissions --chrome --plugin-dir ~/SourceRoot/.claude "${claude_args[@]}"
+      ENABLE_TOOL_SEARCH=true claude --dangerously-skip-permissions --plugin-dir ~/SourceRoot/.claude "${claude_args[@]}"
     elif [[ "$PWD" == "$HOME/IuRoot"* ]]; then
-      ENABLE_TOOL_SEARCH=true claude --dangerously-skip-permissions --chrome --plugin-dir "$(git rev-parse --show-toplevel 2>/dev/null || echo '.')/.claude" "${claude_args[@]}"
+      ENABLE_TOOL_SEARCH=true claude --dangerously-skip-permissions --plugin-dir "$(git rev-parse --show-toplevel 2>/dev/null || echo '.')/.claude" "${claude_args[@]}"
     else
-      ENABLE_TOOL_SEARCH=true claude --dangerously-skip-permissions --chrome "${claude_args[@]}"
+      ENABLE_TOOL_SEARCH=true claude --dangerously-skip-permissions "${claude_args[@]}"
     fi
 
     # Queue /clear: hook wrote next task to marker — restart with fresh context
