@@ -1,0 +1,86 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "http://cqueue.local",
+  "elements": [
+    {
+      "id": "mkcrqPsY2NBkbxQRhhHqv",
+      "type": "rectangle",
+      "x": 299.23828125,
+      "y": 229.04296875,
+      "width": 328.94140625,
+      "height": 122.0078125,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "a0",
+      "roundness": {
+        "type": 3
+      },
+      "seed": 1158653760,
+      "version": 18,
+      "versionNonce": 2479789,
+      "isDeleted": false,
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "G_KkdhSTUOOmiJXEnowYR"
+        }
+      ],
+      "updated": 1774348969961,
+      "link": null,
+      "locked": false
+    },
+    {
+      "id": "G_KkdhSTUOOmiJXEnowYR",
+      "type": "text",
+      "x": 441.84898376464844,
+      "y": 277.546875,
+      "width": 43.720001220703125,
+      "height": 25,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "a0V",
+      "roundness": null,
+      "seed": 1268043523,
+      "version": 6,
+      "versionNonce": 1751937219,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1774348971020,
+      "link": null,
+      "locked": false,
+      "text": "test",
+      "fontSize": 20,
+      "fontFamily": 5,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "mkcrqPsY2NBkbxQRhhHqv",
+      "originalText": "test",
+      "autoResize": true,
+      "lineHeight": 1.25
+    }
+  ],
+  "appState": {
+    "gridSize": 20,
+    "gridStep": 5,
+    "gridModeEnabled": false,
+    "viewBackgroundColor": "#ffffff"
+  },
+  "files": {}
+}
