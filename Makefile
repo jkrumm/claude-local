@@ -13,6 +13,7 @@ setup:
 	@echo "  Setting up claude-local..."
 	@echo ""
 	@$(MAKE) --no-print-directory _setup-config
+	@$(MAKE) --no-print-directory _setup-op-token
 	@$(MAKE) --no-print-directory _setup-hooks
 	@$(MAKE) --no-print-directory _setup-scripts
 	@$(MAKE) --no-print-directory _setup-skills
@@ -56,6 +57,16 @@ _setup-config:
 	   echo "    ✓ localias.yaml"; \
 	 fi
 
+.PHONY: _setup-op-token
+_setup-op-token:
+	@echo "  1Password service account token..."
+	@if security find-generic-password -a "$$USER" -s "op-service-account-token" -w >/dev/null 2>&1; then \
+		echo "    · op-service-account-token (ok)"; \
+	else \
+		echo "    ✗ op-service-account-token MISSING — run:"; \
+		echo "      security add-generic-password -a \"$$USER\" -s \"op-service-account-token\" -w \"ops1_...\" -T /usr/bin/security"; \
+	fi
+
 .PHONY: _setup-hooks
 _setup-hooks:
 	@echo "  Hooks..."
@@ -81,6 +92,9 @@ _setup-scripts:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/scripts/fetch_usage.py" \
 		DST="$(CLAUDE_DIR)/fetch_usage.py"
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(CLAUDE_LOCAL)/scripts/fullscreen-launcher.ts" \
+		DST="$(CLAUDE_DIR)/fullscreen-launcher.ts"
 
 .PHONY: _setup-skills
 _setup-skills:
@@ -172,6 +186,12 @@ status:
 	 else \
 	   echo "    ✗ localias.yaml [real file — run make setup]"; \
 	 fi
+	@echo "  1Password"
+	@if security find-generic-password -a "$$USER" -s "op-service-account-token" -w >/dev/null 2>&1; then \
+		echo "    ✓ op-service-account-token"; \
+	else \
+		echo "    ✗ op-service-account-token [missing — run make setup for instructions]"; \
+	fi
 	@echo "  Settings"
 	@if [ -f "$(CLAUDE_DIR)/settings.json" ]; then \
 		echo "    ✓ settings.json (hooks + statusline wired)"; \
@@ -185,6 +205,7 @@ status:
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/queue.ts"
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/statusline.sh"
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/fetch_usage.py"
+	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/fullscreen-launcher.ts"
 	@echo "  Gitignore"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitignore_global"
 	@echo "  Skills ($(shell ls $(CLAUDE_LOCAL)/skills/ | wc -l | xargs) — SourceRoot only)"

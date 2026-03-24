@@ -364,8 +364,13 @@ export function DiagramPanel({ repoPath }: Props) {
       return;
     }
     void fsEnter(document.documentElement).catch(() => {
-      // WKWebView / embedded Safari don't expose the Fullscreen API — fall back to CSS focus mode
-      setAppFullscreen(true);
+      // WKWebView / embedded Safari don't expose the Fullscreen API.
+      // Try host-side kiosk launcher (run: kiosk-launcher in terminal).
+      // Falls back to CSS focus mode if launcher is not running.
+      const url = encodeURIComponent(window.location.href);
+      void fetch(`http://localhost:7706/open?url=${url}`)
+        .then((r) => { if (!r.ok) setAppFullscreen(true); })
+        .catch(() => setAppFullscreen(true));
     });
   }, []);
 
@@ -626,7 +631,7 @@ export function DiagramPanel({ repoPath }: Props) {
 
             {/* Browser fullscreen */}
             <Tooltip
-              content={browserFullscreen ? "Exit fullscreen" : "Browser fullscreen"}
+              content={browserFullscreen ? "Exit fullscreen" : "Fullscreen — run kiosk-launcher for true OS fullscreen (Cmd+Q to exit)"}
               placement="bottom"
             >
               <Button
