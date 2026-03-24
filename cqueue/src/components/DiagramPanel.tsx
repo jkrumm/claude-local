@@ -363,9 +363,9 @@ export function DiagramPanel({ repoPath }: Props) {
       void fsExit();
       return;
     }
-    // Target document.documentElement — fullscreening a panel div fails in some browsers
-    void fsEnter(document.documentElement).catch((err: unknown) => {
-      console.warn("Fullscreen request failed:", err);
+    void fsEnter(document.documentElement).catch(() => {
+      // WKWebView / embedded Safari don't expose the Fullscreen API — fall back to CSS focus mode
+      setAppFullscreen(true);
     });
   }, []);
 
