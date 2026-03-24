@@ -12,7 +12,13 @@ interface Props {
   onStatusChange: (status: SaveStatus) => void;
 }
 
-const ExcalidrawComponent = React.lazy(() => import("./ExcalidrawLazy"));
+const ExcalidrawComponent = React.lazy(() =>
+  import("./ExcalidrawLazy").catch(() => {
+    // Chunk hash changed after a rebuild — reload to pick up the new build
+    window.location.reload();
+    return new Promise<never>(() => {});
+  }),
+);
 
 export function DiagramEditor({
   name,
