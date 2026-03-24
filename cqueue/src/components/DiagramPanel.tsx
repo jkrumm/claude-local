@@ -361,21 +361,27 @@ export function DiagramPanel({ repoPath }: Props) {
 
   // ── Browser fullscreen ──────────────────────────────────────────────────────
 
-  const toggleBrowserFullscreen = useCallback(() => {
-    if (fsElement()) {
-      void fsExit();
-      return;
-    }
-    void fsEnter(document.documentElement).catch(() => {
-      // WKWebView / embedded Safari don't expose the Fullscreen API.
-      // Ask the cqueue backend to spawn Chrome --kiosk on the host.
-      // Falls back to CSS focus mode if Chrome binary not found.
-      const url = encodeURIComponent(window.location.href);
-      void fetch(`/api/open-kiosk?url=${url}`)
-        .then((r) => { if (!r.ok) setAppFullscreen(true); })
-        .catch(() => setAppFullscreen(true));
-    });
+  const tryKiosk = useCallback(() => {
+    const url = encodeURIComponent(window.location.href);
+    void fetch(`/api/open-kiosk?url=${url}`)
+      .then((r) => { if (!r.ok) setAppFullscreen(true); })
+      .catch(() => setAppFullscreen(true));
   }, []);
+
+  const toggleBrowserFullscreen = useCallback(() => {
+    // Exit CSS focus mode if active
+    if (appFullscreen) { setAppFullscreen(false); return; }
+    // Exit native fullscreen if active
+    if (fsElement()) { void fsExit(); return; }
+    // Skip native API entirely if the browser has disabled fullscreen —
+    // avoids the case where requestFullscreen exists but resolves silently
+    const fsEnabled =
+      document.fullscreenEnabled ??
+      (document as DocWithWebkit).webkitFullscreenEnabled ??
+      false;
+    if (!fsEnabled) { tryKiosk(); return; }
+    void fsEnter(document.documentElement).catch(tryKiosk);
+  }, [appFullscreen, tryKiosk]);
 
   useEffect(() => {
     const handler = () => {
@@ -634,7 +640,7 @@ export function DiagramPanel({ repoPath }: Props) {
 
             {/* Browser fullscreen */}
             <Tooltip
-              content={browserFullscreen ? "Exit fullscreen" : "Fullscreen — run kiosk-launcher for true OS fullscreen (Cmd+Q to exit)"}
+              content={browserFullscreen || appFullscreen ? "Exit fullscreen" : "Fullscreen (Cmd+Q to exit kiosk)"}
               placement="bottom"
             >
               <Button
