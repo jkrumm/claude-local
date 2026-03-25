@@ -1,8 +1,9 @@
 # AI shell helpers — Claude Haiku via ANTHROPIC_API_KEY + ANTHROPIC_BASE_URL
 # Both are loaded from 1Password in secrets.zsh at shell startup.
 #
-#   ai <description>    generate a zsh command from natural language, confirm before run
-#   fix                 fix the last failed command (ai-generated or regular shell command)
+#   ai <description>      generate a zsh command from natural language, confirm before run
+#   fix [description]     fix the last failed command (ai-generated or regular)
+#                         pass description when command succeeded but output was wrong
 
 # Last AI-generated command + original prompt — used by fix to avoid re-invoking ai
 _AI_LAST_CMD=""
@@ -55,7 +56,7 @@ ai() {
 
 fix() {
   local description="${1:-}"
-  local cmd_to_fix prompt
+  local cmd_to_fix base_prompt
   local last_history
   last_history=$(fc -ln -1 2>/dev/null | sed 's/^[[:space:]]*//')
 
@@ -63,13 +64,13 @@ fix() {
   # instead of re-invoking ai (which would just generate a new command)
   if [[ ( "$last_history" == ai\ * || "$last_history" == fix* ) && -n "$_AI_LAST_CMD" ]]; then
     cmd_to_fix="$_AI_LAST_CMD"
-    prompt="Original intent: $_AI_LAST_PROMPT
+    base_prompt="Original intent: $_AI_LAST_PROMPT
 Fix this zsh command.
 Command: $cmd_to_fix"
   else
     cmd_to_fix="$last_history"
     [[ -z "$cmd_to_fix" || "$cmd_to_fix" == "fix" ]] && { echo "No previous command to fix"; return 1 }
-    prompt="Fix this zsh command.
+    base_prompt="Fix this zsh command.
 Command: $cmd_to_fix"
   fi
 
@@ -83,23 +84,23 @@ Command: $cmd_to_fix"
     is_error=true
   fi
 
+  local prompt
   if [[ $is_error == false ]]; then
     if [[ -z "$description" ]]; then
       print -P "%F{yellow}Command succeeded.%f Describe what's wrong: fix '<description>'"
       return 0
     fi
-    # Command succeeded but output was wrong — use output + description as context
     print -P "%F{yellow}Output:%f"
     echo "$captured" | head -20
     echo ""
-    prompt="$prompt
+    prompt="$base_prompt
 Output: $captured
 Issue: $description"
   else
     print -P "%F{red}Error (exit $exit_code):%f"
     echo "$captured" | head -20
     echo ""
-    prompt="$prompt
+    prompt="$base_prompt
 Error: $captured"
     [[ -n "$description" ]] && prompt="$prompt
 Additional context: $description"
