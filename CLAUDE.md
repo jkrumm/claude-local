@@ -13,7 +13,8 @@ outward — edit at either end, git always sees the change here.
 |-|-|-|
 | `config/global.CLAUDE.md` | `~/.claude/CLAUDE.md` | Global Claude instructions |
 | `config/sourceroot.CLAUDE.md` | `~/SourceRoot/CLAUDE.md` | SourceRoot workspace |
-| `config/zshrc` | `~/.zshrc` | Includes `c()` launcher, `cq` alias |
+| `config/zshrc` | `~/.zshrc` | Thin loader — sources all modules in conf.d |
+| `config/zsh/*.zsh` | `~/.zsh/conf.d/` (dir symlink) | ai, aliases, claude, git, keybindings, path, secrets, tools |
 | `config/gitconfig` | `~/.gitconfig` | includeIf per workspace |
 | `config/gitconfig-personal` | `~/.gitconfig-personal` | jkrumm@pm.me + 1Password signing |
 | `config/gitconfig-work` | `~/.gitconfig-work` | johannes.krumm@iu.org + 1Password signing |

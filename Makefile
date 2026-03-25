@@ -36,6 +36,10 @@ _setup-config:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/config/zshrc" \
 		DST="$(HOME)/.zshrc"
+	@mkdir -p $(HOME)/.zsh
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(CLAUDE_LOCAL)/config/zsh" \
+		DST="$(HOME)/.zsh/conf.d"
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/config/gitconfig" \
 		DST="$(HOME)/.gitconfig"
@@ -172,6 +176,7 @@ status:
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/CLAUDE.md"
 	@$(MAKE) --no-print-directory _check DST="$(SOURCEROOT)/CLAUDE.md"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.zshrc"
+	@$(MAKE) --no-print-directory _check DST="$(HOME)/.zsh/conf.d"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitconfig"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitconfig-personal"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitconfig-work"
