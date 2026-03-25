@@ -1,4 +1,4 @@
-# AI shell helpers — Claude Haiku via ANTHROPIC_API_KEY + ANTHROPIC_BASE_URL
+# AI shell helpers — Claude Sonnet via ANTHROPIC_API_KEY + ANTHROPIC_BASE_URL
 # Both are loaded from 1Password in secrets.zsh at shell startup.
 #
 #   ai <description>      generate a zsh command from natural language, confirm before run
@@ -8,8 +8,9 @@
 # Last AI-generated command + original prompt — used by fix to avoid re-invoking ai
 _AI_LAST_CMD=""
 _AI_LAST_PROMPT=""
+_AI_FIX_HISTORY=""  # accumulates all attempted commands + errors across fix iterations
 
-# Internal: call Claude Haiku and return a single shell command (or empty on error)
+# Internal: call Claude Sonnet and return a single shell command (or empty on error)
 _claude_shell_cmd() {
   local prompt="$1" system="${2:-Shell command generator for macOS zsh. Output ONLY the raw command. No explanation, no markdown, no backticks.}"
 
@@ -25,8 +26,8 @@ _claude_shell_cmd() {
     -H "x-api-key: $ANTHROPIC_API_KEY" \
     -H "anthropic-version: 2023-06-01" \
     -d "$(jq -n --arg s "$system" --arg p "$prompt" '{
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 256,
+      model: "claude-sonnet-4-6",
+      max_tokens: 512,
       system: $s,
       messages: [{role: "user", content: $p}]
     }')") || return 1
@@ -50,13 +51,14 @@ ai() {
   if [[ "$REPLY" == [yY] ]]; then
     _AI_LAST_CMD="$cmd"
     _AI_LAST_PROMPT="$*"
+    _AI_FIX_HISTORY=""
     eval "$cmd"
   fi
 }
 
 fix() {
   local description="${1:-}"
-  local cmd_to_fix base_prompt
+  local cmd_to_fix
   local last_history
   last_history=$(fc -ln -1 2>/dev/null | sed 's/^[[:space:]]*//')
 
@@ -64,14 +66,11 @@ fix() {
   # instead of re-invoking ai (which would just generate a new command)
   if [[ ( "$last_history" == ai\ * || "$last_history" == fix* ) && -n "$_AI_LAST_CMD" ]]; then
     cmd_to_fix="$_AI_LAST_CMD"
-    base_prompt="Original intent: $_AI_LAST_PROMPT
-Fix this zsh command.
-Command: $cmd_to_fix"
   else
     cmd_to_fix="$last_history"
     [[ -z "$cmd_to_fix" || "$cmd_to_fix" == "fix" ]] && { echo "No previous command to fix"; return 1 }
-    base_prompt="Fix this zsh command.
-Command: $cmd_to_fix"
+    _AI_LAST_PROMPT="$cmd_to_fix"
+    _AI_FIX_HISTORY=""
   fi
 
   print -P "%F{blue}Re-running to capture output:%f $cmd_to_fix"
@@ -84,6 +83,20 @@ Command: $cmd_to_fix"
     is_error=true
   fi
 
+  # Append this attempt to the fix history
+  local attempt_record="Command: $cmd_to_fix"
+  if [[ $is_error == false && -n "$description" ]]; then
+    attempt_record="$attempt_record
+Output: $captured
+Issue: $description"
+  else
+    attempt_record="$attempt_record
+Error: $captured"
+  fi
+  _AI_FIX_HISTORY="${_AI_FIX_HISTORY}
+---
+$attempt_record"
+
   local prompt
   if [[ $is_error == false ]]; then
     if [[ -z "$description" ]]; then
@@ -93,22 +106,20 @@ Command: $cmd_to_fix"
     print -P "%F{yellow}Output:%f"
     echo "$captured" | head -20
     echo ""
-    prompt="$base_prompt
-Output: $captured
-Issue: $description"
   else
     print -P "%F{red}Error (exit $exit_code):%f"
     echo "$captured" | head -20
     echo ""
-    prompt="$base_prompt
-Error: $captured"
-    [[ -n "$description" ]] && prompt="$prompt
-Additional context: $description"
   fi
 
+  prompt="Original intent: $_AI_LAST_PROMPT
+
+Previous attempts (do not repeat these mistakes):$_AI_FIX_HISTORY
+
+Return ONLY the corrected zsh command."
+
   local fixed
-  fixed=$(_claude_shell_cmd "$prompt
-Return ONLY the corrected command.") || return 1
+  fixed=$(_claude_shell_cmd "$prompt") || return 1
   [[ -z "$fixed" ]] && { echo "No fix generated"; return 1 }
 
   _AI_LAST_CMD="$fixed"
