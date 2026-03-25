@@ -13,15 +13,15 @@ setup:
 	@echo "  Setting up claude-local..."
 	@echo ""
 	@$(MAKE) --no-print-directory _setup-config
-	@$(MAKE) --no-print-directory _setup-op-token
 	@$(MAKE) --no-print-directory _setup-hooks
 	@$(MAKE) --no-print-directory _setup-scripts
 	@$(MAKE) --no-print-directory _setup-skills
 	@$(MAKE) --no-print-directory _setup-settings
 	@$(MAKE) --no-print-directory _setup-gitignore
 	@$(MAKE) --no-print-directory _setup-browser
+	@$(MAKE) --no-print-directory _setup-op-token
 	@echo ""
-	@echo "  Done. Run 'make status' to verify."
+	@echo "  Done. Reload your shell: source ~/.zshrc"
 	@echo ""
 
 .PHONY: _setup-config
@@ -63,12 +63,27 @@ _setup-config:
 
 .PHONY: _setup-op-token
 _setup-op-token:
-	@echo "  1Password service account token..."
-	@if security find-generic-password -a "$$USER" -s "op-service-account-token" -w >/dev/null 2>&1; then \
-		echo "    · op-service-account-token (ok)"; \
-	else \
-		echo "    ✗ op-service-account-token MISSING — run:"; \
-		echo "      security add-generic-password -a \"$$USER\" -s \"op-service-account-token\" -w \"ops1_...\" -T /usr/bin/security"; \
+	@echo "  1Password CLI + secrets..."
+	@TOKEN=$$(security find-generic-password -a "$$USER" -s "op-service-account-token" -w 2>/dev/null); \
+	if [ -z "$$TOKEN" ]; then \
+		echo "    ✗ op-service-account-token missing from Keychain — add it first:"; \
+		echo "      security add-generic-password -a \"$$USER\" -s op-service-account-token -w ops1_... -T /usr/bin/security"; \
+		echo "    Then re-run: make setup"; \
+		exit 0; \
+	fi; \
+	echo "    · op-service-account-token (ok)"; \
+	echo "    Fetching secrets from 1Password CLI vault..."; \
+	KEY=$$(OP_SERVICE_ACCOUNT_TOKEN="$$TOKEN" op read "op://CLI/Anthropic/credential" 2>/dev/null); \
+	URL=$$(OP_SERVICE_ACCOUNT_TOKEN="$$TOKEN" op read "op://CLI/Anthropic/hostname" 2>/dev/null); \
+	if [ -z "$$KEY" ]; then \
+		echo "    ✗ Failed to read op://CLI/Anthropic/credential — check vault path and token"; \
+		exit 1; \
+	fi; \
+	security add-generic-password -U -a "$$USER" -s "anthropic-api-key" -w "$$KEY" -T /usr/bin/security; \
+	echo "    ✓ anthropic-api-key cached"; \
+	if [ -n "$$URL" ]; then \
+		security add-generic-password -U -a "$$USER" -s "anthropic-base-url" -w "$$URL" -T /usr/bin/security; \
+		echo "    ✓ anthropic-base-url cached"; \
 	fi
 
 .PHONY: _setup-hooks
@@ -188,12 +203,16 @@ status:
 	 else \
 	   echo "    ✗ localias.yaml [real file — run make setup]"; \
 	 fi
-	@echo "  1Password"
-	@if security find-generic-password -a "$$USER" -s "op-service-account-token" -w >/dev/null 2>&1; then \
-		echo "    ✓ op-service-account-token"; \
-	else \
-		echo "    ✗ op-service-account-token [missing — run make setup for instructions]"; \
-	fi
+	@echo "  1Password + secrets"
+	@security find-generic-password -a "$$USER" -s "op-service-account-token" -w >/dev/null 2>&1 \
+		&& echo "    ✓ op-service-account-token" \
+		|| echo "    ✗ op-service-account-token [missing]"
+	@security find-generic-password -a "$$USER" -s "anthropic-api-key" -w >/dev/null 2>&1 \
+		&& echo "    ✓ anthropic-api-key" \
+		|| echo "    ✗ anthropic-api-key [missing — run make setup]"
+	@security find-generic-password -a "$$USER" -s "anthropic-base-url" -w >/dev/null 2>&1 \
+		&& echo "    ✓ anthropic-base-url" \
+		|| echo "    ✗ anthropic-base-url [missing — run make setup]"
 	@echo "  Settings"
 	@if [ -f "$(CLAUDE_DIR)/settings.json" ]; then \
 		echo "    ✓ settings.json (hooks + statusline wired)"; \
@@ -290,9 +309,9 @@ help:
 	@echo ""
 	@echo "  claude-local"
 	@echo ""
-	@echo "  make setup           Symlink all config/hooks/scripts/skills into place"
-	@echo "  make status          Verify symlink health"
-	@echo "  make github-config   Apply branch protection + merge settings to all repos"
+	@echo "  make setup              Idempotent full setup — symlinks, secrets, settings, browser"
+	@echo "  make status             Verify symlink health + Keychain secrets"
+	@echo "  make github-config      Apply branch protection + merge settings to all repos"
 	@echo "  make github-config-dry  Preview without applying"
 	@echo ""
 	@echo "  make up         Start cqueue dashboard  (http://cqueue.local)"
