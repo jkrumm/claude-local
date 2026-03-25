@@ -2,6 +2,7 @@
 
 # Shell
 alias sz="source ~/.zshrc"                                # reload config
+alias zh="awk '/OPENSPEC:END/{f=1;next} f&&/^for /{exit} f&&/^#/{sub(/^# ?/,\"\");print}' ~/.zshrc"  # print this help
 
 # Git
 alias gback="git reset --soft HEAD~1"                     # undo last commit, keep changes staged
