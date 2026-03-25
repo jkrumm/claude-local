@@ -7,8 +7,15 @@
 # Internal: call Claude Haiku and return a single shell command (or empty on error)
 _claude_shell_cmd() {
   local prompt="$1" system="${2:-Shell command generator for macOS zsh. Output ONLY the raw command. No explanation, no markdown, no backticks.}"
+
+  if [[ -z "$ANTHROPIC_API_KEY" ]]; then
+    echo "ANTHROPIC_API_KEY not set — run 'sz' to reload secrets" >&2
+    return 1
+  fi
+
   local base="${ANTHROPIC_BASE_URL:-https://api.anthropic.com}"
-  curl -s "${base%/}/v1/messages" \
+  local response
+  response=$(curl -s "${base%/}/v1/messages" \
     -H "content-type: application/json" \
     -H "x-api-key: $ANTHROPIC_API_KEY" \
     -H "anthropic-version: 2023-06-01" \
@@ -17,7 +24,14 @@ _claude_shell_cmd() {
       max_tokens: 256,
       system: $s,
       messages: [{role: "user", content: $p}]
-    }')" | jq -r '.content[0].text // empty'
+    }')") || return 1
+
+  if jq -e '.type == "error"' <<< "$response" &>/dev/null; then
+    echo "API error: $(jq -r '.error.message' <<< "$response")" >&2
+    return 1
+  fi
+
+  jq -r '.content[0].text // empty' <<< "$response"
 }
 
 ai() {
