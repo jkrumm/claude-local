@@ -184,10 +184,72 @@ nb() {
 # rebuild-vps fpp-server
 # rebuild-vps snow-finder
 
-# Make Ghostty behave like Warp
-# autoload -U select-word-style
-# select-word-style bash  # Better word jumping
-# bindkey -e              # Emacs keybindings (Ctrl+A/E, etc.)
+#===========
+# WARP-LIKE TEXT INPUT (Ghostty / CMUX)
+# =========
+autoload -U select-word-style
+select-word-style bash          # natural word boundaries (stops at /, -, _ etc.)
+bindkey -e                      # Ctrl+A/E  Ctrl+U  Ctrl+W  Ctrl+K
+bindkey '\e[1;3D' backward-word # Option+Left
+bindkey '\e[1;3C' forward-word  # Option+Right
+bindkey '\eb'     backward-word # Alt+b fallback
+bindkey '\ef'     forward-word  # Alt+f fallback
+
+#===========
+# AI SHELL HELPERS
+# =========
+# Shared: calls Claude Haiku, returns a shell command or empty string
+_claude_shell_cmd() {
+  local prompt="$1" system="${2:-Shell command generator for macOS zsh. Output ONLY the raw command. No explanation, no markdown, no backticks.}"
+  local base="${ANTHROPIC_BASE_URL:-https://api.anthropic.com}"
+  curl -s "${base%/}/v1/messages" \
+    -H "content-type: application/json" \
+    -H "x-api-key: $ANTHROPIC_API_KEY" \
+    -H "anthropic-version: 2023-06-01" \
+    -d "$(jq -n --arg s "$system" --arg p "$prompt" '{
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 256,
+      system: $s,
+      messages: [{role: "user", content: $p}]
+    }')" | jq -r '.content[0].text // empty'
+}
+
+# ai "list files over 1gb" → generate command → confirm → run
+ai() {
+  [[ -z "$1" ]] && { echo "Usage: ai <describe what you want>"; return 1 }
+  local cmd
+  cmd=$(_claude_shell_cmd "$*") || return 1
+  [[ -z "$cmd" ]] && { echo "No command generated"; return 1 }
+  print -P "\n%F{yellow}▶%f $cmd\n"
+  echo -n "Execute? [y/n] "
+  read -rk1; echo
+  [[ "$REPLY" == [yY] ]] && eval "$cmd"
+}
+
+# fix → re-runs last command, captures error, asks Claude to fix → confirm → run
+fix() {
+  local last_cmd
+  last_cmd=$(fc -ln -1 2>/dev/null | sed 's/^[[:space:]]*//')
+  [[ -z "$last_cmd" || "$last_cmd" == "fix" ]] && { echo "No previous command to fix"; return 1 }
+  print -P "%F{blue}Re-running to capture error:%f $last_cmd"
+  local err_out exit_code
+  err_out=$(eval "$last_cmd" 2>&1)
+  exit_code=$?
+  [[ $exit_code -eq 0 ]] && { echo "Command succeeded — nothing to fix"; return 0 }
+  print -P "%F{red}Error (exit $exit_code):%f"
+  echo "$err_out" | head -20
+  echo ""
+  local fixed
+  fixed=$(_claude_shell_cmd "Fix this zsh command.
+Command: $last_cmd
+Error: $err_out
+Return ONLY the corrected command.") || return 1
+  [[ -z "$fixed" ]] && { echo "No fix generated"; return 1 }
+  print -P "\n%F{green}Fix:%f $fixed\n"
+  echo -n "Execute? [y/n] "
+  read -rk1; echo
+  [[ "$REPLY" == [yY] ]] && eval "$fixed"
+}
 
 #===========
 # GIT WORKTREE MANAGEMENT (via wtp)
