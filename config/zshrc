@@ -9,16 +9,66 @@ else
 fi
 # OPENSPEC:END
 
-# Modules — ~/SourceRoot/claude-local/config/zsh/ symlinked to ~/.zsh/conf.d/
-# Loaded alphabetically; ordering is safe (functions resolve env at call time).
+# ── Navigation ────────────────────────────────────────────────────────────────
+# j <dir>            jump to best match (zoxide)
+# ji                 interactive jump with fzf
+# Ctrl+T             fuzzy file picker — insert path at cursor
+# Ctrl+R             fuzzy history search
+# Alt+C              fuzzy cd into subdirectory
 #
-#   ai.zsh          ai/fix — LLM shell helpers via Claude Haiku
-#   aliases.zsh     sz, gback, homelab, vps, cq, zed, npmplease, iu
-#   claude.zsh      c() — workspace-aware Claude Code launcher + cqueue restart
-#   git.zsh         nb() — smart branch switch/create; rebuild-vps
-#   keybindings.zsh Warp-like editing: Ctrl+A/E, Ctrl+W/U/K, Option+arrows
-#   path.zsh        PATH, homebrew, fnm, deno, npm globals
-#   secrets.zsh     1Password: OP token, ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL
-#   tools.zsh       zoxide (j/ji), fzf (Ctrl+R/T), wtp, bun
+# ── Line editing ─────────────────────────────────────────────────────────────
+# Option+Left/Right  jump word        (requires macos-option-as-alt = left)
+# Ctrl+A / Ctrl+E    line start / end
+# Ctrl+W             delete word before cursor
+# Ctrl+U             clear line
+# Ctrl+K             delete to end of line
+#
+# ── Claude Code ──────────────────────────────────────────────────────────────
+# c [args]           launch Claude Code — auto-detects workspace, loads skills
+#                    SourceRoot → ~/SourceRoot/.claude skills
+#                    IuRoot    → per-project .claude/ skills
+# cq add "task"      append task to queue (single-line)
+# cq add             append multi-line task via stdin (Ctrl+D to finish)
+# cq list            show all pending tasks with index
+# cq status          pending count
+# cq edit            open cqueue.md in $EDITOR
+# cq stop            append STOP sentinel — ends queue processing
+# cq clear           empty the queue
+#
+# ── AI shell helpers ─────────────────────────────────────────────────────────
+# ai "<desc>"        generate zsh command from description → confirm → run
+# fix                re-run last failed command, ask Claude to fix → confirm
+#
+# ── Git ──────────────────────────────────────────────────────────────────────
+# nb <branch>        smart branch switch / create
+#                    • switches + rebases if branch exists (local or remote)
+#                    • creates from origin/default otherwise
+#                    • offers to carry ahead commits to new branch
+# gback              git reset --soft HEAD~1 (undo last commit, keep staged)
+# wtp add <branch>   create worktree + run post_create hooks
+# wtp cd <name>      navigate to worktree
+# wtp list           list all worktrees
+# wtp remove <name>  remove worktree  (--with-branch to also delete branch)
+#
+# ── SSH / Infra ──────────────────────────────────────────────────────────────
+# homelab            ssh homelab
+# vps                ssh vps
+# rebuild-vps <c>    rebuild docker container on VPS  (e.g. rebuild-vps fpp-server)
+#
+# ── Apps ─────────────────────────────────────────────────────────────────────
+# zed [dir]          open dir (or cwd) in Zed
+# tailscale <cmd>    Tailscale CLI
+#
+# ── IU (work) ────────────────────────────────────────────────────────────────
+# start-iu-fe        start all IU frontend dev servers
+# sync-iu-db         sync IU dev database
+#
+# ── Misc ─────────────────────────────────────────────────────────────────────
+# sz                 reload ~/.zshrc
+# npmplease          rm node_modules + package-lock.json + npm install
+#
+# ── Modules (config/zsh/*.zsh → ~/.zsh/conf.d/) ──────────────────────────────
+# path.zsh · secrets.zsh · tools.zsh · keybindings.zsh
+# aliases.zsh · claude.zsh · git.zsh · ai.zsh
 
 for f in ~/.zsh/conf.d/*.zsh(N); do source "$f"; done
