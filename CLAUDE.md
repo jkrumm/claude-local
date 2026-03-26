@@ -32,28 +32,19 @@ template wins on structural keys (hooks, statusLine, plugins, env); permissions 
 
 ## Secrets Strategy
 
-Secrets flow: **1Password CLI vault → macOS Keychain → shell env**. No plain-text files, no network calls at shell startup.
+Currently using **personal 1Password account** (biometric/session token). `make setup` calls `op signin` to authenticate; `op` CLI then works interactively with Touch ID.
 
-**Why service account, not personal account + biometric:**
-Personal account + Touch ID gives full vault access — any process in the session could read banking passwords, SSH keys, etc. The service account is scoped to the CLI vault only, limiting blast radius to dev/automation secrets (Anthropic API key etc.) regardless of what gets triggered.
-
-**Why Keychain cache, not live `op read` at startup:**
-`op read` with a service account hits the 1Password API over HTTPS — ~200ms per call, every terminal open. Caching in Keychain makes startup instant and offline-capable. 1Password remains the source of truth; the cache is refreshed via `make setup` or `make refresh-secrets`.
-
-**Keychain entries:**
-
-| Key | Content |
-|-|-|
-| `op-service-account-token` | 1Password CLI service account token (CLI vault only) |
-| `anthropic-api-key` | Fetched from `op://CLI/Anthropic/credential` |
-| `anthropic-base-url` | Fetched from `op://CLI/Anthropic/hostname` |
+`ANTHROPIC_API_KEY` is intentionally **not exported** — Claude Code falls back to the subscription when the key is absent. Exporting it would cause Claude Code to bill API credits instead.
 
 **New machine setup:**
-1. Create service account in 1Password → Developer Tools → Service Accounts (CLI vault only)
-2. Store token: `security add-generic-password -a "$USER" -s op-service-account-token -w ops1_... -T /usr/bin/security`
-3. `make setup` — fetches and caches Anthropic keys automatically
+1. Install 1Password CLI (`brew install 1password-cli`)
+2. Sign in once: `op signin`
+3. `make setup`
 
-**Rotating a secret:** update in 1Password, then `make setup`, then `source ~/.zshrc`.
+**Switching back to service account:**
+- Uncomment `OP_SERVICE_ACCOUNT_TOKEN` in `config/zsh/secrets.zsh`
+- Uncomment the service account block in `_setup-op-token` (Makefile)
+- Add token to Keychain: `security add-generic-password -a "$USER" -s op-service-account-token -w ops1_... -T /usr/bin/security`
 
 ## Rules
 

@@ -63,28 +63,30 @@ _setup-config:
 
 .PHONY: _setup-op-token
 _setup-op-token:
-	@echo "  1Password CLI + secrets..."
-	@TOKEN=$$(security find-generic-password -a "$$USER" -s "op-service-account-token" -w 2>/dev/null); \
-	if [ -z "$$TOKEN" ]; then \
-		echo "    ✗ op-service-account-token missing from Keychain — add it first:"; \
-		echo "      security add-generic-password -a \"$$USER\" -s op-service-account-token -w ops1_... -T /usr/bin/security"; \
-		echo "    Then re-run: make setup"; \
-		exit 0; \
-	fi; \
-	echo "    · op-service-account-token (ok)"; \
-	echo "    Fetching secrets from 1Password CLI vault..."; \
-	KEY=$$(OP_SERVICE_ACCOUNT_TOKEN="$$TOKEN" op read "op://CLI/Anthropic/credential" 2>/dev/null); \
-	URL=$$(OP_SERVICE_ACCOUNT_TOKEN="$$TOKEN" op read "op://CLI/Anthropic/hostname" 2>/dev/null); \
-	if [ -z "$$KEY" ]; then \
-		echo "    ✗ Failed to read op://CLI/Anthropic/credential — check vault path and token"; \
+	@echo "  1Password CLI (personal account: tkrumm)..."
+	@if [ ! -S "$$HOME/.config/op/op-daemon.sock" ]; then \
+		echo "    ✗ op daemon socket missing — is 1Password app running?"; \
+		echo "      Start 1Password, then re-run: make setup"; \
 		exit 1; \
-	fi; \
-	security add-generic-password -U -a "$$USER" -s "anthropic-api-key" -w "$$KEY" -T /usr/bin/security; \
-	echo "    ✓ anthropic-api-key cached"; \
-	if [ -n "$$URL" ]; then \
-		security add-generic-password -U -a "$$USER" -s "anthropic-base-url" -w "$$URL" -T /usr/bin/security; \
-		echo "    ✓ anthropic-base-url cached"; \
 	fi
+	@echo "    · op-daemon.sock (ok)"
+	@if op whoami --account tkrumm >/dev/null 2>&1; then \
+		echo "    · op session (ok, $$(op whoami --account tkrumm --format=json 2>/dev/null | jq -r '.email // "unknown"'))"; \
+	else \
+		echo "    Triggering Touch ID sign-in for tkrumm..."; \
+		op vault list --account tkrumm >/dev/null 2>&1 || true; \
+		if op whoami --account tkrumm >/dev/null 2>&1; then \
+			echo "    ✓ op session established"; \
+		else \
+			echo "    ✗ op sign-in failed — run manually: op vault list --account tkrumm"; \
+		fi; \
+	fi
+	@echo "    · ANTHROPIC_API_KEY not exported (Claude Code uses subscription)"
+	@#
+	@# [SERVICE ACCOUNT — disabled]
+	@# TOKEN=$$(security find-generic-password -a "$$USER" -s "op-service-account-token" -w 2>/dev/null); \
+	@# KEY=$$(OP_SERVICE_ACCOUNT_TOKEN="$$TOKEN" op read "op://CLI/Anthropic/credential" 2>/dev/null); \
+	@# security add-generic-password -U -a "$$USER" -s "anthropic-api-key" -w "$$KEY" -T /usr/bin/security
 
 .PHONY: _setup-hooks
 _setup-hooks:
@@ -203,16 +205,13 @@ status:
 	 else \
 	   echo "    ✗ localias.yaml [real file — run make setup]"; \
 	 fi
-	@echo "  1Password + secrets"
-	@security find-generic-password -a "$$USER" -s "op-service-account-token" -w >/dev/null 2>&1 \
-		&& echo "    ✓ op-service-account-token" \
-		|| echo "    ✗ op-service-account-token [missing]"
-	@security find-generic-password -a "$$USER" -s "anthropic-api-key" -w >/dev/null 2>&1 \
-		&& echo "    ✓ anthropic-api-key" \
-		|| echo "    ✗ anthropic-api-key [missing — run make setup]"
-	@security find-generic-password -a "$$USER" -s "anthropic-base-url" -w >/dev/null 2>&1 \
-		&& echo "    ✓ anthropic-base-url" \
-		|| echo "    ✗ anthropic-base-url [missing — run make setup]"
+	@echo "  1Password (personal account)"
+	@if op whoami >/dev/null 2>&1; then \
+		echo "    ✓ op session active ($$(op whoami --format=json 2>/dev/null | jq -r '.email // "unknown"'))"; \
+	else \
+		echo "    ✗ op session [expired — run make setup to re-authenticate]"; \
+	fi
+	@echo "    · ANTHROPIC_API_KEY not cached (Claude Code uses subscription)"
 	@echo "  Settings"
 	@if [ -f "$(CLAUDE_DIR)/settings.json" ]; then \
 		echo "    ✓ settings.json (hooks + statusline wired)"; \
