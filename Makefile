@@ -18,6 +18,7 @@ setup:
 	@$(MAKE) --no-print-directory _setup-skills
 	@$(MAKE) --no-print-directory _setup-settings
 	@$(MAKE) --no-print-directory _setup-gitignore
+	@$(MAKE) --no-print-directory _setup-ghostty
 	@$(MAKE) --no-print-directory _setup-browser
 	@$(MAKE) --no-print-directory _setup-op-token
 	@echo ""
@@ -148,6 +149,27 @@ _setup-gitignore:
 	@git config --global core.excludesfile "$(HOME)/.gitignore_global"
 	@echo "    ✓ git config core.excludesfile"
 
+.PHONY: _setup-ghostty
+_setup-ghostty:
+	@echo "  Ghostty (Blueprint v6 themes)..."
+	@mkdir -p $(HOME)/.config/ghostty/themes
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(CLAUDE_LOCAL)/config/ghostty/config" \
+		DST="$(HOME)/.config/ghostty/config"
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(CLAUDE_LOCAL)/config/ghostty/themes/basalt-ui-light" \
+		DST="$(HOME)/.config/ghostty/themes/basalt-ui-light"
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(CLAUDE_LOCAL)/config/ghostty/themes/basalt-ui-dark" \
+		DST="$(HOME)/.config/ghostty/themes/basalt-ui-dark"
+	@# Clean up old unmanaged theme files
+	@for old in ayu-mirage basalt-ui; do \
+		if [ -f "$(HOME)/.config/ghostty/themes/$$old" ] && [ ! -L "$(HOME)/.config/ghostty/themes/$$old" ]; then \
+			mv "$(HOME)/.config/ghostty/themes/$$old" "$(HOME)/.config/ghostty/themes/$$old.bak"; \
+			echo "    ✓ backed up old $$old theme"; \
+		fi; \
+	done
+
 .PHONY: _setup-browser
 _setup-browser:
 	@echo "  Browser debugging..."
@@ -227,6 +249,10 @@ status:
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/fetch_usage.py"
 	@echo "  Gitignore"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitignore_global"
+	@echo "  Ghostty"
+	@$(MAKE) --no-print-directory _check DST="$(HOME)/.config/ghostty/config"
+	@$(MAKE) --no-print-directory _check DST="$(HOME)/.config/ghostty/themes/basalt-ui-light"
+	@$(MAKE) --no-print-directory _check DST="$(HOME)/.config/ghostty/themes/basalt-ui-dark"
 	@echo "  Skills ($(shell ls $(CLAUDE_LOCAL)/skills/ | wc -l | xargs) — SourceRoot only)"
 	@for skill in $(CLAUDE_LOCAL)/skills/*/; do \
 		name=$$(basename "$$skill"); \

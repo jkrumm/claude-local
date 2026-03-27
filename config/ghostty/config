@@ -1,0 +1,10 @@
+# Shell integration — enables semantic zones (command blocks) in Ghostty
+shell-integration = zsh
+shell-integration-features = cursor,sudo,title
+
+# Required for Option+Left/Right word-jumping to work
+# "left" means only the left Option key acts as Alt; right Option still types special chars
+macos-option-as-alt = left
+
+# Auto-switch between Blueprint v6 light/dark themes with macOS appearance
+theme = light:basalt-ui-light,dark:basalt-ui-dark

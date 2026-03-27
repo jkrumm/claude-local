@@ -15,6 +15,15 @@ c() {
   local claude_args=("$@")
 
   while true; do
+    # Auto-sync Claude Code theme with macOS appearance (no "system" theme exists)
+    local appearance
+    appearance=$(defaults read -g AppleInterfaceStyle 2>/dev/null)
+    if [[ "$appearance" == "Dark" ]]; then
+      sed -i '' 's/"theme": "light-ansi"/"theme": "dark-ansi"/' ~/.claude.json 2>/dev/null
+    else
+      sed -i '' 's/"theme": "dark-ansi"/"theme": "light-ansi"/' ~/.claude.json 2>/dev/null
+    fi
+
     if [[ "$PWD" == "$HOME/SourceRoot"* ]]; then
       ENABLE_TOOL_SEARCH=true claude --dangerously-skip-permissions --plugin-dir ~/SourceRoot/.claude "${claude_args[@]}"
     elif [[ "$PWD" == "$HOME/IuRoot"* ]]; then

@@ -1,0 +1,27 @@
+# Basalt UI Light — Blueprint v6 palette
+# Stone grays from BP6 light-gray scale, intent colors for ANSI
+background = #f6f7f9
+foreground = #1c2127
+cursor-color = #2d72d2
+selection-background = #d3d8de
+selection-foreground = #1c2127
+
+# Normal colors (0-7)
+palette = 0=#1c2127
+palette = 1=#cd4246
+palette = 2=#238551
+palette = 3=#c87619
+palette = 4=#2d72d2
+palette = 5=#9d3f9d
+palette = 6=#147eb3
+palette = 7=#d3d8de
+
+# Bright colors (8-15) — darker for contrast on light bg
+palette = 8=#5f6b7c
+palette = 9=#ac2f33
+palette = 10=#1c6e42
+palette = 11=#935610
+palette = 12=#184a90
+palette = 13=#7c327c
+palette = 14=#0c5174
+palette = 15=#ffffff
