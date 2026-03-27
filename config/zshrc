@@ -72,3 +72,6 @@ fi
 # aliases.zsh · claude.zsh · git.zsh · ai.zsh
 
 for f in ~/.zsh/conf.d/*.zsh(N); do source "$f"; done
+
+# Vite+ bin (https://viteplus.dev)
+. "$HOME/.vite-plus/env"

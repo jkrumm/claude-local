@@ -20,6 +20,8 @@ setup:
 	@$(MAKE) --no-print-directory _setup-gitignore
 	@$(MAKE) --no-print-directory _setup-ghostty
 	@$(MAKE) --no-print-directory _setup-browser
+	@$(MAKE) --no-print-directory _setup-pnpm
+	@$(MAKE) --no-print-directory _setup-viteplus
 	@$(MAKE) --no-print-directory _setup-op-token
 	@echo ""
 	@echo "  Done. Reload your shell: source ~/.zshrc"
@@ -61,6 +63,30 @@ _setup-config:
 	   ln -sfn "$$LOCALIAS_SRC" "$$LOCALIAS_DST"; \
 	   echo "    ✓ localias.yaml"; \
 	 fi
+
+.PHONY: _setup-pnpm
+_setup-pnpm:
+	@echo "  pnpm..."
+	@if command -v pnpm >/dev/null 2>&1; then \
+		echo "    Updating pnpm..."; \
+		pnpm self-update 2>&1 | tail -1; \
+		echo "    · pnpm $$(pnpm --version) (ok)"; \
+	else \
+		echo "    Installing pnpm..."; \
+		curl -fsSL https://get.pnpm.io/install.sh | sh -; \
+		echo "    ✓ pnpm installed"; \
+	fi
+
+.PHONY: _setup-viteplus
+_setup-viteplus:
+	@echo "  Vite+..."
+	@if [ -f "$$HOME/.vite-plus/env" ]; then \
+		echo "    · Vite+ (ok)"; \
+	else \
+		echo "    Installing Vite+..."; \
+		curl -fsSL https://vite.plus | bash; \
+		echo "    ✓ Vite+ installed (node version managed via fnm)"; \
+	fi
 
 .PHONY: _setup-op-token
 _setup-op-token:
@@ -258,6 +284,18 @@ status:
 		name=$$(basename "$$skill"); \
 		$(MAKE) --no-print-directory _check DST="$(SOURCEROOT)/.claude/skills/$$name"; \
 	done
+	@echo "  pnpm"
+	@if command -v pnpm >/dev/null 2>&1; then \
+		echo "    ✓ pnpm $$(pnpm --version)"; \
+	else \
+		echo "    ✗ pnpm [not installed — run make setup]"; \
+	fi
+	@echo "  Vite+"
+	@if [ -f "$$HOME/.vite-plus/env" ]; then \
+		echo "    ✓ Vite+ installed"; \
+	else \
+		echo "    ✗ Vite+ [not installed — run make setup]"; \
+	fi
 	@echo "  Browser debugging"
 	@if claude mcp list 2>/dev/null | grep -q "chrome-devtools"; then \
 		echo "    ✓ chrome-devtools MCP"; \
