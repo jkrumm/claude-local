@@ -43,6 +43,10 @@
       {
         "matcher": "Bash",
         "hooks": [{ "type": "command", "command": "~/.claude/hooks/protect-branches.ts" }]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "command": "~/.claude/hooks/protect-pnpm.ts" }]
       }
     ],
     "SessionStart": [
