@@ -1,8 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import { Spinner } from "@blueprintjs/core";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 
 export type SaveStatus = "idle" | "dirty" | "saving" | "synced";
+
+export interface DiagramEditorHandle {
+  save: () => void;
+}
 
 interface Props {
   name: string;
@@ -23,15 +27,18 @@ const ExcalidrawComponent = React.lazy(() =>
   }),
 );
 
-export function DiagramEditor({
+export const DiagramEditor = React.forwardRef<DiagramEditorHandle, Props>(function DiagramEditor({
   name,
   initialData,
   isDark,
   onSave,
   onStatusChange,
-}: Props) {
+}: Props, ref) {
   const excalidrawAPIRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Fingerprint of element ids+versions — changes only when actual drawing content changes,
+  // not when the user scrolls/zooms/selects (appState-only changes).
+  const elementsHashRef = useRef<string>("");
   const pendingSaveRef = useRef<{
     elements: Parameters<NonNullable<React.ComponentProps<typeof ExcalidrawComponent>["onChange"]>>[0];
     appState: Parameters<NonNullable<React.ComponentProps<typeof ExcalidrawComponent>["onChange"]>>[1];
@@ -114,6 +121,7 @@ export function DiagramEditor({
     }
   }, [name, setStatus]);
 
+  // Silent flush — used by blur / visibilitychange / unmount. No-op if nothing pending.
   const flushSave = useCallback(() => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
@@ -123,6 +131,25 @@ export function DiagramEditor({
       void doSave();
     }
   }, [doSave]);
+
+  // Explicit save — used by save button and Cmd+S. Always flashes green so the
+  // user gets confirmation even when the file was already up to date.
+  const explicitSave = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    if (pendingSaveRef.current) {
+      void doSave();
+    } else {
+      setStatus("synced");
+      setTimeout(() => {
+        if (statusRef.current === "synced") setStatus("idle");
+      }, 1500);
+    }
+  }, [doSave, setStatus]);
+
+  useImperativeHandle(ref, () => ({ save: explicitSave }), [explicitSave]);
 
   const scheduleDebounce = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -138,20 +165,44 @@ export function DiagramEditor({
       appState: Parameters<NonNullable<React.ComponentProps<typeof ExcalidrawComponent>["onChange"]>>[1],
       files: Parameters<NonNullable<React.ComponentProps<typeof ExcalidrawComponent>["onChange"]>>[2],
     ) => {
+      // Always keep pendingSaveRef current so appState (viewport) is included in the next save.
       pendingSaveRef.current = { elements, appState, files };
-      if (statusRef.current === "idle" || statusRef.current === "synced") {
-        setStatus("dirty");
+
+      // Only mark dirty and trigger autosave when actual element content changes.
+      // appState-only changes (scroll, zoom, selection) don't constitute unsaved work
+      // and must not block conflict detection in the SSE sync logic.
+      const hash = elements
+        .map((e) => `${e.id}:${(e as { version?: number }).version ?? 0}`)
+        .join(",");
+      if (hash !== elementsHashRef.current) {
+        elementsHashRef.current = hash;
+        if (statusRef.current === "idle" || statusRef.current === "synced") {
+          setStatus("dirty");
+        }
+        scheduleDebounce();
       }
-      scheduleDebounce();
     },
     [scheduleDebounce, setStatus],
   );
 
-  // Flush on window blur (tab switch, browser minimize)
+  // Flush on window blur, tab hide (app switch), or Cmd/Ctrl+S
   useEffect(() => {
+    const onVisibility = () => { if (document.hidden) flushSave(); };
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault();
+        explicitSave();
+      }
+    };
     window.addEventListener("blur", flushSave);
-    return () => window.removeEventListener("blur", flushSave);
-  }, [flushSave]);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("blur", flushSave);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [flushSave, explicitSave]);
 
   // Flush on unmount (diagram switch, panel collapse)
   useEffect(() => {
@@ -194,4 +245,4 @@ export function DiagramEditor({
       </React.Suspense>
     </div>
   );
-}
+});

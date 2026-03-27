@@ -1,7 +1,7 @@
 import Elysia, { t } from "elysia";
 import { existsSync } from "fs";
 
-const ALLOWED_ORIGIN = "http://cqueue.local";
+const ALLOWED_ORIGINS = ["http://cqueue.local", "http://localhost"];
 
 async function findChrome(): Promise<string | null> {
   const candidates = [
@@ -32,8 +32,8 @@ export const kioskRoute = new Elysia().get(
   "/api/open-kiosk",
   async ({ query, error }) => {
     const { url } = query;
-    if (!url.startsWith(ALLOWED_ORIGIN)) {
-      return error(400, { ok: false, error: "URL must be a cqueue.local URL" });
+    if (!ALLOWED_ORIGINS.some((o) => url.startsWith(o))) {
+      return error(400, { ok: false, error: "URL must be a local cqueue URL" });
     }
 
     const chrome = await findChrome();

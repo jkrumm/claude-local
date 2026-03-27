@@ -2,6 +2,14 @@ import { Elysia } from "elysia";
 import { join, resolve } from "path";
 import { promises as fs } from "fs";
 import { toContainerPath } from "../lib/workspace";
+import { publishDiagram } from "../lib/diagram-bus";
+import {
+  acquireLock,
+  heartbeatLock,
+  releaseLock,
+  validateLock,
+  getLockAge,
+} from "../lib/diagram-lock";
 
 const DIAGRAMS_DIR = "docs/diagrams";
 
@@ -88,15 +96,20 @@ export const diagramsRoutes = new Elysia({ prefix: "/api" })
     }
 
     try {
-      const content = await Bun.file(filePath).text();
-      return { ok: true, data: content } as const;
+      const [content, stat] = await Promise.all([
+        Bun.file(filePath).text(),
+        fs.stat(filePath),
+      ]);
+      return { ok: true, data: content, modifiedAt: stat.mtimeMs } as const;
     } catch {
-      return { ok: true, data: "" } as const;
+      return { ok: true, data: "", modifiedAt: 0 } as const;
     }
   })
 
-  // Save .excalidraw file and optional .svg
-  .put("/diagrams/file", async ({ query, body, set }) => {
+  // Save .excalidraw + .svg — requires a valid lock token for existing files.
+  // New files (first save) bypass the lock check since there is no concurrent
+  // edit risk for files that do not yet exist.
+  .put("/diagrams/file", async ({ query, body, request, set }) => {
     const { path, name } = query;
     if (!path || !name) {
       set.status = 400;
@@ -124,6 +137,16 @@ export const diagramsRoutes = new Elysia({ prefix: "/api" })
       return { ok: false, error: "Path traversal not allowed" } as const;
     }
 
+    // Lock enforcement: if the file already exists, the caller must hold the lock.
+    const fileExists = await fs.access(excalidrawPath).then(() => true).catch(() => false);
+    if (fileExists) {
+      const lockToken = request.headers.get("x-lock-token");
+      if (!lockToken || !validateLock(path, safeName, lockToken)) {
+        set.status = 403;
+        return { ok: false, error: "lock_required" } as const;
+      }
+    }
+
     const tmpExcalidraw = `${excalidrawPath}.tmp`;
     await Bun.write(tmpExcalidraw, b.excalidraw);
     await fs.rename(tmpExcalidraw, excalidrawPath);
@@ -135,7 +158,12 @@ export const diagramsRoutes = new Elysia({ prefix: "/api" })
       await fs.rename(tmpSvg, svgPath);
     }
 
-    return { ok: true } as const;
+    const newStat = await fs.stat(excalidrawPath);
+    const modifiedAt = newStat.mtimeMs;
+
+    publishDiagram(path, { name: safeName, modifiedAt });
+
+    return { ok: true, modifiedAt } as const;
   })
 
   // Delete .excalidraw + .svg pair
@@ -230,4 +258,62 @@ export const diagramsRoutes = new Elysia({ prefix: "/api" })
       set.status = 404;
       return "Not found";
     }
+  })
+
+  // ── Pessimistic edit lock ────────────────────────────────────────────────────
+  //
+  // Locks are per-diagram (repoPath + name). TTL = 45s, heartbeat every 15s.
+  // Only the lock holder may write via PUT /diagrams/file (enforced by X-Lock-Token).
+
+  // Acquire lock — returns token on success, 423 if locked by another session.
+  .post("/diagrams/lock", ({ query, set }) => {
+    const { path, name } = query;
+    if (!path || !name) {
+      set.status = 400;
+      return { ok: false, error: "Missing path or name" } as const;
+    }
+    const safeName = sanitizeName(name);
+    if (!safeName) {
+      set.status = 400;
+      return { ok: false, error: "Invalid diagram name" } as const;
+    }
+
+    const token = acquireLock(path, safeName);
+    if (!token) {
+      set.status = 423;
+      return { ok: false, lockedAgoMs: getLockAge(path, safeName) ?? 0 } as const;
+    }
+    return { ok: true, token } as const;
+  })
+
+  // Heartbeat — extend TTL. Returns 401 if token is invalid or lock has expired.
+  .post("/diagrams/lock/heartbeat", ({ query, set }) => {
+    const { path, name, token } = query;
+    if (!path || !name || !token) {
+      set.status = 400;
+      return { ok: false, error: "Missing path, name, or token" } as const;
+    }
+    const safeName = sanitizeName(name);
+    if (!safeName) {
+      set.status = 400;
+      return { ok: false, error: "Invalid diagram name" } as const;
+    }
+
+    if (!heartbeatLock(path, safeName, token)) {
+      set.status = 401;
+      return { ok: false, error: "Lock expired or invalid token" } as const;
+    }
+    return { ok: true } as const;
+  })
+
+  // Release lock — idempotent. Safe to call even if lock has already expired.
+  // Also used as the sendBeacon target on page unload (POST with token in query).
+  .post("/diagrams/lock/release", ({ query }) => {
+    const { path, name, token } = query;
+    if (path && name && token) {
+      const safeName = sanitizeName(name);
+      if (safeName) releaseLock(path, safeName, token);
+    }
+    // Always 200 — release is idempotent
+    return { ok: true } as const;
   });

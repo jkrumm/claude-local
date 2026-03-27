@@ -45,6 +45,12 @@ body.bp6-dark {
   color: white;
 }
 
+/* Diagram status dot — save pulse animation */
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.75); }
+}
+
 /* CodeMirror 6 — Blueprint integration */
 .cm-editor {
   font-family: var(--bp-typography-family-default);

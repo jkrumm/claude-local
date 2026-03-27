@@ -3,6 +3,14 @@ import { watch } from "fs";
 import { existsSync } from "fs";
 import { join } from "path";
 import { toContainerPath } from "../lib/workspace";
+import { subscribeDiagrams } from "../lib/diagram-bus";
+
+// Stable identity for this process lifetime.
+// Clients compare this on reconnect — a change means the server restarted
+// (new build deployed) and they should reload to pick up updated assets.
+const SERVER_START = Date.now();
+
+const HEARTBEAT_INTERVAL_MS = 20_000;
 
 export const eventsRoutes = new Elysia({ prefix: "/api" }).get(
   "/events",
@@ -17,12 +25,17 @@ export const eventsRoutes = new Elysia({ prefix: "/api" }).get(
     const queuePath = join(containerPath, "cqueue.md");
     const notesPath = join(containerPath, "cnotes.md");
 
-    const pending: Array<{ file: "queue" | "notes" }> = [];
+    type PendingEvent =
+      | { file: "queue" | "notes" }
+      | { file: "diagram"; name: string; modifiedAt: number }
+      | { file: "ping" };
+
+    const pending: PendingEvent[] = [];
     let wake: (() => void) | null = null;
     let closed = false;
 
-    const notify = (file: "queue" | "notes") => {
-      pending.push({ file });
+    const push = (event: PendingEvent) => {
+      pending.push(event);
       wake?.();
       wake = null;
     };
@@ -30,23 +43,36 @@ export const eventsRoutes = new Elysia({ prefix: "/api" }).get(
     const watchers: ReturnType<typeof watch>[] = [];
 
     if (existsSync(queuePath)) {
-      watchers.push(watch(queuePath, () => notify("queue")));
+      watchers.push(watch(queuePath, () => push({ file: "queue" })));
     }
     if (existsSync(notesPath)) {
-      watchers.push(watch(notesPath, () => notify("notes")));
+      watchers.push(watch(notesPath, () => push({ file: "notes" })));
     }
+
+    const unsubDiagrams = subscribeDiagrams(path, (evt) => {
+      push({ file: "diagram", name: evt.name, modifiedAt: evt.modifiedAt });
+    });
+
+    // Heartbeat — keeps the connection alive through proxies and lets clients
+    // detect stale connections via a watchdog timer.
+    const heartbeat = setInterval(() => {
+      if (!closed) push({ file: "ping" });
+    }, HEARTBEAT_INTERVAL_MS);
 
     const cleanup = () => {
       if (closed) return;
       closed = true;
+      clearInterval(heartbeat);
       for (const w of watchers) w.close();
+      unsubDiagrams();
       wake?.();
       wake = null;
     };
 
     request.signal.addEventListener("abort", cleanup);
 
-    yield sse({ event: "connected", data: "{}" });
+    // Server identity in the handshake — clients reload on change (server restarted).
+    yield sse({ event: "connected", data: JSON.stringify({ serverStart: SERVER_START }) });
 
     while (!request.signal.aborted) {
       await new Promise<void>((resolve) => {
@@ -55,7 +81,11 @@ export const eventsRoutes = new Elysia({ prefix: "/api" }).get(
 
       while (pending.length > 0) {
         const event = pending.shift()!;
-        yield sse({ event: "change", data: JSON.stringify(event) });
+        if (event.file === "ping") {
+          yield sse({ event: "ping", data: "{}" });
+        } else {
+          yield sse({ event: "change", data: JSON.stringify(event) });
+        }
       }
     }
 

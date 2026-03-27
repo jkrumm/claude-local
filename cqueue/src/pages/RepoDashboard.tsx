@@ -141,6 +141,24 @@ function RepoDashboardInner() {
     fetchCompleted(repoPath);
 
     let isActive = true;
+    let knownServerStart: number | null = null;
+    let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const resetWatchdog = (evtSource: EventSource) => {
+      if (watchdogTimer) clearTimeout(watchdogTimer);
+      watchdogTimer = setTimeout(() => {
+        if (!isActive) return;
+        // Heartbeat timeout — connection silently dropped
+        evtSource.close();
+        evtSourceRef.current = null;
+        if (isActive) {
+          setSseDisconnected(true);
+          setTimeout(() => {
+            if (isActive) { setSseDisconnected(false); connect(); }
+          }, 100);
+        }
+      }, 35_000);
+    };
 
     const connect = () => {
       const evtSource = new EventSource(
@@ -148,9 +166,28 @@ function RepoDashboardInner() {
       );
       evtSourceRef.current = evtSource;
 
+      evtSource.addEventListener("connected", (e: MessageEvent) => {
+        const data = JSON.parse(e.data as string) as { serverStart?: number };
+        if (data.serverStart) {
+          if (knownServerStart !== null && knownServerStart !== data.serverStart) {
+            // Server restarted with a new build — reload to pick up fresh assets
+            window.location.reload();
+            return;
+          }
+          knownServerStart = data.serverStart;
+        }
+        // Re-fetch everything to catch events missed during any disconnect gap
+        fetchData(repoPath);
+        fetchCompleted(repoPath);
+        resetWatchdog(evtSource);
+      });
+
+      evtSource.addEventListener("ping", () => resetWatchdog(evtSource));
+
       evtSource.addEventListener("change", (e: MessageEvent) => {
+        resetWatchdog(evtSource);
         const payload = JSON.parse(e.data as string) as {
-          file: "queue" | "notes";
+          file: "queue" | "notes" | "diagram";
         };
         if (payload.file === "queue" && !isEditingRef.current) {
           fetchQueue(repoPath);
@@ -158,10 +195,12 @@ function RepoDashboardInner() {
         } else if (payload.file === "notes") {
           setNotesExternallyChanged(true);
         }
+        // diagram events are handled by DiagramPanel's own SSE connection
       });
 
       evtSource.onerror = () => {
         if (!isActive) return;
+        if (watchdogTimer) { clearTimeout(watchdogTimer); watchdogTimer = null; }
         evtSource.close();
         evtSourceRef.current = null;
         const showTimer = setTimeout(() => {
@@ -189,6 +228,7 @@ function RepoDashboardInner() {
 
     return () => {
       isActive = false;
+      if (watchdogTimer) clearTimeout(watchdogTimer);
       clearInterval(pollInterval);
       evtSourceRef.current?.close();
       evtSourceRef.current = null;
