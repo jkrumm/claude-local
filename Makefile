@@ -199,13 +199,11 @@ _setup-ghostty:
 .PHONY: _setup-browser
 _setup-browser:
 	@echo "  Browser debugging..."
-	@# chrome-devtools MCP — manages its own Chrome via Puppeteer, no manual browser needed
-	@if claude mcp list 2>/dev/null | grep -q "chrome-devtools"; then \
-		echo "    · chrome-devtools MCP (ok)"; \
-	else \
-		claude mcp add chrome-devtools --scope user -- npx -y chrome-devtools-mcp@latest --isolated --headless; \
-		echo "    ✓ chrome-devtools MCP registered"; \
-	fi
+	@# chrome-devtools MCP — always re-register to ensure flags are up to date
+	@# Flags: --headless (no window), --isolated (throwaway profile per session), --usageStatistics=false (privacy)
+	@claude mcp remove chrome-devtools --scope user 2>/dev/null || true
+	@claude mcp add chrome-devtools --scope user -- npx -y chrome-devtools-mcp@latest --isolated --headless --usageStatistics=false
+	@echo "    ✓ chrome-devtools MCP registered"
 	@# Permission — patch into live settings if missing (fresh machines preserve template on first run)
 	@if jq -e '.permissions.allow | contains(["mcp__chrome-devtools__*"])' "$(CLAUDE_DIR)/settings.json" > /dev/null 2>&1; then \
 		echo "    · mcp__chrome-devtools__* permission (ok)"; \
