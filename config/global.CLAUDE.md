@@ -165,8 +165,7 @@ Git worktree management via **wtp** (`brew install satococoa/tap/wtp`):
 | **Sentry** | Error tracking, issue monitoring | ~10 tools | ~2,000 tokens |
 | **Tavily** | Web research, content extraction | 5 tools | ~1,000 tokens |
 | **Context7** | Official library documentation | 2 tools | ~500 tokens |
-| **Chrome DevTools** | Frontend debugging: console, network, DOM, CSS, JS eval | ~8 tools | ~1,500 tokens |
-| **claude-in-chrome** | Browser screenshots, multi-step UI flows (via `--chrome` flag) | ~15 tools | ~2,000 tokens |
+| **Chrome DevTools** | Frontend debugging: console, network, DOM, CSS, JS eval, screenshots | ~8 tools | ~1,500 tokens |
 
 ### ToolSearch & Deferred Loading
 
@@ -205,35 +204,41 @@ Sentry debugging?           → /fix-sentry skill (uses Sentry MCP)
 
 ## Browser Debugging & Visual Validation
 
-Two tools available for frontend debugging. **Use proactively after any UI change** — don't wait to be asked.
+### Chrome DevTools MCP — Claude Code ad-hoc validation
 
-### Chrome DevTools MCP (primary — stable)
+The MCP manages its own headless Chrome via Puppeteer internally — **no manual browser launch, no debug port, no interference with personal Chrome**. Just works.
 
-Connected to an isolated Chrome instance at `localhost:9222`. Requires Chrome running with debug port:
-```bash
-chrome-debug  # zsh alias → isolated profile, port 9222, no personal data
-```
-
-Use for: console errors · network requests/responses · DOM/CSS inspection · JS eval · computed styles · performance
+Use for: console errors · network requests/responses · DOM/CSS inspection · JS eval · screenshots · performance · Lighthouse
 
 **Tools:** `mcp__chrome-devtools__*` — load via ToolSearch when needed.
 
-### claude-in-chrome (secondary — less stable)
-
-Available when Claude Code is started with `--chrome` (always active in the `c()` launcher). Tools: `mcp__claude-in-chrome__*`.
-
-Use for: visual screenshots at multiple viewports · multi-step UI flows · quick page inspection. Fallback if Chrome DevTools MCP is unavailable.
-
-### When to use without being asked
-
+**Use proactively after any UI change** — don't wait to be asked:
 1. After writing or modifying any component → check console for errors
-2. After CSS/layout changes → screenshot at mobile (375px) + desktop (1440px)
-3. When a network call is involved → verify request/response in DevTools before declaring done
+2. After CSS/layout changes → screenshot at relevant viewport
+3. When a network call is involved → verify request/response before declaring done
 4. After fixing a bug → re-validate the exact scenario in browser
 
-### Chrome for Testing
+### Playwright — structured E2E test suites
 
-Installed by `make setup` into `~/Library/Caches/ms-playwright/`. Purpose-built for automation — no Google account sync, no auto-updates, same rendering as real Chrome. The `c()` launcher auto-starts it in the background so it is always ready when Claude Code starts.
+A different pattern entirely: developer-written test files that Claude *runs*, not *controls*.
+
+Use when: the project has `playwright.config.ts` and `*.spec.ts` test files.
+
+**Claude's role with Playwright:**
+- Run `npx playwright test` (or `bun run test:e2e`) and read the output
+- Read failing test files to understand what broke
+- Write new test cases when asked
+- Never launch Playwright as a browser control tool — that's what the MCP is for
+
+**Pattern decision:**
+
+| Situation | Use |
+|-|-|
+| Checking UI after a code change | Chrome DevTools MCP |
+| Verifying a network call or console error | Chrome DevTools MCP |
+| Taking a screenshot for visual review | Chrome DevTools MCP |
+| Running the project's existing E2E suite | `Bash(npx playwright test)` |
+| Writing a new regression test | Edit `.spec.ts` file |
 
 ---
 
