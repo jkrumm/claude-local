@@ -203,7 +203,7 @@ _setup-browser:
 	@if claude mcp list 2>/dev/null | grep -q "chrome-devtools"; then \
 		echo "    · chrome-devtools MCP (ok)"; \
 	else \
-		claude mcp add chrome-devtools --scope user -- npx -y chrome-devtools-mcp@latest; \
+		claude mcp add chrome-devtools --scope user -- npx -y chrome-devtools-mcp@latest --isolated --headless; \
 		echo "    ✓ chrome-devtools MCP registered"; \
 	fi
 	@# Permission — patch into live settings if missing (fresh machines preserve template on first run)
