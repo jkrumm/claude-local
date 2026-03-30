@@ -20,6 +20,7 @@ setup:
 	@$(MAKE) --no-print-directory _setup-gitignore
 	@$(MAKE) --no-print-directory _setup-ghostty
 	@$(MAKE) --no-print-directory _setup-browser
+	@$(MAKE) --no-print-directory _setup-localias
 	@$(MAKE) --no-print-directory _setup-pnpm
 	@$(MAKE) --no-print-directory _setup-viteplus
 	@$(MAKE) --no-print-directory _setup-op-token
@@ -63,6 +64,20 @@ _setup-config:
 	   ln -sfn "$$LOCALIAS_SRC" "$$LOCALIAS_DST"; \
 	   echo "    ✓ localias.yaml"; \
 	 fi
+
+.PHONY: _setup-localias
+_setup-localias:
+	@echo "  Localias..."
+	@brew list peterldowns/tap/localias &>/dev/null || brew install peterldowns/tap/localias
+	@localias start 2>&1 | grep -v "^$$" || true
+	@echo "    ✓ localias daemon"
+	@brew list sleepwatcher &>/dev/null || brew install sleepwatcher
+	@brew services start sleepwatcher 2>/dev/null || true
+	@echo "    ✓ sleepwatcher service"
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(CLAUDE_LOCAL)/scripts/wakeup.sh" \
+		DST="$(HOME)/.wakeup"
+	@chmod +x $(CLAUDE_LOCAL)/scripts/wakeup.sh
 
 .PHONY: _setup-pnpm
 _setup-pnpm:
@@ -282,6 +297,12 @@ status:
 		name=$$(basename "$$skill"); \
 		$(MAKE) --no-print-directory _check DST="$(SOURCEROOT)/.claude/skills/$$name"; \
 	done
+	@echo "  Localias"
+	@brew list peterldowns/tap/localias &>/dev/null && echo "    ✓ localias" || echo "    ✗ localias [not installed — run make setup]"
+	@localias status 2>&1 | grep -q "running" && echo "    ✓ localias daemon running" || echo "    ✗ localias daemon [not running — run make setup]"
+	@brew list sleepwatcher &>/dev/null && echo "    ✓ sleepwatcher" || echo "    ✗ sleepwatcher [not installed — run make setup]"
+	@brew services list | grep sleepwatcher | grep -q started && echo "    ✓ sleepwatcher service started" || echo "    ✗ sleepwatcher service [not started — run make setup]"
+	@$(MAKE) --no-print-directory _check DST="$(HOME)/.wakeup"
 	@echo "  pnpm"
 	@if command -v pnpm >/dev/null 2>&1; then \
 		echo "    ✓ pnpm $$(pnpm --version)"; \

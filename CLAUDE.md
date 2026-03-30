@@ -22,6 +22,7 @@ outward — edit at either end, git always sees the change here.
 | `config/ghostty/config` | `~/.config/ghostty/config` | Ghostty terminal config + auto theme switching |
 | `config/ghostty/themes/*` | `~/.config/ghostty/themes/` | Blueprint v6 light/dark terminal themes |
 | `config/localias.yaml` | `~/Library/Application Support/localias.yaml` | localias proxy config (cqueue.local → 7705) |
+| `scripts/wakeup.sh` | `~/.wakeup` | sleepwatcher hook — runs `localias reload` on wake |
 | `hooks/notify.ts` | `~/.claude/hooks/notify.ts` | All 4 hook events |
 | `scripts/queue.ts` | `~/.claude/queue.ts` | cq CLI |
 | `scripts/statusline.sh` | `~/.claude/statusline.sh` | 3-line statusline |
