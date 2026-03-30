@@ -9,7 +9,6 @@ export PATH="$PATH:$HOME/.local/bin"                     # pipx
 export PATH="$PATH:$HOME/.npm-global/bin"                # npm globals
 
 eval "$(fnm env --use-on-cd --shell zsh)"                # fnm — node version manager
-. "$HOME/.deno/env"                                      # deno
 
 export PNPM_HOME="$HOME/Library/pnpm"                   # pnpm
 case ":$PATH:" in
