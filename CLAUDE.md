@@ -40,9 +40,8 @@ Currently using **personal 1Password account** (biometric/session token). `make 
 `ANTHROPIC_API_KEY` is intentionally **not exported** — Claude Code falls back to the subscription when the key is absent. Exporting it would cause Claude Code to bill API credits instead.
 
 **New machine setup:**
-1. Install 1Password CLI (`brew install 1password-cli`)
-2. Sign in once: `op signin`
-3. `make setup`
+1. Install 1Password + enable CLI integration (Settings → Developer → Enable CLI)
+2. `make setup` — will fail fast with instructions if 1Password isn't ready
 
 **Switching back to service account:**
 - Uncomment `OP_SERVICE_ACCOUNT_TOKEN` in `config/zsh/secrets.zsh`

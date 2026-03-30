@@ -12,6 +12,7 @@ setup:
 	@echo ""
 	@echo "  Setting up claude-local..."
 	@echo ""
+	@$(MAKE) --no-print-directory _check-prereqs
 	@$(MAKE) --no-print-directory _setup-config
 	@$(MAKE) --no-print-directory _setup-hooks
 	@$(MAKE) --no-print-directory _setup-scripts
@@ -28,6 +29,32 @@ setup:
 	@echo ""
 	@echo "  Done. Reload your shell: source ~/.zshrc"
 	@echo ""
+
+.PHONY: _check-prereqs
+_check-prereqs:
+	@echo "  Checking prerequisites..."
+	@if [ ! -d "/Applications/1Password.app" ] && [ ! -d "$(HOME)/Applications/1Password.app" ]; then \
+		echo ""; \
+		echo "  ✗ 1Password app not found."; \
+		echo ""; \
+		echo "    Install 1Password before running make setup:"; \
+		echo "      https://1password.com/downloads/mac/"; \
+		echo ""; \
+		echo "    Then install the CLI integration:"; \
+		echo "      System Preferences → 1Password → Developer → Enable CLI"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@if ! command -v op >/dev/null 2>&1; then \
+		echo ""; \
+		echo "  ✗ 1Password CLI (op) not found."; \
+		echo ""; \
+		echo "    Enable the CLI in 1Password:"; \
+		echo "      System Preferences → 1Password → Developer → Enable CLI"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@echo "    ✓ 1Password app + CLI ready"
 
 .PHONY: _setup-config
 _setup-config:
