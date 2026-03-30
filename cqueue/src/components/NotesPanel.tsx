@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { use, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   Button,
   Callout,
@@ -12,14 +12,16 @@ import {
 import type { TreeNodeInfo } from "@blueprintjs/core";
 import { api } from "../lib/api";
 import { MarkdownEditor } from "./MarkdownEditor";
+import type { RepoData } from "../types";
+
+export interface NotesPanelHandle {
+  notifyExternal: (sourceTabId?: string) => void;
+}
 
 interface Props {
-  notes: string;
-  notesModifiedAt: number;
   repoPath: string;
-  tabId: string;
-  externallyChanged: boolean;
-  onExternalChangeAck: () => void;
+  initialPromise: Promise<RepoData>;
+  ref?: React.Ref<NotesPanelHandle>;
 }
 
 // Build Blueprint Tree nodes from flat file paths
@@ -89,19 +91,22 @@ function buildFileTree(
   return toTreeNodes(root);
 }
 
-export function NotesPanel({
-  notes,
-  notesModifiedAt,
-  repoPath,
-  tabId,
-  externallyChanged,
-  onExternalChangeAck,
-}: Props) {
+export function NotesPanel({ repoPath, initialPromise, ref }: Props) {
+  const initial = use(initialPromise);
+  const tabId = useRef(crypto.randomUUID()).current;
+  const [externallyChanged, setExternallyChanged] = useState(false);
+
+  const notifyExternal = useCallback((sourceTabId?: string) => {
+    if (sourceTabId !== tabId) setExternallyChanged(true);
+  }, [tabId]);
+
+  useImperativeHandle(ref, () => ({ notifyExternal }), [notifyExternal]);
+
   const [collapsed, setCollapsed] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [editorContent, setEditorContent] = useState(notes);
+  const [editorContent, setEditorContent] = useState(initial.notes);
   const [cnoteVersion, setCnoteVersion] = useState(0);
-  const [modifiedAt, setModifiedAt] = useState(notesModifiedAt);
+  const [modifiedAt, setModifiedAt] = useState(initial.notesModifiedAt);
   const [conflictDetected, setConflictDetected] = useState(false);
   const [fileVersion, setFileVersion] = useState(0);
   const [mdFiles, setMdFiles] = useState<string[] | null>(null);
@@ -178,7 +183,7 @@ export function NotesPanel({
     const res = await api.api.notes
       .get({ query: { path: repoPath } })
       .catch(() => null);
-    const content = res?.data?.ok ? (res.data.data as string) : notes;
+    const content = res?.data?.ok ? (res.data.data as string) : "";
     setSelectedFile(null);
     setEditorContent(content);
     setCnoteVersion((v) => v + 1);
@@ -190,7 +195,7 @@ export function NotesPanel({
       const res = await api.api.notes
         .get({ query: { path: repoPath } })
         .catch(() => null);
-      const content = res?.data?.ok ? (res.data.data as string) : notes;
+      const content = res?.data?.ok ? (res.data.data as string) : "";
       setSelectedFile(null);
       setEditorContent(content);
       setCnoteVersion((v) => v + 1);
@@ -208,7 +213,7 @@ export function NotesPanel({
       setCnoteVersion((v) => v + 1);
       setConflictDetected(false);
     }
-    onExternalChangeAck();
+    setExternallyChanged(false);
   };
 
   const persistExpansion = (next: Set<string>) => {
@@ -264,6 +269,7 @@ export function NotesPanel({
         });
         const res = await fetch(`/api/notes?${params}`, {
           method: "PUT",
+          keepalive: true,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ content }),
         });

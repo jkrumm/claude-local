@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { use, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -24,7 +24,7 @@ import {
 } from "@blueprintjs/core";
 import { api } from "../lib/api";
 import { QueueCard } from "./QueueCard";
-import type { CompletedTask, QueueTask } from "../types";
+import type { CompletedTask, QueueTask, RepoData } from "../types";
 
 function timeAgo(timestamp: number, now: number): string {
   const seconds = Math.floor((now - timestamp) / 1000);
@@ -45,11 +45,14 @@ const subLabelStyle: React.CSSProperties = {
   margin: "10px 0 4px 0",
 };
 
+export interface QueuePanelHandle {
+  refresh: () => void;
+}
+
 interface Props {
-  tasks: QueueTask[];
   repoPath: string;
-  completedTasks: CompletedTask[];
-  onTasksChange: (tasks: QueueTask[]) => void;
+  initialPromise: Promise<RepoData>;
+  ref?: React.Ref<QueuePanelHandle>;
 }
 
 function reindex(tasks: QueueTask[]): QueueTask[] {
@@ -156,12 +159,10 @@ function CompletedTaskRow({
   );
 }
 
-export function QueuePanel({
-  tasks,
-  repoPath,
-  completedTasks,
-  onTasksChange,
-}: Props) {
+export function QueuePanel({ repoPath, initialPromise, ref }: Props) {
+  const initial = use(initialPromise);
+  const [tasks, setTasks] = useState<QueueTask[]>(initial.queue);
+  const [completedTasks, setCompletedTasks] = useState<CompletedTask[]>([]);
   const [collapsed, setCollapsed] = useState(false);
   const [addValue, setAddValue] = useState("");
   const addInputRef = useRef<HTMLInputElement>(null);
@@ -173,6 +174,34 @@ export function QueuePanel({
     const interval = setInterval(() => setNow(Date.now()), 10_000);
     return () => clearInterval(interval);
   }, []);
+
+  const doFetchQueue = useCallback(async () => {
+    const res = await fetch(`/api/queue?path=${encodeURIComponent(repoPath)}`);
+    const json = (await res.json()) as { ok: boolean; data: QueueTask[] };
+    if (json.ok) setTasks(json.data);
+  }, [repoPath]);
+
+  const doFetchCompleted = useCallback(async () => {
+    const res = await fetch(`/api/completed-tasks?path=${encodeURIComponent(repoPath)}`);
+    const json = (await res.json()) as { ok: boolean; data: CompletedTask[] };
+    if (json.ok) setCompletedTasks(json.data);
+  }, [repoPath]);
+
+  const refresh = useCallback(() => {
+    void doFetchQueue();
+    void doFetchCompleted();
+  }, [doFetchQueue, doFetchCompleted]);
+
+  useImperativeHandle(ref, () => ({ refresh }), [refresh]);
+
+  // Initial completed tasks load
+  useEffect(() => { void doFetchCompleted(); }, [doFetchCompleted]);
+
+  // 2s polling
+  useEffect(() => {
+    const id = setInterval(refresh, 2_000);
+    return () => clearInterval(id);
+  }, [refresh]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -190,13 +219,13 @@ export function QueuePanel({
     if (oldIndex === -1 || newIndex === -1) return;
 
     const reordered = reindex(arrayMove(tasks, oldIndex, newIndex));
-    onTasksChange(reordered);
+    setTasks(reordered);
     void syncToServer(repoPath, reordered);
   };
 
   const handleDelete = (index: number) => {
     const updated = reindex(tasks.filter((t) => t.index !== index));
-    onTasksChange(updated);
+    setTasks(updated);
     void syncToServer(repoPath, updated);
   };
 
@@ -227,7 +256,7 @@ export function QueuePanel({
           : t,
       ),
     );
-    onTasksChange(updated);
+    setTasks(updated);
     void syncToServer(repoPath, updated);
   };
 
@@ -246,7 +275,7 @@ export function QueuePanel({
     };
 
     const updated = reindex([...tasks, newTask]);
-    onTasksChange(updated);
+    setTasks(updated);
     void syncToServer(repoPath, updated);
     setAddValue("");
   };
@@ -260,7 +289,7 @@ export function QueuePanel({
       lineCount: 1,
     };
     const updated = reindex([...tasks, newTask]);
-    onTasksChange(updated);
+    setTasks(updated);
     void syncToServer(repoPath, updated);
   };
 

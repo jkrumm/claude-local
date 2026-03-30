@@ -1,15 +1,16 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { use, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { AnchorButton, Button, Callout, H6, Icon, Intent, Popover, Tag, Tooltip } from "@blueprintjs/core";
 import type { GitFile, GitCommit, GitStatus, GithubData, WorkflowRun, Worktree } from "../types";
 import { ChainDrawer } from "./ChainDrawer";
 
+export interface GitPanelHandle {
+  refresh: () => void;
+}
+
 interface Props {
   repoPath: string;
-  gitStatus: GitStatus | null;
-  githubData: GithubData | null;
-  githubLoading: boolean;
-  lastGithubRefresh: Date | null;
-  onRefresh: () => void;
+  initialPromise: Promise<GitStatus | null>;
+  ref?: React.Ref<GitPanelHandle>;
 }
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -739,7 +740,58 @@ function ActionsSection({
 
 // ─── Main GitPanel ────────────────────────────────────────────────────────────
 
-export function GitPanel({ repoPath, gitStatus, githubData, githubLoading, lastGithubRefresh, onRefresh }: Props) {
+export function GitPanel({ repoPath, initialPromise, ref }: Props) {
+  const initialGit = use(initialPromise);
+  const [gitStatus, setGitStatus] = useState<GitStatus | null>(initialGit);
+  const [githubData, setGithubData] = useState<GithubData | null>(null);
+  const [githubLoading, setGithubLoading] = useState(false);
+  const [lastGithubRefresh, setLastGithubRefresh] = useState<Date | null>(null);
+
+  const doFetchGithub = useCallback(async (git: GitStatus) => {
+    if (!git.githubRepo) return;
+    setGithubLoading(true);
+    try {
+      const res = await fetch(
+        `/api/github?githubRepo=${encodeURIComponent(git.githubRepo)}&branch=${encodeURIComponent(git.branch)}`,
+      );
+      const json = (await res.json()) as { ok: boolean; data: GithubData };
+      if (json.ok) {
+        setGithubData(json.data);
+        setLastGithubRefresh(new Date());
+      }
+    } catch {
+      // GitHub data is optional — silently ignore failures
+    } finally {
+      setGithubLoading(false);
+    }
+  }, []);
+
+  const refresh = useCallback(() => {
+    void (async () => {
+      const res = await fetch(`/api/repo/git?path=${encodeURIComponent(repoPath)}`);
+      const json = (await res.json()) as { ok: boolean; data: GitStatus | null };
+      if (json.ok) {
+        const newGit = json.data ?? null;
+        setGitStatus(newGit);
+        if (newGit?.githubRepo) void doFetchGithub(newGit);
+      }
+    })();
+  }, [repoPath, doFetchGithub]);
+
+  useImperativeHandle(ref, () => ({ refresh }), [refresh]);
+
+  // Initial GitHub fetch once git data is available
+  useEffect(() => {
+    if (initialGit?.githubRepo) void doFetchGithub(initialGit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 15s polling
+  useEffect(() => {
+    const id = setInterval(refresh, 15_000);
+    return () => clearInterval(id);
+  }, [refresh]);
+
   if (!gitStatus) return null;
 
   return (
@@ -759,7 +811,7 @@ export function GitPanel({ repoPath, gitStatus, githubData, githubLoading, lastG
         )}
         {gitStatus.githubRepo && (
           <div style={{ marginLeft: "auto", alignSelf: "center" }}>
-            <StatusDot lastRefresh={lastGithubRefresh} githubLoading={githubLoading} onRefresh={onRefresh} />
+            <StatusDot lastRefresh={lastGithubRefresh} githubLoading={githubLoading} onRefresh={refresh} />
           </div>
         )}
       </div>

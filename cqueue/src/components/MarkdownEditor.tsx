@@ -261,6 +261,23 @@ export function MarkdownEditor({
     };
   }, []);
 
+  // Flush before tab hide/close/reload — fires while fetch still works
+  useEffect(() => {
+    const handleHide = () => {
+      if (document.visibilityState !== "hidden") return;
+      if (debounceRef.current && pendingSaveFnRef.current) {
+        clearTimeout(debounceRef.current);
+        const fn = pendingSaveFnRef.current;
+        const content = latestValueRef.current;
+        pendingSaveFnRef.current = null;
+        debounceRef.current = null;
+        fn(content).catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", handleHide);
+    return () => document.removeEventListener("visibilitychange", handleHide);
+  }, []);
+
   // Flush pending save on file switch (contentKey change)
   useEffect(() => {
     if (debounceRef.current && pendingSaveFnRef.current) {

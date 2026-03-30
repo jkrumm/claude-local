@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Alignment,
@@ -7,22 +7,32 @@ import {
   NavbarGroup,
   NavbarHeading,
   NonIdealState,
-  Spinner,
 } from "@blueprintjs/core";
-import { api } from "../lib/api";
 import { GitPanel } from "../components/GitPanel";
 import { UsageTags } from "../components/UsageTags";
 import { QueuePanel } from "../components/QueuePanel";
 import { NotesPanel } from "../components/NotesPanel";
 import { DiagramPanel } from "../components/DiagramPanel";
+import { PanelSkeleton } from "../components/PanelSkeleton";
 import { useTheme } from "../main";
-import type {
-  CompletedTask,
-  GithubData,
-  GitStatus,
-  QueueTask,
-  RepoDashboardData,
-} from "../types";
+import type { GitPanelHandle } from "../components/GitPanel";
+import type { QueuePanelHandle } from "../components/QueuePanel";
+import type { NotesPanelHandle } from "../components/NotesPanel";
+import type { GitStatus, RepoData } from "../types";
+
+async function fetchRepoData(path: string): Promise<RepoData> {
+  const res = await fetch(`/api/repo?path=${encodeURIComponent(path)}`);
+  const json = (await res.json()) as { ok: boolean; data: RepoData };
+  if (!json.ok) throw new Error("Failed to load repo");
+  return json.data;
+}
+
+async function fetchGitData(path: string): Promise<GitStatus | null> {
+  const res = await fetch(`/api/repo/git?path=${encodeURIComponent(path)}`);
+  const json = (await res.json()) as { ok: boolean; data: GitStatus | null };
+  if (!json.ok) throw new Error("Failed to load git status");
+  return json.data;
+}
 
 class DashboardErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -57,92 +67,26 @@ function RepoDashboardInner() {
 
   const repoPath = workspace && repo ? `/${workspace}/${repo}` : null;
 
-  const [data, setData] = useState<RepoDashboardData | null>(null);
-  const [tasks, setTasks] = useState<QueueTask[]>([]);
-  const [notes, setNotes] = useState<string>("");
-  const [completedTasks, setCompletedTasks] = useState<CompletedTask[]>([]);
-  const [notesExternallyChanged, setNotesExternallyChanged] = useState(false);
-  const [notesModifiedAt, setNotesModifiedAt] = useState(0);
-  const tabIdRef = useRef(crypto.randomUUID());
-  const tabId = tabIdRef.current;
-  const [fetchError, setFetchError] = useState<string | null>(null);
   const [sseDisconnected, setSseDisconnected] = useState(false);
-  const [githubData, setGithubData] = useState<GithubData | null>(null);
-  const [githubLoading, setGithubLoading] = useState(false);
-  const [lastGithubRefresh, setLastGithubRefresh] = useState<Date | null>(null);
 
+  const gitRef = useRef<GitPanelHandle>(null);
+  const queueRef = useRef<QueuePanelHandle>(null);
+  const notesRef = useRef<NotesPanelHandle>(null);
   const evtSourceRef = useRef<EventSource | null>(null);
-  const isEditingRef = useRef(false);
 
-  const fetchData = async (path: string) => {
-    const result = await api.api.repo
-      .get({ query: { path } })
-      .catch((err: unknown) => {
-        setFetchError(String(err));
-        return null;
-      });
-    if (!result) return;
-    if (result.error) {
-      setFetchError(String(result.error));
-      return;
-    }
-    if (result.data?.ok) {
-      const d = result.data.data as RepoDashboardData;
-      setData(d);
-      setTasks(d.queue);
-      setNotes(d.notes);
-      setNotesModifiedAt(d.notesModifiedAt ?? 0);
-    }
-  };
+  // Both promises fire immediately in parallel — no waterfall
+  const repoPromise = useMemo(
+    () => (repoPath ? fetchRepoData(repoPath) : Promise.reject(new Error("No path"))),
+    [repoPath],
+  );
+  const gitPromise = useMemo(
+    () => (repoPath ? fetchGitData(repoPath) : Promise.reject(new Error("No path"))),
+    [repoPath],
+  );
 
-  const fetchQueue = async (path: string) => {
-    const result = await api.api.queue.get({ query: { path } }).catch(() => null);
-    if (result?.data?.ok) {
-      setTasks(result.data.data as QueueTask[]);
-    }
-  };
-
-  const fetchCompleted = async (path: string) => {
-    const result = await api.api["completed-tasks"]
-      .get({ query: { path } })
-      .catch(() => null);
-    if (result?.data?.ok) {
-      setCompletedTasks(result.data.data as CompletedTask[]);
-    }
-  };
-
-  const fetchGitStatus = useCallback(async (path: string) => {
-    const result = await api.api.repo.get({ query: { path } }).catch(() => null);
-    if (result?.data?.ok) {
-      const d = result.data.data as RepoDashboardData;
-      setData((prev) => (prev ? { ...prev, git: d.git } : prev));
-    }
-  }, []);
-
-  const fetchGithubData = useCallback(async (git: GitStatus) => {
-    if (!git.githubRepo) return;
-    setGithubLoading(true);
-    try {
-      const res = await fetch(
-        `/api/github?githubRepo=${encodeURIComponent(git.githubRepo)}&branch=${encodeURIComponent(git.branch)}`,
-      );
-      const json = (await res.json()) as { ok: boolean; data: GithubData };
-      if (json.ok) {
-        setGithubData(json.data);
-        setLastGithubRefresh(new Date());
-      }
-    } catch {
-      // GitHub data is optional — silently ignore failures
-    } finally {
-      setGithubLoading(false);
-    }
-  }, []);
-
+  // SSE — single connection per repo, dispatches to panel refs
   useEffect(() => {
     if (!repoPath) return;
-
-    fetchData(repoPath);
-    fetchCompleted(repoPath);
 
     let isActive = true;
     let knownServerStart: number | null = null;
@@ -152,13 +96,15 @@ function RepoDashboardInner() {
       if (watchdogTimer) clearTimeout(watchdogTimer);
       watchdogTimer = setTimeout(() => {
         if (!isActive) return;
-        // Heartbeat timeout — connection silently dropped
         evtSource.close();
         evtSourceRef.current = null;
         if (isActive) {
           setSseDisconnected(true);
           setTimeout(() => {
-            if (isActive) { setSseDisconnected(false); connect(); }
+            if (isActive) {
+              setSseDisconnected(false);
+              connect();
+            }
           }, 100);
         }
       }, 35_000);
@@ -174,15 +120,14 @@ function RepoDashboardInner() {
         const data = JSON.parse(e.data as string) as { serverStart?: number };
         if (data.serverStart) {
           if (knownServerStart !== null && knownServerStart !== data.serverStart) {
-            // Server restarted with a new build — reload to pick up fresh assets
             window.location.reload();
             return;
           }
           knownServerStart = data.serverStart;
         }
-        // Re-fetch everything to catch events missed during any disconnect gap
-        fetchData(repoPath);
-        fetchCompleted(repoPath);
+        // Refresh panels to catch any events missed during a disconnect gap
+        queueRef.current?.refresh();
+        gitRef.current?.refresh();
         resetWatchdog(evtSource);
       });
 
@@ -192,22 +137,18 @@ function RepoDashboardInner() {
         resetWatchdog(evtSource);
         const payload = JSON.parse(e.data as string) as {
           file: "queue" | "notes" | "diagram";
+          sourceTabId?: string;
         };
-        if (payload.file === "queue" && !isEditingRef.current) {
-          fetchQueue(repoPath);
-          fetchCompleted(repoPath);
-        } else if (payload.file === "notes") {
-          const notesPayload = payload as { file: "notes"; sourceTabId?: string };
-          if (notesPayload.sourceTabId !== tabId) {
-            setNotesExternallyChanged(true);
-          }
-        }
-        // diagram events are handled by DiagramPanel's own SSE connection
+        if (payload.file === "queue") queueRef.current?.refresh();
+        else if (payload.file === "notes") notesRef.current?.notifyExternal(payload.sourceTabId);
       });
 
       evtSource.onerror = () => {
         if (!isActive) return;
-        if (watchdogTimer) { clearTimeout(watchdogTimer); watchdogTimer = null; }
+        if (watchdogTimer) {
+          clearTimeout(watchdogTimer);
+          watchdogTimer = null;
+        }
         evtSource.close();
         evtSourceRef.current = null;
         const showTimer = setTimeout(() => {
@@ -225,39 +166,13 @@ function RepoDashboardInner() {
 
     connect();
 
-    // Polling fallback for SSE gaps
-    const pollInterval = setInterval(() => {
-      if (!isEditingRef.current) {
-        fetchQueue(repoPath);
-        fetchCompleted(repoPath);
-      }
-    }, 2000);
-
     return () => {
       isActive = false;
       if (watchdogTimer) clearTimeout(watchdogTimer);
-      clearInterval(pollInterval);
       evtSourceRef.current?.close();
       evtSourceRef.current = null;
     };
-    // fetchData / fetchQueue use stable setters; repoPath is the only dep that matters
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoPath]);
-
-  // Local git + GitHub polling every 15s
-  useEffect(() => {
-    if (!repoPath) return;
-    const git = data?.git;
-
-    if (git?.githubRepo) fetchGithubData(git);
-    fetchGitStatus(repoPath);
-
-    const interval = setInterval(() => {
-      fetchGitStatus(repoPath);
-      if (git?.githubRepo) fetchGithubData(git);
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [repoPath, data?.git?.githubRepo, data?.git?.branch, fetchGithubData, fetchGitStatus]);
 
   if (!repoPath) {
     return (
@@ -267,25 +182,7 @@ function RepoDashboardInner() {
     );
   }
 
-  if (fetchError) {
-    return (
-      <div style={{ padding: 40 }}>
-        <NonIdealState
-          icon="error"
-          title="Failed to load repo"
-          description={fetchError}
-        />
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div style={{ padding: 40, display: "flex", justifyContent: "center" }}>
-        <Spinner />
-      </div>
-    );
-  }
+  const repoName = repoPath.split("/").pop() ?? repoPath;
 
   return (
     <div>
@@ -299,7 +196,7 @@ function RepoDashboardInner() {
           <NavbarHeading
             style={{ fontFamily: "var(--bp-typography-family-mono)" }}
           >
-            {data.repo.name}
+            {repoName}
           </NavbarHeading>
         </NavbarGroup>
         <NavbarGroup align={Alignment.END}>
@@ -335,34 +232,31 @@ function RepoDashboardInner() {
           padding: 24,
         }}
       >
-        <GitPanel
-          repoPath={repoPath}
-          gitStatus={data.git}
-          githubData={githubData}
-          githubLoading={githubLoading}
-          lastGithubRefresh={lastGithubRefresh}
-          onRefresh={() => {
-            void fetchGitStatus(repoPath);
-            if (data.git) void fetchGithubData(data.git);
-          }}
-        />
-        <QueuePanel
-          tasks={tasks}
-          repoPath={repoPath}
-          completedTasks={completedTasks}
-          onTasksChange={(updated) => {
-            setTasks(updated);
-          }}
-        />
+        <Suspense fallback={<PanelSkeleton height={100} />}>
+          <GitPanel
+            key={repoPath}
+            ref={gitRef}
+            repoPath={repoPath}
+            initialPromise={gitPromise}
+          />
+        </Suspense>
+        <Suspense fallback={<PanelSkeleton height={160} />}>
+          <QueuePanel
+            key={repoPath}
+            ref={queueRef}
+            repoPath={repoPath}
+            initialPromise={repoPromise}
+          />
+        </Suspense>
         <DiagramPanel repoPath={repoPath} />
-        <NotesPanel
-          notes={notes}
-          notesModifiedAt={notesModifiedAt}
-          repoPath={repoPath}
-          tabId={tabId}
-          externallyChanged={notesExternallyChanged}
-          onExternalChangeAck={() => setNotesExternallyChanged(false)}
-        />
+        <Suspense fallback={<PanelSkeleton height={200} />}>
+          <NotesPanel
+            key={repoPath}
+            ref={notesRef}
+            repoPath={repoPath}
+            initialPromise={repoPromise}
+          />
+        </Suspense>
       </div>
     </div>
   );

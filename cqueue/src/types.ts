@@ -5,12 +5,11 @@ import type { CompletedTask } from "../server/lib/db";
 
 export type { RepoInfo, QueueTask, GitStatus, GitFile, GitCommit, Worktree, CompletedTask };
 
-export interface RepoDashboardData {
+export interface RepoData {
   repo: RepoInfo;
   queue: QueueTask[];
   notes: string;
   notesModifiedAt: number;
-  git: GitStatus | null;
 }
 
 // GitHub types defined here to avoid Vite bundling server-side @octokit/rest

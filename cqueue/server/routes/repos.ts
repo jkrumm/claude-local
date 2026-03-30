@@ -19,6 +19,27 @@ export const reposRoutes = new Elysia({ prefix: "/api" })
     const repos = scanRepos();
     return { ok: true, data: repos };
   })
+  .get("/repo/git", ({ query, set }) => {
+    const path = query.path;
+    if (!path) {
+      set.status = 400;
+      return { ok: false, error: "Missing path query parameter" };
+    }
+
+    const containerPath = toContainerPath(path);
+    const git = getGitStatus(containerPath);
+
+    // Normalise worktree paths to display paths so frontend can pass them back
+    // to API endpoints directly (e.g. /api/actions/chain { worktreePath })
+    if (git) {
+      git.worktrees = git.worktrees.map((wt) => ({
+        ...wt,
+        path: toDisplayPath(wt.path),
+      }));
+    }
+
+    return { ok: true, data: git };
+  })
   .get("/repo", async ({ query, set }) => {
     const path = query.path;
     if (!path) {
@@ -37,16 +58,6 @@ export const reposRoutes = new Elysia({ prefix: "/api" })
     ]);
 
     const queue = parseQueue(queueRaw);
-    const git = getGitStatus(containerPath);
-
-    // Normalise worktree paths to display paths so frontend can pass them back
-    // to API endpoints directly (e.g. /api/actions/chain { worktreePath })
-    if (git) {
-      git.worktrees = git.worktrees.map((wt) => ({
-        ...wt,
-        path: toDisplayPath(wt.path),
-      }));
-    }
 
     const repo = {
       name: path.split("/").pop() ?? path,
@@ -57,5 +68,5 @@ export const reposRoutes = new Elysia({ prefix: "/api" })
     };
 
     const notesModifiedAt = notesStat?.mtimeMs ?? 0;
-    return { ok: true, data: { repo, queue, notes, notesModifiedAt, git } };
+    return { ok: true, data: { repo, queue, notes, notesModifiedAt } };
   });
