@@ -13,6 +13,8 @@ setup:
 	@echo "  Setting up claude-local..."
 	@echo ""
 	@$(MAKE) --no-print-directory _check-prereqs
+	@$(MAKE) --no-print-directory _setup-brew
+	@$(MAKE) --no-print-directory _setup-claude
 	@$(MAKE) --no-print-directory _setup-config
 	@$(MAKE) --no-print-directory _setup-hooks
 	@$(MAKE) --no-print-directory _setup-scripts
@@ -55,6 +57,28 @@ _check-prereqs:
 		exit 1; \
 	fi
 	@echo "    ✓ 1Password app + CLI ready"
+
+.PHONY: _setup-brew
+_setup-brew:
+	@echo "  Homebrew..."
+	@if command -v brew >/dev/null 2>&1; then \
+		echo "    · brew $$(brew --version | head -1) (ok)"; \
+	else \
+		echo "    Installing Homebrew..."; \
+		/bin/bash -c "$$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; \
+		echo "    ✓ Homebrew installed"; \
+	fi
+
+.PHONY: _setup-claude
+_setup-claude:
+	@echo "  Claude Code..."
+	@if command -v claude >/dev/null 2>&1; then \
+		echo "    · claude $$(claude --version 2>/dev/null | head -1) (ok)"; \
+	else \
+		echo "    Installing Claude Code..."; \
+		curl -fsSL https://claude.ai/install.sh | bash; \
+		echo "    ✓ Claude Code installed"; \
+	fi
 
 .PHONY: _setup-config
 _setup-config:
@@ -114,6 +138,9 @@ _setup-tools:
 	@# fnm — node version manager
 	@brew list fnm &>/dev/null || brew install fnm
 	@echo "    ✓ fnm $$(fnm --version)"
+	@# uv — Python runner (required by statusline.sh + fetch_usage.py)
+	@brew list uv &>/dev/null || brew install uv
+	@echo "    ✓ uv $$(uv --version)"
 	@# bun — JS runtime (cq alias, hooks)
 	@if command -v bun >/dev/null 2>&1; then \
 		echo "    · bun $$(bun --version) (ok)"; \
@@ -306,6 +333,13 @@ _link:
 .PHONY: status
 status:
 	@echo ""
+	@echo "  Prerequisites"
+	@[ -d "/Applications/1Password.app" ] || [ -d "$(HOME)/Applications/1Password.app" ] \
+		&& echo "    ✓ 1Password app" || echo "    ✗ 1Password app [not installed]"
+	@command -v op >/dev/null 2>&1 && echo "    ✓ op CLI" || echo "    ✗ op CLI [not installed]"
+	@command -v brew >/dev/null 2>&1 && echo "    ✓ brew" || echo "    ✗ brew [not installed — run make setup]"
+	@command -v claude >/dev/null 2>&1 && echo "    ✓ claude" || echo "    ✗ claude [not installed — run make setup]"
+	@echo ""
 	@echo "  Symlink health:"
 	@echo ""
 	@echo "  Config"
@@ -356,7 +390,7 @@ status:
 		$(MAKE) --no-print-directory _check DST="$(SOURCEROOT)/.claude/skills/$$name"; \
 	done
 	@echo "  Tools"
-	@for tool in jq gh fzf zoxide wtp fnm bun; do \
+	@for tool in jq gh fzf zoxide wtp fnm bun uv; do \
 		command -v $$tool >/dev/null 2>&1 \
 			&& echo "    ✓ $$tool" \
 			|| echo "    ✗ $$tool [not installed — run make setup]"; \
