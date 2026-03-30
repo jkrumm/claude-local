@@ -19,6 +19,7 @@ setup:
 	@$(MAKE) --no-print-directory _setup-settings
 	@$(MAKE) --no-print-directory _setup-gitignore
 	@$(MAKE) --no-print-directory _setup-ghostty
+	@$(MAKE) --no-print-directory _setup-tools
 	@$(MAKE) --no-print-directory _setup-browser
 	@$(MAKE) --no-print-directory _setup-localias
 	@$(MAKE) --no-print-directory _setup-pnpm
@@ -64,6 +65,36 @@ _setup-config:
 	   ln -sfn "$$LOCALIAS_SRC" "$$LOCALIAS_DST"; \
 	   echo "    ✓ localias.yaml"; \
 	 fi
+
+.PHONY: _setup-tools
+_setup-tools:
+	@echo "  Tools..."
+	@# jq — required by this Makefile itself
+	@brew list jq &>/dev/null || brew install jq
+	@echo "    ✓ jq $$(jq --version)"
+	@# gh — GitHub CLI (used by /pr skill)
+	@brew list gh &>/dev/null || brew install gh
+	@echo "    ✓ gh $$(gh --version | head -1)"
+	@# fzf — fuzzy finder (Ctrl+R, Ctrl+T, Alt+C)
+	@brew list fzf &>/dev/null || brew install fzf
+	@echo "    ✓ fzf $$(fzf --version)"
+	@# zoxide — smart cd (j command)
+	@brew list zoxide &>/dev/null || brew install zoxide
+	@echo "    ✓ zoxide $$(zoxide --version)"
+	@# wtp — git worktree manager
+	@brew list satococoa/tap/wtp &>/dev/null || brew install satococoa/tap/wtp
+	@echo "    ✓ wtp $$(wtp --version 2>/dev/null || echo ok)"
+	@# fnm — node version manager
+	@brew list fnm &>/dev/null || brew install fnm
+	@echo "    ✓ fnm $$(fnm --version)"
+	@# bun — JS runtime (cq alias, hooks)
+	@if command -v bun >/dev/null 2>&1; then \
+		echo "    · bun $$(bun --version) (ok)"; \
+	else \
+		echo "    Installing bun..."; \
+		curl -fsSL https://bun.sh/install | bash; \
+		echo "    ✓ bun installed"; \
+	fi
 
 .PHONY: _setup-localias
 _setup-localias:
@@ -296,6 +327,12 @@ status:
 	@for skill in $(CLAUDE_LOCAL)/skills/*/; do \
 		name=$$(basename "$$skill"); \
 		$(MAKE) --no-print-directory _check DST="$(SOURCEROOT)/.claude/skills/$$name"; \
+	done
+	@echo "  Tools"
+	@for tool in jq gh fzf zoxide wtp fnm bun; do \
+		command -v $$tool >/dev/null 2>&1 \
+			&& echo "    ✓ $$tool" \
+			|| echo "    ✗ $$tool [not installed — run make setup]"; \
 	done
 	@echo "  Localias"
 	@brew list peterldowns/tap/localias &>/dev/null && echo "    ✓ localias" || echo "    ✗ localias [not installed — run make setup]"
