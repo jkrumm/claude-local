@@ -4,6 +4,7 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { toContainerPath } from "../lib/workspace";
 import { subscribeDiagrams } from "../lib/diagram-bus";
+import { getNotesWriteSource } from "../lib/notes-bus";
 
 // Stable identity for this process lifetime.
 // Clients compare this on reconnect — a change means the server restarted
@@ -26,7 +27,8 @@ export const eventsRoutes = new Elysia({ prefix: "/api" }).get(
     const notesPath = join(containerPath, "cnotes.md");
 
     type PendingEvent =
-      | { file: "queue" | "notes" }
+      | { file: "queue" }
+      | { file: "notes"; sourceTabId?: string }
       | { file: "diagram"; name: string; modifiedAt: number }
       | { file: "ping" };
 
@@ -46,7 +48,12 @@ export const eventsRoutes = new Elysia({ prefix: "/api" }).get(
       watchers.push(watch(queuePath, () => push({ file: "queue" })));
     }
     if (existsSync(notesPath)) {
-      watchers.push(watch(notesPath, () => push({ file: "notes" })));
+      watchers.push(
+        watch(notesPath, () => {
+          const sourceTabId = getNotesWriteSource(notesPath);
+          push({ file: "notes", sourceTabId: sourceTabId ?? undefined });
+        }),
+      );
     }
 
     const unsubDiagrams = subscribeDiagrams(path, (evt) => {

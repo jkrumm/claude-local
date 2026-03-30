@@ -9,6 +9,7 @@ export interface RepoDashboardData {
   repo: RepoInfo;
   queue: QueueTask[];
   notes: string;
+  notesModifiedAt: number;
   git: GitStatus | null;
 }
 

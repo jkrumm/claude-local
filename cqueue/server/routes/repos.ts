@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { existsSync } from "fs";
+import { promises as fs } from "fs";
 import { join } from "path";
 import { scanRepos } from "../lib/repo-scanner";
 import { parseQueue } from "../lib/parse-queue";
@@ -29,9 +30,10 @@ export const reposRoutes = new Elysia({ prefix: "/api" })
     const queuePath = join(containerPath, "cqueue.md");
     const notesPath = join(containerPath, "cnotes.md");
 
-    const [queueRaw, notes] = await Promise.all([
+    const [queueRaw, notes, notesStat] = await Promise.all([
       ensureFile(queuePath),
       ensureFile(notesPath),
+      fs.stat(notesPath).catch(() => null),
     ]);
 
     const queue = parseQueue(queueRaw);
@@ -54,5 +56,6 @@ export const reposRoutes = new Elysia({ prefix: "/api" })
       hasNotes: existsSync(notesPath),
     };
 
-    return { ok: true, data: { repo, queue, notes, git } };
+    const notesModifiedAt = notesStat?.mtimeMs ?? 0;
+    return { ok: true, data: { repo, queue, notes, notesModifiedAt, git } };
   });

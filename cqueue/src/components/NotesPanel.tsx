@@ -15,7 +15,9 @@ import { MarkdownEditor } from "./MarkdownEditor";
 
 interface Props {
   notes: string;
+  notesModifiedAt: number;
   repoPath: string;
+  tabId: string;
   externallyChanged: boolean;
   onExternalChangeAck: () => void;
 }
@@ -89,7 +91,9 @@ function buildFileTree(
 
 export function NotesPanel({
   notes,
+  notesModifiedAt,
   repoPath,
+  tabId,
   externallyChanged,
   onExternalChangeAck,
 }: Props) {
@@ -97,6 +101,8 @@ export function NotesPanel({
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [editorContent, setEditorContent] = useState(notes);
   const [cnoteVersion, setCnoteVersion] = useState(0);
+  const [modifiedAt, setModifiedAt] = useState(notesModifiedAt);
+  const [conflictDetected, setConflictDetected] = useState(false);
   const [fileVersion, setFileVersion] = useState(0);
   const [mdFiles, setMdFiles] = useState<string[] | null>(null);
   const [treeOpen, setTreeOpen] = useState(false);
@@ -196,8 +202,11 @@ export function NotesPanel({
       .get({ query: { path: repoPath } })
       .catch(() => null);
     if (res?.data?.ok) {
-      setEditorContent(res.data.data as string);
+      const d = res.data as { ok: true; data: string; modifiedAt: number };
+      setEditorContent(d.data);
+      setModifiedAt(d.modifiedAt ?? 0);
       setCnoteVersion((v) => v + 1);
+      setConflictDetected(false);
     }
     onExternalChangeAck();
   };
@@ -247,8 +256,29 @@ export function NotesPanel({
           { content },
           { query: { path: repoPath, file: selectedFile } },
         )
-    : (content: string) =>
-        api.api.notes.put({ content }, { query: { path: repoPath } });
+    : async (content: string) => {
+        const params = new URLSearchParams({
+          path: repoPath,
+          tabId,
+          ...(modifiedAt ? { modifiedAt: String(modifiedAt) } : {}),
+        });
+        const res = await fetch(`/api/notes?${params}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content }),
+        });
+        if (res.status === 409) {
+          setConflictDetected(true);
+          return;
+        }
+        if (res.ok) {
+          const json = (await res.json()) as { ok: boolean; modifiedAt?: number };
+          if (json.ok && json.modifiedAt) {
+            setModifiedAt(json.modifiedAt);
+            setConflictDetected(false);
+          }
+        }
+      };
 
   const contentKey = selectedFile
     ? `${selectedFile}:${fileVersion}`
@@ -402,6 +432,16 @@ export function NotesPanel({
           Notes changed externally —{" "}
           <Button variant="minimal" small onClick={handleCnoteReload}>
             Reload
+          </Button>
+        </Callout>
+      )}
+
+      {/* Save conflict: file changed on disk since last load */}
+      {conflictDetected && !selectedFile && !collapsed && (
+        <Callout intent="danger" style={{ marginBottom: 8 }}>
+          Save conflict — file was modified externally. Your changes were not saved.{" "}
+          <Button variant="minimal" small onClick={handleCnoteReload}>
+            Reload and discard
           </Button>
         </Callout>
       )}

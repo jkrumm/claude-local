@@ -62,6 +62,9 @@ function RepoDashboardInner() {
   const [notes, setNotes] = useState<string>("");
   const [completedTasks, setCompletedTasks] = useState<CompletedTask[]>([]);
   const [notesExternallyChanged, setNotesExternallyChanged] = useState(false);
+  const [notesModifiedAt, setNotesModifiedAt] = useState(0);
+  const tabIdRef = useRef(crypto.randomUUID());
+  const tabId = tabIdRef.current;
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [sseDisconnected, setSseDisconnected] = useState(false);
   const [githubData, setGithubData] = useState<GithubData | null>(null);
@@ -88,6 +91,7 @@ function RepoDashboardInner() {
       setData(d);
       setTasks(d.queue);
       setNotes(d.notes);
+      setNotesModifiedAt(d.notesModifiedAt ?? 0);
     }
   };
 
@@ -193,7 +197,10 @@ function RepoDashboardInner() {
           fetchQueue(repoPath);
           fetchCompleted(repoPath);
         } else if (payload.file === "notes") {
-          setNotesExternallyChanged(true);
+          const notesPayload = payload as { file: "notes"; sourceTabId?: string };
+          if (notesPayload.sourceTabId !== tabId) {
+            setNotesExternallyChanged(true);
+          }
         }
         // diagram events are handled by DiagramPanel's own SSE connection
       });
@@ -350,7 +357,9 @@ function RepoDashboardInner() {
         <DiagramPanel repoPath={repoPath} />
         <NotesPanel
           notes={notes}
+          notesModifiedAt={notesModifiedAt}
           repoPath={repoPath}
+          tabId={tabId}
           externallyChanged={notesExternallyChanged}
           onExternalChangeAck={() => setNotesExternallyChanged(false)}
         />
