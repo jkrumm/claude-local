@@ -93,7 +93,7 @@ function buildFileTree(
 
 export function NotesPanel({ repoPath, initialPromise, ref }: Props) {
   const initial = use(initialPromise);
-  const tabId = useRef(crypto.randomUUID()).current;
+  const tabId = useRef(`tab-${Math.random().toString(36).slice(2)}`).current;
   const [externallyChanged, setExternallyChanged] = useState(false);
 
   const notifyExternal = useCallback((sourceTabId?: string) => {
