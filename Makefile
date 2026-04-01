@@ -155,6 +155,7 @@ _setup-localias:
 	@echo "  Localias..."
 	@brew list peterldowns/tap/localias &>/dev/null || brew install peterldowns/tap/localias
 	@localias start >/dev/null 2>&1 || true
+	@localias reload >/dev/null 2>&1 || true
 	@echo "    ✓ localias daemon"
 	@brew list sleepwatcher &>/dev/null || brew install sleepwatcher
 	@brew services start sleepwatcher >/dev/null 2>&1 || brew services restart sleepwatcher >/dev/null 2>&1 || true

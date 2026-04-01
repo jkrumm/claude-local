@@ -11,5 +11,8 @@ http://rollhook.local: 7700
 http://rollhook-marketing.local: 7701
 http://rollhook-dashboard.local: 7702
 http://cqueue.local: 7705
+http://hyperdx.local: 7707
 http://basalt.local: 7710
 http://basalt-example.local: 7711
+http://basalt-ui-playground.local: 7712
+http://basalt-ui-playground-api.local: 7713
