@@ -23,14 +23,7 @@
 ### Personal Projects: `/Users/johannes.krumm/SourceRoot/`
 - GitHub for version control and PRs
 - Has its own CLAUDE.md with conventions and workflow
-- Skills: `/commit`, `/pr`, `/fix-sentry`, `/code-quality`, `/research`, `/review`, `/upgrade-deps`, `/homelab-api`
-
-### HomeLab API: `claude-remote-api.jkrumm.com`
-Personal backend for all private tooling. A Bun/Elysia proxy on the home server that absorbs OAuth2 complexity and exposes a single Bearer-token API. Secret in Doppler:
-```bash
-doppler secrets get HOMELAB_API_SECRET --plain -p homelab -c prod
-```
-Current integrations: TickTick task management. Use `/homelab-api` skill for full endpoint reference, auth patterns, and date handling. Source: `/Users/johannes.krumm/SourceRoot/homelab/homelab-api/`
+- Skills: `/commit`, `/pr`, `/fix-sentry`, `/code-quality`, `/research`, `/review`, `/upgrade-deps`
 
 ### Work Projects: `/Users/johannes.krumm/IuRoot/`
 - Project-specific CLAUDE.md files (e.g., `epos.student-enrolment/CLAUDE.md`)
@@ -68,8 +61,8 @@ When uncertain: state the question, list 2 options with tradeoffs, give tendency
 - Code comments
 - Any file tracked by git
 
-Use placeholders instead: `<your-domain>`, `<tailscale-ip>`, `<see-doppler>`, `example.com`.
-All actual values go in Doppler (or equivalent secret manager). This applies to **all projects**.
+Use placeholders instead: `<your-domain>`, `<tailscale-ip>`, `<see-1password>`, `example.com`.
+All actual values go in 1Password. This applies to **all projects**.
 
 ---
 

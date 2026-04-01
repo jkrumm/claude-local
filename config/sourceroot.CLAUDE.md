@@ -98,7 +98,7 @@ All available skills in this project:
 | `/ralph [setup\|run\|status\|reset N]` | Autonomous multi-group implementation loop | main | Large migrations, rewrites, multi-session tasks |
 | `/react` | React performance best practices (Vercel) | **fork** | Writing/reviewing React components |
 | `/web-design` | Web Interface Guidelines (Vercel) | **fork** | UI/UX review, accessibility audit |
-| `/homelab-api` | HomeLab API reference — endpoints, auth, date handling | **fork** | Working with api.jkrumm.com |
+
 | `/excalidraw-diagram` | Create Excalidraw diagrams that argue visually | main | Visualizing workflows, architectures, concepts |
 | `/read-drawing` | Read and interpret Excalidraw diagrams for context | main | When given a .excalidraw or .svg path to understand its content |
 | `/pencil-design` | Pencil MCP design workflow with basalt-ui tokens | main | Creating/editing .pen design files |
