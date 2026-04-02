@@ -162,8 +162,9 @@ ssh server "cd ~/repo && make up"
 
 For sudo operations (homelab requires password):
 ```bash
-ROOT_PW=$(op read "op://vault/server/ROOT_PASSWORD")
-ssh server "echo '$ROOT_PW' | sudo -S <command>"
+# Root passwords are in Private vault (not accessible to server SAs — local only)
+ROOT_PW=$(op read "op://Private/homelab-server/password")
+ssh homelab "echo '$ROOT_PW' | sudo -S <command>"
 ```
 
 ## Cloudflare Integration
@@ -197,4 +198,4 @@ Query zones and tunnel IDs dynamically via the manage token — don't store zone
 - All secrets flow through `.env.tpl` → `op run` at runtime
 - Server auth: `OP_SERVICE_ACCOUNT_TOKEN` is the only secret on disk
 - Tailscale IPs and internal URLs go in 1Password config items, not plain in `.env.tpl`
-- Root passwords in vault — use `sudo -S` pattern, never SSH as root
+- Root passwords in `Private` vault (local-only, not accessible to server SAs) — use `sudo -S` pattern, never SSH as root
