@@ -34,13 +34,16 @@ from datetime import date
 
 RECIPIENT = "age1eg6cypgrjv48urgvmxe9wua9d8a7x9e6jxt6w2phcfg46gxzpqdq9f3jke"  # public key — not a secret
 
+# Vaults to exclude from backup (e.g. very large personal vault — back up separately)
+SKIP_VAULTS: set[str] = {"Private"}
+
 def op_json(cmd: list[str]) -> ...:
     return json.loads(subprocess.check_output(["op"] + cmd))
 
 def main():
     # Auth check — triggers biometric if 1Password desktop is unlocked
     try:
-        subprocess.check_output(["op", "whoami"], stderr=subprocess.DEVNULL)
+        subprocess.check_output(["op", "vault", "list", "--format", "json"], stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError:
         print("1Password not unlocked — open the app and retry")
         sys.exit(1)
@@ -51,6 +54,9 @@ def main():
     total = 0
     for vault in vaults:
         vid, vname = vault["id"], vault["name"]
+        if vname in SKIP_VAULTS:
+            print(f"  {vname}: skipped")
+            continue
         items = op_json(["item", "list", "--vault", vid, "--format", "json"])
         vault_items = []
         for item in items:
