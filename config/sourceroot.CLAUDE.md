@@ -133,6 +133,7 @@ All available skills in this project:
 | `/react` | React performance best practices (Vercel) | **fork** | Writing/reviewing React components |
 | `/web-design` | Web Interface Guidelines (Vercel) | **fork** | UI/UX review, accessibility audit |
 
+| `/otel [env] [intent]` | Debug OTEL traces/logs/metrics in ClickHouse (HyperDX/ClickStack) — local Docker or prod VPS | **fork** | Investigating errors, slow spans, log anomalies, service health (VPS projects only) |
 | `/secrets` | 1Password secrets management — vault ops, .env.tpl patterns, rotation | **fork** | Adding/rotating secrets, debugging op run issues |
 | `/excalidraw-diagram` | Create Excalidraw diagrams that argue visually | main | Visualizing workflows, architectures, concepts |
 | `/read-drawing` | Read and interpret Excalidraw diagrams for context | main | When given a .excalidraw or .svg path to understand its content |
