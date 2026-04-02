@@ -8,28 +8,56 @@
 Run manually: opbackup (alias)
 Frequency: weekly (Uptime Kuma push monitor reminds if overdue at 8 days)
 
-How it works:
-  1. First op call triggers Touch ID (one fingerprint, session lasts ~10min)
-  2. Exports every item from every accessible vault as JSON
-  3. Encrypts in memory with age public key (private key in 1Password + paper)
-  4. Rsyncs encrypted file to homelab — unencrypted data never touches disk
-  5. Pushes success to Uptime Kuma
+Vaults backed up: Private, common, homelab, vps  (Shared skipped — see SKIP_VAULTS)
+Archived items:   excluded automatically (op item list omits them by default)
 
-Recovery (run locally — age is not installed on homelab):
-  # Fetch from homelab first:
+How it works:
+  1. First op call triggers Touch ID (session lasts ~10min)
+  2. Lists all active items per vault — archived items are absent from this list
+  3. Fetches full item details in parallel (WORKERS=8) — ~90s for ~370 items
+  4. Serialises to JSON in memory — unencrypted data never written to disk
+  5. Encrypts with age public key (private key in 1Password + paper backup)
+  6. Rsyncs encrypted .json.age to homelab — temp file deleted in finally block
+  7. Pushes heartbeat to Uptime Kuma (8-day window monitor alerts if overdue)
+
+Security properties (validated 2026-04-02):
+  - Unencrypted JSON lives only in memory (json_bytes); passed via stdin to age
+  - Temp file holds only age-encrypted output (0o600 permissions, /tmp)
+  - finally block deletes temp file on success, exception, and KeyboardInterrupt
+  - SIGKILL is the only case where temp file might persist — it contains only
+    encrypted data, so exposure risk is nil
+  - Secrets (passwords, tokens) are captured from op stdout, never passed as
+    subprocess argv — not visible in `ps`
+  - Minor: Uptime Kuma push URL is passed as curl argv (visible in ps briefly);
+    acceptable since it is a low-privilege heartbeat token, not account credentials
+  - Item fetch failures propagate immediately and abort the backup (no silent
+    partial exports)
+
+Recovery (MUST run locally — age is not installed on homelab):
+  # 1. Fetch file from homelab:
   rsync -az homelab:~/backups/1password/<file>.json.age .
-  # Decrypt with key from 1Password (use item ID to avoid name ambiguity):
+
+  # 2a. Decrypt via op CLI (use item ID — avoids name-ambiguity if duplicates exist):
   op read "op://Private/362mxq2lw7s7jvly2lk6ozrb5e/PRIVATE_KEY" \\
     | age -d -i - -o backup.json <file>.json.age
-  # OR with paper key:
+
+  # 2b. Decrypt via paper key (same result — both methods verified identical output):
   echo "AGE-SECRET-KEY-..." | age -d -i - -o backup.json <file>.json.age
+
+  # 3. Browse:
+  cat backup.json | python3 -m json.tool | less
 
 Pre-requisites:
   - 1Password desktop app installed + CLI enabled
   - age: brew install age
-  - age keypair: private in op://Private/backup-age-key/PRIVATE_KEY + paper
+  - age keypair: private in op://Private/backup-age-key/PRIVATE_KEY (item 362mxq2l) + paper
   - Uptime Kuma push URL in op://homelab/config/1PASSWORD_BACKUP_PUSH_URL
   - Remote dir: ssh homelab "mkdir -p ~/backups/1password"
+
+Known duplicates / gotchas:
+  - backup-age-key had a duplicate item (archived 2026-04-02); always use item ID
+    362mxq2lw7s7jvly2lk6ozrb5e in recovery to avoid ambiguity
+  - age is not installed on homelab — do not attempt server-side decryption
 """
 
 import json, subprocess, sys, os, tempfile
