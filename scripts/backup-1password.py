@@ -15,8 +15,11 @@ How it works:
   4. Rsyncs encrypted file to homelab — unencrypted data never touches disk
   5. Pushes success to Uptime Kuma
 
-Recovery:
-  op read "op://Private/backup-age-key/PRIVATE_KEY" \\
+Recovery (run locally — age is not installed on homelab):
+  # Fetch from homelab first:
+  rsync -az homelab:~/backups/1password/<file>.json.age .
+  # Decrypt with key from 1Password (use item ID to avoid name ambiguity):
+  op read "op://Private/362mxq2lw7s7jvly2lk6ozrb5e/PRIVATE_KEY" \\
     | age -d -i - -o backup.json <file>.json.age
   # OR with paper key:
   echo "AGE-SECRET-KEY-..." | age -d -i - -o backup.json <file>.json.age
