@@ -138,14 +138,26 @@ TOKEN=$(op read "op://vault/item/field")
 ```
 The script's calling environment must have `OP_SERVICE_ACCOUNT_TOKEN` set.
 
-## Remote Server Operations
+## Remote Server Operations (SSH + OP_SERVICE_ACCOUNT_TOKEN)
 
-SSH commands don't source `.bashrc` (non-interactive shell). Always export the token inline:
+Non-interactive SSH (`ssh server "command"`) needs `OP_SERVICE_ACCOUNT_TOKEN` available. The token must be at the **top of `~/.bashrc`**, before the interactive guard:
 
 ```bash
-# Read SA token locally, use it remotely
-SA_TOKEN=$(op read "op://vault/service-account/TOKEN")
-ssh server "export OP_SERVICE_ACCOUNT_TOKEN='$SA_TOKEN' && cd ~/repo && op run --env-file=.env.tpl -- docker compose up -d"
+# MUST be ABOVE the "If not running interactively" guard in ~/.bashrc
+export OP_SERVICE_ACCOUNT_TOKEN="<token>"
+
+# If not running interactively, don't do anything
+case $- in
+    *i*) ;;
+      *) return;;
+esac
+```
+
+**Why:** Ubuntu's default `.bashrc` exits early for non-interactive shells. Anything below the guard is invisible to `ssh server "command"`. Additionally, homelab uses **Tailscale SSH** (not OpenSSH), which does NOT support `~/.ssh/environment` or `PermitUserEnvironment`.
+
+With the token at the top of `.bashrc`, SSH commands work directly:
+```bash
+ssh server "cd ~/repo && make up"
 ```
 
 For sudo operations (homelab requires password):
@@ -168,6 +180,8 @@ Query zones and tunnel IDs dynamically via the manage token — don't store zone
 | Symptom | Cause | Fix |
 |-|-|-|
 | `No accounts configured` | `OP_SERVICE_ACCOUNT_TOKEN` not in environment | Export it or source `.profile` |
+| Token empty in `ssh server "cmd"` | Token export below `.bashrc` interactive guard | Move export to top of `.bashrc`, before `case $-` |
+| `~/.ssh/environment` not working | Tailscale SSH ignores `PermitUserEnvironment` | Use `.bashrc` top-of-file approach instead |
 | `could not resolve secret reference` | Wrong vault/item/field name in `.env.tpl` | Check with `op item get <item> --vault <vault>` |
 | `authorization timeout` | Biometric prompt not answered (local op) | Retry — Touch ID prompt may be behind windows |
 | Caddy rejects `cfut_` token | Old caddy-dns/cloudflare plugin | Rebuild caddy: `docker compose build caddy` |
