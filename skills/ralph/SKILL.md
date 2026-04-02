@@ -446,6 +446,8 @@ run_group() {
   local exit_code=0
   if CLAUDE_CODE_ENABLE_TASKS=true CLAUDECODE="" gtimeout "$CLAUDE_TIMEOUT" claude \
     -p "$full_prompt" \
+    --model sonnet \
+    --effort high \
     --dangerously-skip-permissions \
     --output-format stream-json \
     --verbose \
@@ -456,10 +458,13 @@ run_group() {
     exit_code=$?
   fi
 
-  [[ $exit_code -eq 124 ]] && { log_error "Timed out after ${CLAUDE_TIMEOUT}s"; return 1; }
-
+  # Check completion signal BEFORE the timeout guard — Claude may have finished its
+  # work and emitted the signal, but the post-signal summary/notes/commit pushed the
+  # process past the timeout limit. In that case the group is done; don't treat it as failed.
   grep -q "RALPH_TASK_COMPLETE: Group $group_id" "$log_file" && return 0
   grep -q "RALPH_TASK_BLOCKED: Group $group_id" "$log_file" && return 2
+
+  [[ $exit_code -eq 124 ]] && { log_error "Timed out after ${CLAUDE_TIMEOUT}s"; return 1; }
 
   log_warn "Claude finished but no completion signal in log."
   return 1
@@ -658,6 +663,8 @@ Make both executable: `chmod +x scripts/ralph.sh scripts/ralph-reset.sh`
 ```bash
 gtimeout "$CLAUDE_TIMEOUT" claude \
   -p "$full_prompt" \
+  --model sonnet \                  # explicit — don't inherit interactive session model
+  --effort high \                   # explicit — don't inherit interactive session effort
   --dangerously-skip-permissions \  # lets Claude run tools without prompting
   --output-format stream-json \     # writes to log file in real-time (text format buffers)
   --verbose \                       # includes tool use in log output
@@ -666,6 +673,8 @@ gtimeout "$CLAUDE_TIMEOUT" claude \
 ```
 
 `CLAUDE_CODE_ENABLE_TASKS=true` + `CLAUDECODE=""` suppress interactive UI noise.
+
+**Model choice:** `--model` and `--effort` must be set explicitly. The `/model` and `/effort` commands in an interactive Claude Code session are session-level only — they are **not** inherited by spawned `claude -p` subprocesses. Without explicit flags, each group silently uses whatever the global default is. Sonnet + high effort is the right default for RALPH: good quality at materially lower cost and latency than Opus for 45-minute autonomous runs. Override per-group if needed (e.g. bump to `opus` for a particularly complex migration group).
 
 ### Completion signal detection
 
@@ -702,6 +711,8 @@ Shared context is read fresh each group run — it can be updated between runs.
 | > 3h | Split — Claude loses focus, errors accumulate |
 
 Each group should leave the repo in a **compilable, testable state**. Never have a group that deliberately breaks the build (except explicitly transient mid-group state).
+
+**Timeout risk:** The 45-minute `CLAUDE_TIMEOUT` is generous for most groups, but groups that combine heavy research + multiple integrations + validation can stretch close to the limit. A group that looks like "2h of work" on paper can push toward timeout when Claude spends significant time researching unfamiliar APIs before writing a line of code. If a group has more than ~5 major components *and* requires researching 3+ libraries from scratch, consider splitting it — not because 2h is too long conceptually, but because research time is unpredictable. The runner handles the timeout-after-completion edge case (emitting the signal before the clock runs out but not before cleanup finishes), so this is a soft concern, not a hard rule.
 
 ---
 
