@@ -30,15 +30,23 @@ Pre-requisites:
 """
 
 import json, subprocess, sys, os, tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 
 RECIPIENT = "age1eg6cypgrjv48urgvmxe9wua9d8a7x9e6jxt6w2phcfg46gxzpqdq9f3jke"  # public key — not a secret
 
-# Vaults to exclude from backup (e.g. very large personal vault — back up separately)
-SKIP_VAULTS: set[str] = {"Private"}
+# Archived items are excluded automatically (op item list omits them without --include-archive).
+# To exclude a vault entirely, add its name here.
+SKIP_VAULTS: set[str] = set()
+
+# Max parallel op item get calls — 1Password desktop app handles concurrency well
+WORKERS = 8
 
 def op_json(cmd: list[str]) -> ...:
     return json.loads(subprocess.check_output(["op"] + cmd))
+
+def fetch_item(item_id: str, vault_id: str) -> dict:
+    return op_json(["item", "get", item_id, "--vault", vault_id, "--format", "json"])
 
 def main():
     # Auth check — triggers biometric if 1Password desktop is unlocked
@@ -58,10 +66,21 @@ def main():
             print(f"  {vname}: skipped")
             continue
         items = op_json(["item", "list", "--vault", vid, "--format", "json"])
-        vault_items = []
-        for item in items:
-            detail = op_json(["item", "get", item["id"], "--vault", vid, "--format", "json"])
-            vault_items.append(detail)
+        if not items:
+            backup[vname] = []
+            print(f"  {vname}: 0 items")
+            continue
+
+        # Fetch all item details in parallel — archived items are absent from the list above
+        vault_items: list[dict] = [None] * len(items)
+        with ThreadPoolExecutor(max_workers=WORKERS) as executor:
+            future_to_idx = {
+                executor.submit(fetch_item, item["id"], vid): i
+                for i, item in enumerate(items)
+            }
+            for future in as_completed(future_to_idx):
+                vault_items[future_to_idx[future]] = future.result()
+
         backup[vname] = vault_items
         total += len(vault_items)
         print(f"  {vname}: {len(vault_items)} items")
