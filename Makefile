@@ -141,6 +141,9 @@ _setup-tools:
 	@# uv — Python runner (required by statusline.sh + fetch_usage.py)
 	@brew list uv &>/dev/null || brew install uv
 	@echo "    ✓ uv $$(uv --version)"
+	@# age — encryption for 1Password backup
+	@brew list age &>/dev/null || brew install age
+	@echo "    ✓ age $$(age --version)"
 	@# bun — JS runtime (cq alias, hooks)
 	@if command -v bun >/dev/null 2>&1; then \
 		echo "    · bun $$(bun --version) (ok)"; \
@@ -395,7 +398,7 @@ status:
 		$(MAKE) --no-print-directory _check DST="$(SOURCEROOT)/.claude/skills/$$name"; \
 	done
 	@echo "  Tools"
-	@for tool in jq gh fzf zoxide wtp fnm bun uv; do \
+	@for tool in jq gh fzf zoxide wtp fnm bun uv age; do \
 		command -v $$tool >/dev/null 2>&1 \
 			&& echo "    ✓ $$tool" \
 			|| echo "    ✗ $$tool [not installed — run make setup]"; \

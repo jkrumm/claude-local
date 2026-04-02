@@ -25,6 +25,9 @@ zed() { /opt/homebrew/bin/zed "${1:-.}" }                 # open dir (or cwd) in
 #   cq clear          empty the queue
 alias cq="bun ~/.claude/queue.ts"
 
+# 1Password backup
+alias opbackup="~/SourceRoot/claude-local/scripts/backup-1password.py"
+
 # IU (work)
 alias start-iu-fe="~/IuRoot/prometheus-scripts/bash/start-frontends.sh"
 alias sync-iu-db="~/IuRoot/prometheus-scripts/bash/sync-dev-db.sh"
