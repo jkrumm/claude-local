@@ -2,6 +2,7 @@
 name: code-quality
 description: Run validation (format, lint, tsc, test) via forked agent for token efficiency
 context: fork
+model: haiku
 agent: general-purpose
 ---
 

@@ -27,6 +27,7 @@ outward — edit at either end, git always sees the change here.
 | `scripts/queue.ts` | `~/.claude/queue.ts` | cq CLI |
 | `scripts/statusline.sh` | `~/.claude/statusline.sh` | 3-line statusline |
 | `scripts/fetch_usage.py` | `~/.claude/fetch_usage.py` | Claude.ai usage % fetcher (uv script) |
+| `rules/` | `~/.claude/rules/` (dir symlink) | Global rules (see `rules/*.md`, e.g., attribution, commit conventions, formatting, research-first, security, TypeScript, code style) |
 | `skills/{name}/` | `~/SourceRoot/.claude/skills/{name}/` | SourceRoot-only |
 
 **Not symlinked:** `~/.claude/settings.json` — machine-specific permissions.
@@ -39,19 +40,24 @@ Currently using **personal 1Password account** (biometric/session token). `make 
 
 `ANTHROPIC_API_KEY` is intentionally **not exported** — Claude Code falls back to the subscription when the key is absent. Exporting it would cause Claude Code to bill API credits instead.
 
+**API keys** cached in macOS Keychain by `make setup`:
+- `CLAUDE_SDK_API_KEY` + `CLAUDE_SDK_BASE_URL` — from `op://common/anthropic/API_KEY` and `BASE_URL`. Used for API offloading via `claude -p`.
+- `TAVILY_API_KEY` — from `op://common/tavily/API_KEY`. Used by `/research` skill for web search.
+
+**Chrome DevTools MCP** — registered globally with deferred tool loading (~400 tokens overhead). Used exclusively via `/browse` skill (haiku fork) to isolate expensive MCP responses from main context.
+
+**CodeRabbit CLI** — requires one-time auth: `coderabbit auth login` (GitHub OAuth). Free tier: 3 reviews/hour. Used by `/review` and `/ship` skills.
+
 **New machine setup:**
 1. Install 1Password + enable CLI integration (Settings → Developer → Enable CLI)
 2. `make setup` — will fail fast with instructions if 1Password isn't ready
 
-**Switching back to service account:**
-- Uncomment `OP_SERVICE_ACCOUNT_TOKEN` in `config/zsh/secrets.zsh`
-- Uncomment the service account block in `_setup-op-token` (Makefile)
-- Add token to Keychain: `security add-generic-password -a "$USER" -s op-service-account-token -w ops1_... -T /usr/bin/security`
-
-## Rules
+## Editing Rules
 
 **Adding a skill:** create `skills/{name}/SKILL.md` here, then `make setup`.
 Never create directly in `~/SourceRoot/.claude/skills/` — won't be in VCS.
+
+**Adding a global rule:** create `rules/{name}.md` here. The entire `rules/` dir is symlinked to `~/.claude/rules/`. Rules without `paths:` frontmatter load every session. Rules with `paths:` load lazily.
 
 **Skills scope:** loaded only in SourceRoot via `--plugin-dir ~/SourceRoot/.claude`
 in `c()`. Not available in IuRoot — intentional. IuRoot uses per-project `.claude/`.

@@ -1,6 +1,7 @@
 ---
 name: read-drawing
 description: Read and interpret Excalidraw diagrams (.excalidraw + .svg). Use when given a diagram file path to extract visual and semantic context for the current task.
+model: haiku
 ---
 
 # Excalidraw Diagram Reader

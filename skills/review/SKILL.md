@@ -1,241 +1,119 @@
 ---
 name: review
-description: Agnostic code review that reads project rules from CLAUDE.md and analyzes staged changes
+description: Multi-angle code review — CodeRabbit CLI, static analysis, architecture, KISS, race conditions, TS quality, test gaps, security
 context: fork
+model: haiku
 agent: Explore
 ---
 
-# Review Skill
+# Review — Comprehensive Code Review
 
-Automated code review that dynamically reads project rules from documentation and analyzes code changes for violations, issues, and improvement suggestions.
-
-**Style:** CodeRabbit-like review - categorized findings with file:line references and fix suggestions.
+Multi-angle review that catches issues locally before they reach PRs. Combines automated tools with semantic analysis.
 
 ## Usage
 
-```
-/review                    # Review staged changes
+```bash
+/review                    # Review staged/uncommitted changes
 /review HEAD~1             # Review last commit
 /review path/to/file.ts    # Review specific file
 ```
 
 ## Process
 
-### Step 1: Load Project Rules (Dynamic)
+### Step 1: Load Project Rules
+Read CLAUDE.md and any ARCHITECTURE.md for project-specific patterns, conventions, and constraints.
 
-**Read CLAUDE.md for:**
-- Coding Standards section
-- Core Patterns section
-- Error handling conventions
-- Type usage rules
-- Project-specific patterns
-
-**Optionally read architecture docs if exists (check both locations):**
-- `ARCHITECTURE.md` (project root)
-- `docs/architecture.md`
-
-**Extract from architecture docs:**
-- Architecture patterns
-- Layer responsibilities
-- Design decisions
-
-**Why read dynamically?** Rules live in project documentation. Reading them ensures the review uses current standards without hardcoding rules that could drift.
-
-### Step 2: Analyze Changes
-
-Get the changes to review:
-
+### Step 2: Get Changes
 ```bash
-# For staged changes (default)
+# Staged changes (default)
 git diff --cached
-
+# If nothing staged, check uncommitted
+git diff
 # For last commit
-git show HEAD --stat
 git show HEAD
-
-# For specific file
-cat <file>
 ```
 
-Identify:
-- Files modified
-- Types of changes (new code, modifications, deletions)
-- Affected modules/layers
+### Step 3: CodeRabbit CLI (if available)
+```bash
+# Check if cr is installed
+which coderabbit 2>/dev/null
 
-### Step 3: Check Against Loaded Rules
+# Run CodeRabbit on uncommitted changes
+coderabbit --prompt-only -t uncommitted 2>/dev/null
 
-**Review Categories (derived from CLAUDE.md, not hardcoded):**
+# Or on a specific target
+coderabbit --prompt-only -t HEAD~1 2>/dev/null
+```
+Parse the output for findings. CodeRabbit catches: style issues, potential bugs, security concerns, performance problems.
 
-| Category | What to Check |
-|----------|---------------|
-| `PATTERN_VIOLATION` | Project patterns not followed |
-| `TYPE_ISSUE` | TypeScript type problems |
-| `ERROR_HANDLING` | Missing or incorrect error handling |
-| `CODE_STYLE` | Style guide violations |
-| `SIMPLIFICATION` | Unnecessary complexity |
-| `PROBLEM` | Logic errors, bugs |
-| `SECURITY` | Potential vulnerabilities |
+### Step 4: Quick Static Analysis
+```bash
+# Dead code in changed files (if knip available)
+npx knip --reporter json 2>/dev/null | jq '.counters // empty'
 
-### Step 4: Output Report
+# Duplication check (if jscpd available)
+npx jscpd ./src --reporters json --output /tmp/jscpd-report 2>/dev/null
+```
 
-**Format:**
+### Step 5: Semantic Review
+
+Review from multiple angles — don't just check style:
+
+| Angle | What to Look For |
+|-|-|
+| **Architecture** | Does this fit the existing patterns? Layer violations? Coupling? |
+| **KISS** | Over-engineered? Premature abstraction? Could be simpler? |
+| **TypeScript Quality** | `any` usage, missing types, wrong generics, type safety gaps |
+| **Race Conditions** | Async issues, shared state, missing awaits, cleanup |
+| **Error Handling** | Unhandled promise rejections, swallowed errors, missing error paths |
+| **Security** | Injection, XSS, exposed secrets, auth bypass, OWASP top 10 |
+| **Performance** | Unnecessary re-renders, N+1 queries, missing memoization, large bundles |
+| **Test Gaps** | What tests should exist? Unit, integration, E2E? |
+| **Code Duplication** | Same logic in multiple places? Extract or consolidate? |
+| **Bugs** | Logic errors, off-by-one, null handling, edge cases |
+
+### Step 6: Test Gap Analysis
+
+For each changed file, assess:
+- Does it have tests? Should it?
+- What scenarios aren't covered?
+- Suggest specific test cases (name + what they verify)
+
+## Output Format
 
 ```markdown
-## Code Review Summary
+## Review: [scope]
 
-**Files reviewed:** {count}
-**Issues found:** {count by severity}
+**Files reviewed:** N
+**Issues:** N blocking, N warnings, N suggestions
 
----
+### Blocking
+- **[file:line]** CATEGORY — description. Fix: ...
 
-## Issues
+### Warnings
+- **[file:line]** CATEGORY — description. Fix: ...
 
-### ❌ PATTERN_VIOLATION
+### Suggestions
+- **[file:line]** CATEGORY — description.
 
-**{file_path}:{line}**
-```typescript
-{code snippet}
-```
+### Test Gaps
+- [file] — missing tests for: [scenarios]
+- Suggested test: `it("should [behavior]", ...)`
 
-**Issue:** {description of the violation}
-**Rule:** {quote from CLAUDE.md}
-**Fix:** {suggested correction}
-
----
-
-### ⚠️ TYPE_ISSUE
-
-**{file_path}:{line}**
-```typescript
-{code snippet}
-```
-
-**Issue:** {description}
-**Fix:** {suggested correction}
-
----
-
-## Suggestions (Non-blocking)
-
-### 💡 SIMPLIFICATION
-
-**{file_path}:{line}**
-{suggestion for cleaner code}
-
----
-
-## Summary
-
-{1-2 sentence overall assessment}
+### Summary
+[1-2 sentence assessment]
 ```
 
 ## Severity Levels
 
-- ❌ **Error** - Must fix before merge (pattern violations, security issues, bugs)
-- ⚠️ **Warning** - Should fix (code standards violations)
-- 💡 **Suggestion** - Nice to have (simplifications, optimizations)
-
-## Common Patterns to Check
-
-### General (All Projects)
-- TypeScript strict mode compliance
-- Proper error handling
-- No `any` types without justification
-- Consistent naming conventions
-- Early returns over deep nesting
-
-### React/Next.js Projects
-- Hook rules compliance
-- Component naming (PascalCase)
-- Proper key props in lists
-- Effect cleanup
-
-### Node.js/Backend Projects
-- Async/await error handling
-- Input validation
-- Proper typing for API contracts
-
-## Example Output
-
-```markdown
-## Code Review Summary
-
-**Files reviewed:** 3
-**Issues found:** 2 errors, 1 warning, 2 suggestions
-
----
-
-## Issues
-
-### ❌ TYPE_ISSUE
-
-**src/utils/parser.ts:45**
-```typescript
-const result: any = parseData(input);
-```
-
-**Issue:** Using `any` type without justification
-**Rule:** "No `any` unless explicitly justified with comment" - CLAUDE.md
-**Fix:**
-```typescript
-interface ParseResult {
-  data: string;
-  valid: boolean;
-}
-const result: ParseResult = parseData(input);
-```
-
----
-
-### ⚠️ CODE_STYLE
-
-**src/components/Button.tsx:23**
-```typescript
-if (condition) {
-  if (otherCondition) {
-    if (thirdCondition) {
-      doSomething();
-    }
-  }
-}
-```
-
-**Issue:** Deep nesting (3 levels)
-**Rule:** "Low nesting: early returns, guard clauses" - CLAUDE.md
-**Fix:** Use early returns to flatten the logic
-
----
-
-## Suggestions
-
-### 💡 SIMPLIFICATION
-
-**src/api/client.ts:89-95**
-The conditional chain could be simplified using a lookup object.
-
----
-
-## Summary
-
-2 issues require attention: an `any` type usage and deep nesting.
-Code quality is generally good with clear naming and structure.
-```
-
-## When to Use
-
-- Before committing changes
-- During PR self-review
-- When refactoring unfamiliar code
-- After receiving PR feedback (verify fixes)
+- **Blocking** — Must fix: bugs, security, race conditions, type errors
+- **Warning** — Should fix: KISS violations, missing error handling, style
+- **Suggestion** — Nice to have: simplifications, test ideas, refactoring
 
 ## Integration
 
-This skill complements `/code-quality`:
-- `/code-quality` - Runs automated tools (lint, tsc, test)
-- `/review` - Semantic code review against project patterns
-
-Use both before creating a PR:
-1. `/review` - Check patterns and conventions
-2. `/code-quality` - Run automated validation
-3. `/commit` - Commit with conventional message
-4. `/pr create` - Create PR
+Use before committing:
+1. `/review` — Semantic review + CodeRabbit CLI
+2. `/check` — Automated validation (format, lint, tsc, test)
+3. `/commit` — Commit with conventional message
+4. Or just `/ship` — runs all of the above automatically
