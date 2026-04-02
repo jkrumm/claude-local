@@ -37,7 +37,7 @@ RECIPIENT = "age1eg6cypgrjv48urgvmxe9wua9d8a7x9e6jxt6w2phcfg46gxzpqdq9f3jke"  # 
 
 # Archived items are excluded automatically (op item list omits them without --include-archive).
 # To exclude a vault entirely, add its name here.
-SKIP_VAULTS: set[str] = set()
+SKIP_VAULTS: set[str] = {"Shared"}
 
 # Max parallel op item get calls — 1Password desktop app handles concurrency well
 WORKERS = 8
