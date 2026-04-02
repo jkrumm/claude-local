@@ -877,6 +877,8 @@ function handleSessionStartEvent(
   saveState(state);
 
   // No notification for session start (silent tracking)
+  // Date injection: Claude Code already injects # currentDate automatically.
+  // Research reminder: handled by ~/.claude/rules/research-first.md (always loaded).
   return null;
 }
 

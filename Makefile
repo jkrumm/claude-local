@@ -23,11 +23,13 @@ setup:
 	@$(MAKE) --no-print-directory _setup-gitignore
 	@$(MAKE) --no-print-directory _setup-ghostty
 	@$(MAKE) --no-print-directory _setup-tools
-	@$(MAKE) --no-print-directory _setup-browser
 	@$(MAKE) --no-print-directory _setup-localias
+	@$(MAKE) --no-print-directory _setup-browser
 	@$(MAKE) --no-print-directory _setup-pnpm
 	@$(MAKE) --no-print-directory _setup-viteplus
 	@$(MAKE) --no-print-directory _setup-op-token
+	@$(MAKE) --no-print-directory _setup-sdk-keys
+	@$(MAKE) --no-print-directory _setup-rules
 	@echo ""
 	@echo "  Done. Reload your shell: source ~/.zshrc"
 	@echo ""
@@ -144,6 +146,13 @@ _setup-tools:
 	@# age — encryption for 1Password backup
 	@brew list age &>/dev/null || brew install age
 	@echo "    ✓ age $$(age --version)"
+	@# coderabbit — local code review CLI (used by /review and /ship skills)
+	@if command -v coderabbit >/dev/null 2>&1; then \
+		echo "    · coderabbit $$(coderabbit --version 2>/dev/null || echo ok)"; \
+	else \
+		brew install coderabbit 2>/dev/null || curl -fsSL https://cli.coderabbit.ai/install.sh | sh; \
+		echo "    ✓ coderabbit installed (run: coderabbit auth login)"; \
+	fi
 	@# bun — JS runtime (cq alias, hooks)
 	@if command -v bun >/dev/null 2>&1; then \
 		echo "    · bun $$(bun --version) (ok)"; \
@@ -218,6 +227,50 @@ _setup-op-token:
 	@# TOKEN=$$(security find-generic-password -a "$$USER" -s "op-service-account-token" -w 2>/dev/null); \
 	@# KEY=$$(OP_SERVICE_ACCOUNT_TOKEN="$$TOKEN" op read "op://CLI/Anthropic/credential" 2>/dev/null); \
 	@# security add-generic-password -U -a "$$USER" -s "anthropic-api-key" -w "$$KEY" -T /usr/bin/security
+
+.PHONY: _setup-sdk-keys
+_setup-sdk-keys:
+	@echo "  API keys (1Password → Keychain cache)..."
+	@if security find-generic-password -s claude-sdk-api-key -w >/dev/null 2>&1; then \
+		echo "    · CLAUDE_SDK_API_KEY (ok)"; \
+	else \
+		KEY=$$(op read "op://common/anthropic/API_KEY" 2>/dev/null || echo ""); \
+		if [ -n "$$KEY" ]; then \
+			security add-generic-password -a "$$USER" -s claude-sdk-api-key -w "$$KEY" -T /usr/bin/security; \
+			echo "    ✓ CLAUDE_SDK_API_KEY cached in Keychain"; \
+		else \
+			echo "    ✗ Could not read op://common/anthropic/API_KEY — skipping"; \
+		fi; \
+	fi
+	@if security find-generic-password -s claude-sdk-base-url -w >/dev/null 2>&1; then \
+		echo "    · CLAUDE_SDK_BASE_URL (ok)"; \
+	else \
+		URL=$$(op read "op://common/anthropic/BASE_URL" 2>/dev/null || echo ""); \
+		if [ -n "$$URL" ]; then \
+			security add-generic-password -a "$$USER" -s claude-sdk-base-url -w "$$URL" -T /usr/bin/security; \
+			echo "    ✓ CLAUDE_SDK_BASE_URL cached in Keychain"; \
+		else \
+			echo "    ✗ Could not read op://common/anthropic/BASE_URL — skipping"; \
+		fi; \
+	fi
+	@if security find-generic-password -s tavily-api-key -w >/dev/null 2>&1; then \
+		echo "    · TAVILY_API_KEY (ok)"; \
+	else \
+		KEY=$$(op read "op://common/tavily/API_KEY" 2>/dev/null || echo ""); \
+		if [ -n "$$KEY" ]; then \
+			security add-generic-password -a "$$USER" -s tavily-api-key -w "$$KEY" -T /usr/bin/security; \
+			echo "    ✓ TAVILY_API_KEY cached in Keychain"; \
+		else \
+			echo "    ✗ Could not read op://common/tavily/API_KEY — skipping"; \
+		fi; \
+	fi
+
+.PHONY: _setup-rules
+_setup-rules:
+	@echo "  Rules (global → ~/.claude/rules/)..."
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(CLAUDE_LOCAL)/rules" \
+		DST="$(CLAUDE_DIR)/rules"
 
 .PHONY: _setup-hooks
 _setup-hooks:
@@ -302,20 +355,10 @@ _setup-ghostty:
 
 .PHONY: _setup-browser
 _setup-browser:
-	@echo "  Browser debugging..."
-	@# chrome-devtools MCP — always re-register to ensure flags are up to date
-	@# Flags: --headless (no window), --isolated (throwaway profile per session), --usageStatistics=false (privacy)
+	@echo "  Chrome DevTools MCP (deferred loading — ~400 tokens overhead)..."
 	@claude mcp remove chrome-devtools --scope user 2>/dev/null || true
 	@claude mcp add chrome-devtools --scope user -- npx -y chrome-devtools-mcp@latest --isolated --headless --usageStatistics=false
-	@echo "    ✓ chrome-devtools MCP registered"
-	@# Permission — patch into live settings if missing (fresh machines preserve template on first run)
-	@if jq -e '.permissions.allow | contains(["mcp__chrome-devtools__*"])' "$(CLAUDE_DIR)/settings.json" > /dev/null 2>&1; then \
-		echo "    · mcp__chrome-devtools__* permission (ok)"; \
-	else \
-		jq '.permissions.allow += ["mcp__chrome-devtools__*"]' "$(CLAUDE_DIR)/settings.json" > /tmp/claude-browser-perm.json \
-		&& mv /tmp/claude-browser-perm.json "$(CLAUDE_DIR)/settings.json"; \
-		echo "    ✓ mcp__chrome-devtools__* permission added"; \
-	fi
+	@echo "    ✓ chrome-devtools MCP registered (use via /browse skill only)"
 
 .PHONY: _link
 _link:
@@ -368,7 +411,19 @@ status:
 	else \
 		echo "    ✗ op session [expired — run make setup to re-authenticate]"; \
 	fi
-	@echo "    · ANTHROPIC_API_KEY not cached (Claude Code uses subscription)"
+	@echo "    · ANTHROPIC_API_KEY not exported (Claude Code uses subscription)"
+	@echo "  Agent SDK Keys"
+	@security find-generic-password -s claude-sdk-api-key -w >/dev/null 2>&1 \
+		&& echo "    ✓ CLAUDE_SDK_API_KEY (Keychain)" \
+		|| echo "    ✗ CLAUDE_SDK_API_KEY [not cached — run make setup]"
+	@security find-generic-password -s claude-sdk-base-url -w >/dev/null 2>&1 \
+		&& echo "    ✓ CLAUDE_SDK_BASE_URL (Keychain)" \
+		|| echo "    ✗ CLAUDE_SDK_BASE_URL [not cached — run make setup]"
+	@security find-generic-password -s tavily-api-key -w >/dev/null 2>&1 \
+		&& echo "    ✓ TAVILY_API_KEY (Keychain)" \
+		|| echo "    ✗ TAVILY_API_KEY [not cached — run make setup]"
+	@echo "  Rules"
+	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/rules"
 	@echo "  Settings"
 	@if [ -f "$(CLAUDE_DIR)/settings.json" ]; then \
 		echo "    ✓ settings.json (hooks + statusline wired)"; \
@@ -394,7 +449,7 @@ status:
 		$(MAKE) --no-print-directory _check DST="$(SOURCEROOT)/.claude/skills/$$name"; \
 	done
 	@echo "  Tools"
-	@for tool in jq gh fzf zoxide wtp fnm bun uv age; do \
+	@for tool in jq gh fzf zoxide wtp fnm bun uv age coderabbit; do \
 		command -v $$tool >/dev/null 2>&1 \
 			&& echo "    ✓ $$tool" \
 			|| echo "    ✗ $$tool [not installed — run make setup]"; \
@@ -419,14 +474,9 @@ status:
 	fi
 	@echo "  Browser debugging"
 	@if claude mcp list 2>/dev/null | grep -q "chrome-devtools"; then \
-		echo "    ✓ chrome-devtools MCP"; \
+		echo "    ✓ chrome-devtools MCP (deferred loading)"; \
 	else \
-		echo "    ✗ chrome-devtools MCP [missing — run make setup]"; \
-	fi
-	@if jq -e '.permissions.allow | contains(["mcp__chrome-devtools__*"])' "$(CLAUDE_DIR)/settings.json" > /dev/null 2>&1; then \
-		echo "    ✓ mcp__chrome-devtools__* permission"; \
-	else \
-		echo "    ✗ mcp__chrome-devtools__* permission [missing]"; \
+		echo "    ✗ chrome-devtools MCP [not registered — run make setup]"; \
 	fi
 	@echo ""
 

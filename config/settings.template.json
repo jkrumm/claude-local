@@ -31,9 +31,7 @@
       "Bash(which *)",
       "Bash(docker ps *)",
       "Bash(docker logs *)",
-      "WebSearch",
-      "mcp__tavily__*",
-      "mcp__context7__*"
+      "WebSearch"
     ],
     "deny": [],
     "defaultMode": "default"
@@ -43,7 +41,7 @@
       {
         "matcher": "Bash",
         "hooks": [{ "type": "command", "command": "~/.claude/hooks/protect-branches.ts" }]
-      },
+      }
     ],
     "SessionStart": [
       {
@@ -84,5 +82,5 @@
     "typescript-lsp@claude-plugins-official": true
   },
 
-  "_NOTE": "This is a template. The real ~/.claude/settings.json is NOT version-controlled — it contains machine-specific permission lists. Copy this to ~/.claude/settings.json on a new machine and extend the allow list as needed. frontend-design and skill-creator are now VCS'd custom skills (skills/global/) — do NOT re-enable them as plugins."
+  "_NOTE": "Template — real ~/.claude/settings.json is NOT version-controlled. make setup creates from template or jq-merges (preserving permissions + model/effort). All skills are VCS'd in claude-local/skills/ and symlinked to ~/SourceRoot/.claude/skills/."
 }

@@ -312,6 +312,17 @@ gh pr view $pr_number --json state,mergeable,mergeStateStatus,reviewDecision,bod
 gh pr checks $pr_number
 
 # MANDATORY: Load ALL CodeRabbit comments — run all three calls (see section above)
+
+# Load ALL user (non-bot) PR comments — always, same as CodeRabbit
+gh api --paginate "repos/$owner/$repo/issues/$pr_number/comments" \
+  --jq '[.[] | select(.user.type != "Bot")] | map({user: .user.login, id, created_at, body})'
+
+gh api --paginate "repos/$owner/$repo/pulls/$pr_number/comments" \
+  --jq '[.[] | select(.user.type != "Bot")] | map({user: .user.login, id, path, line, diff_hunk, body})'
+
+# Include top-level human PR reviews (state + review body)
+gh api --paginate "repos/$owner/$repo/pulls/$pr_number/reviews" \
+  --jq '[.[] | select(.user.type != "Bot")] | map({user: .user.login, id, state, submitted_at, body})'
 ```
 
 ### Pre-check: Local State
@@ -344,6 +355,12 @@ Run `/code-quality` and push first? [y/N]
 
 ### CodeRabbit
 [Parsed output per "CodeRabbit Comment Parsing" section]
+
+### PR Discussion Comments (by user)
+[Top-level issue comments (no file path). Include: user, created_at, body. Present every comment.]
+
+### Inline File Comments (by user)
+[All non-bot inline comments grouped by `path`. Include: user, file path, line, body. Present every comment — do not skip.]
 
 ### Actions Available
 - Fix blocking issues (see below)
