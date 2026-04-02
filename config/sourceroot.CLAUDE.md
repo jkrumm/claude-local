@@ -10,6 +10,33 @@
 
 ---
 
+## Infrastructure
+
+### Servers
+
+| Server | SSH | Repos | Secrets Vault |
+|-|-|-|-|
+| HomeLab | `ssh homelab` | `~/homelab`, `~/homelab-private` | `homelab` + `common` |
+| VPS | `ssh vps` | `~/vps` | `vps` + `common` |
+
+SSH config is in `~/.ssh/config` — key auth via Tailscale IPs. Root passwords stored in 1Password (`homelab/server/ROOT_PASSWORD`, `vps/server/ROOT_PASSWORD`). Use `echo '<pw>' | sudo -S <cmd>` for remote privileged operations.
+
+### Repos
+
+| Repo | Location | Purpose |
+|-|-|-|
+| `homelab` | `~/SourceRoot/homelab` | Main homelab stack — 25+ containers (Caddy, Immich, ntfy, Uptime Kuma, etc.) |
+| `homelab-private` | `~/SourceRoot/homelab-private` | Additional private homelab services — shares homelab's `.env.tpl` |
+| `vps` | `~/SourceRoot/vps` | VPS stack — 3 compose files (networking, infra, monitoring) |
+
+### Secrets (1Password)
+
+All secrets managed via 1Password with `op run --env-file=.env.tpl -- <command>` pattern. Each repo has a `.env.tpl` committed to git containing only `op://` references — never actual values.
+
+Use `/secrets` skill for vault structure, operational patterns, adding/rotating secrets, and cron/watchdog setup.
+
+---
+
 ## BasaltUI Integration
 
 **Repository:** https://github.com/jkrumm/basalt-ui
@@ -99,6 +126,7 @@ All available skills in this project:
 | `/react` | React performance best practices (Vercel) | **fork** | Writing/reviewing React components |
 | `/web-design` | Web Interface Guidelines (Vercel) | **fork** | UI/UX review, accessibility audit |
 
+| `/secrets` | 1Password secrets management — vault ops, .env.tpl patterns, rotation | **fork** | Adding/rotating secrets, debugging op run issues |
 | `/excalidraw-diagram` | Create Excalidraw diagrams that argue visually | main | Visualizing workflows, architectures, concepts |
 | `/read-drawing` | Read and interpret Excalidraw diagrams for context | main | When given a .excalidraw or .svg path to understand its content |
 | `/pencil-design` | Pencil MCP design workflow with basalt-ui tokens | main | Creating/editing .pen design files |
