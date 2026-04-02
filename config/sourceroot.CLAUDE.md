@@ -19,7 +19,14 @@
 | HomeLab | `ssh homelab` | `~/homelab`, `~/homelab-private` | `homelab` + `common` |
 | VPS | `ssh vps` | `~/vps` | `vps` + `common` |
 
-SSH config is in `~/.ssh/config` — key auth via Tailscale IPs. Root passwords in `Private` vault (`homelab-server`, `vps-server`) — not accessible to server SAs, only from local 1Password. Use `echo '<pw>' | sudo -S <cmd>` for remote privileged operations.
+SSH config is in `~/.ssh/config` — key auth via Tailscale IPs. For sudo on servers:
+
+```bash
+# Homelab (requires password for sudo)
+ROOT_PW=$(op read "op://Private/homelab-server/password") && ssh homelab "echo '$ROOT_PW' | sudo -S <cmd>"
+# VPS (has NOPASSWD sudo — root pw rarely needed)
+ROOT_PW=$(op read "op://Private/vps-server/password") && ssh vps "echo '$ROOT_PW' | sudo -S <cmd>"
+```
 
 ### Repos
 
