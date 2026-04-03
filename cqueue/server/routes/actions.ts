@@ -102,7 +102,7 @@ export const actionsRoutes = new Elysia({ prefix: "/api/actions" })
     },
     {
       body: t.Object({
-        skill: t.String(),        // e.g. "/code-quality" or "/pr create"
+        skill: t.String(),        // e.g. "/check" or "/pr create"
         worktreePath: t.String(), // display path e.g. "/SourceRoot/cbbi-blueprint"
       }),
     },

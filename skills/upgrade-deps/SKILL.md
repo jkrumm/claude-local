@@ -16,14 +16,14 @@ Analyze, validate, upgrade npm/bun dependencies, run validation, and commit chan
 | Skill | Use For | Context |
 |-------|---------|---------|
 | **`/research`** | Major version research, breaking changes, migration guides | fork |
-| **`/code-quality`** | Post-upgrade validation (format, lint, tsc, build) | fork |
+| **`/check`** | Post-upgrade validation (format, lint, tsc, build) | subprocess |
 
 ### Delegation Rules
 
 **ALWAYS delegate:**
 - Major version research → `/research` skill
 - OpenSpec migration research (major/minor changes) → `/research` skill
-- Post-upgrade validation → `/code-quality` skill
+- Post-upgrade validation → `/check` skill
 
 **Keep in main thread:**
 - Git operations (status, add, commit)
@@ -35,7 +35,7 @@ Analyze, validate, upgrade npm/bun dependencies, run validation, and commit chan
 ### Token Savings
 
 - Research responses: ~80% savings via `/research` skill
-- Validation output: ~70% savings via `/code-quality` skill
+- Validation output: ~70% savings via `/check` skill
 
 ---
 
@@ -263,12 +263,12 @@ npx npm-check-updates -u <package1> <package2> [--packageManager bun] && [npm|bu
 
 ---
 
-## Phase 5: Validation → `/code-quality` Skill
+## Phase 5: Validation → `/check` Skill
 
-**⚠️ ALWAYS use /code-quality skill for validation.**
+**⚠️ ALWAYS use /check skill for validation.**
 
 ```
-/code-quality
+/check
 ```
 
 The skill will:
@@ -359,7 +359,7 @@ Peer deps: react-dom must also upgrade
 # Safe (patch+minor):
 npx npm-check-updates --target minor -u --deep --packageManager bun && bun install
 
-✅ Validation Results (via /code-quality skill)
+✅ Validation Results (via /check skill)
 -----------------------------------------------
 format:check: ✅
 lint: ✅
@@ -384,5 +384,5 @@ git commit -m "chore: upgrade dependencies"
 | Phase 2 | Check outdated | Main thread |
 | Phase 3 | Research majors | `/research` |
 | Phase 4 | Execute upgrades | Main thread |
-| Phase 5 | Validation | `/code-quality` |
+| Phase 5 | Validation | `/check` |
 | Phase 6 | Commit | Main thread |

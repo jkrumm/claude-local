@@ -19,7 +19,7 @@ interface Props {
 type JobStatus = "running" | "pass" | "fail";
 
 const SKILL_LABELS: Record<string, string> = {
-  "/code-quality": "Validate",
+  "/check": "Validate",
   "/review": "Review",
   "/git-cleanup": "Git Cleanup",
   "/pr create": "Create PR",

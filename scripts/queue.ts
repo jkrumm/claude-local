@@ -336,7 +336,7 @@ function printHelp(): void {
     ${fmt.warn("help")}           Show this help
 
   ${fmt.label("TASK KINDS")}
-    ${fmt.slash("⚡ /command")}    Injected as slash command ${fmt.detail("(e.g. /commit, /code-quality)")}
+    ${fmt.slash("⚡ /command")}    Injected as slash command ${fmt.detail("(e.g. /commit, /check)")}
     ${fmt.preview("◆ regular")}     Plain instruction injected as user message
     ${fmt.warn("🔄 /clear")}      Ends session, restarts with fresh context
     ${fmt.stop("⏹ STOP")}        Stops queue — session ends

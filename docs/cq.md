@@ -32,7 +32,7 @@ Implement unit tests for the auth validators.
 Focus on edge cases for token expiry.
 Relevant: src/auth/validators.ts
 ---
-/code-quality
+/check
 ---
 STOP
 ---

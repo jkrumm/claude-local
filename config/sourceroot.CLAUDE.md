@@ -71,22 +71,22 @@ optimizeDeps: { exclude: ['basalt-ui'] }
 | Skill | Purpose | Context | Model |
 |-|-|-|-|
 | `/commit [options]` | Smart conventional commits | main | haiku |
-| `/check` | Format, lint, typecheck, test | **fork** | haiku |
-| `/review` | Multi-angle code review + CodeRabbit CLI | **fork** | haiku |
-| `/research <query>` | Deep technical research (Context7 CLI + Tavily API) | **fork** | haiku |
+| `/check` | Format, lint, typecheck, test | **subprocess** | haiku |
+| `/review` | Multi-angle code review + CodeRabbit CLI | **subprocess** | haiku |
+| `/research <query>` | Deep technical research (WebSearch + WebFetch) | **subprocess** | haiku |
 | `/grill` | Question until clear direction, generate PRD | main | (inherits) |
 | `/implement` | Guided implementation with research + explore + check | main | sonnet subagent |
 | `/ship` | Full flow: check → review → commit → PR → CodeRabbit → merge → release | main | haiku |
 | `/browse` | Chrome DevTools debugging via subagent | **fork** | haiku |
-| `/analyze` | Deep static analysis (knip, jscpd, dependency-cruiser) | **fork** | haiku |
+| `/analyze` | Deep static analysis (knip, jscpd, dependency-cruiser) | **subprocess** | haiku |
 | `/git-cleanup` | Squash and group noisy branch commits | main | haiku |
 | `/pr [action]` | GitHub PR workflow (create, status, merge) | main | haiku |
 | `/ralph [cmd]` | Autonomous multi-group implementation loop | main | sonnet |
-| `/otel [env] [intent]` | Debug OTEL traces/logs/metrics in ClickHouse | **fork** | haiku |
-| `/secrets` | 1Password vault ops, .env.tpl patterns | **fork** | haiku |
+| `/otel [env] [intent]` | Debug OTEL traces/logs/metrics in ClickHouse | **subprocess** | haiku |
+| `/secrets` | 1Password vault ops, .env.tpl patterns | main | haiku |
 | `/upgrade-deps` | Dependency upgrade assistant | main | (inherits) |
 | `/excalidraw-diagram` | Create Excalidraw diagrams | main | haiku |
-| `/read-drawing` | Interpret Excalidraw diagrams | main | haiku |
+| `/read-drawing` | Interpret Excalidraw diagrams | **subprocess** | haiku |
 | `/frontend-design` | Production-grade frontend interfaces | main | (inherits) |
 | `/skill-creator` | Create, modify, and test skills | main | (inherits) |
 

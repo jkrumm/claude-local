@@ -35,7 +35,7 @@ Config files live here and are symlinked outward — `~/.zshrc`, `~/.gitconfig`,
 |-|-|-|
 | Opus | Strategy, planning, PRD, architecture | `/grill`, main conversation |
 | Sonnet | Implementation, complex code changes | `/ralph`, `/implement` |
-| Haiku | All delegated work (read-only, validation, review) | `/check`, `/review`, `/research`, `/browse`, `/analyze`, `/commit`, `/pr`, `/ship`, `/otel`, `/secrets`, `/git-cleanup`, `/excalidraw-diagram`, `/read-drawing` |
+| Haiku | All delegated work — subprocess or fork | `/check`, `/review`, `/research`, `/analyze`, `/otel`, `/read-drawing` (subprocess) + `/browse` (fork) + `/commit`, `/pr`, `/ship`, `/secrets`, `/git-cleanup` (main) |
 
 ### Workflow
 
@@ -104,19 +104,18 @@ coderabbit auth login   # one-time CodeRabbit CLI auth (GitHub OAuth)
 | `/commit` | haiku | main | Smart conventional commits |
 | `/pr` | haiku | main | GitHub PR workflow (create, status, merge) |
 | `/git-cleanup` | haiku | main | Squash and group noisy branch commits |
-| `/check` | haiku | fork | Validation: format, lint, typecheck, test |
-| `/review` | haiku | fork | Multi-angle code review + CodeRabbit CLI |
-| `/research` | haiku | fork | Context7 CLI + Tavily API + WebFetch |
+| `/check` | haiku | subprocess | Validation: format, lint, typecheck, test |
+| `/review` | haiku | subprocess | Multi-angle code review + CodeRabbit CLI |
+| `/research` | haiku | subprocess | WebSearch + WebFetch |
 | `/browse` | haiku | fork | Chrome DevTools debugging (isolated MCP) |
-| `/analyze` | haiku | fork | Deep static analysis (knip, jscpd, dep-cruiser) |
-| `/otel` | haiku | fork | Debug OTEL traces/logs in ClickHouse |
+| `/analyze` | haiku | subprocess | Deep static analysis (knip, jscpd, dep-cruiser) |
+| `/otel` | haiku | subprocess | Debug OTEL traces/logs in ClickHouse |
 | `/secrets` | haiku | main | 1Password vault ops |
 | `/upgrade-deps` | inherits | main | Dependency upgrade assistant |
 | `/frontend-design` | inherits | main | Production-grade frontend interfaces |
 | `/excalidraw-diagram` | haiku | main | Create Excalidraw diagrams |
-| `/read-drawing` | haiku | main | Interpret Excalidraw diagrams |
+| `/read-drawing` | haiku | subprocess | Interpret Excalidraw diagrams |
 | `/skill-creator` | inherits | main | Create, modify, and test skills |
-| `/code-quality` | haiku | fork | Legacy alias for /check |
 
 ## API Keys (Keychain-cached)
 

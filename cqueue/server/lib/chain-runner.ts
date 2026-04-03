@@ -18,7 +18,7 @@ export type JobStatus = "pending" | "running" | "pass" | "fail";
 
 export interface ChainJob {
   id: string;
-  skill: string;        // e.g. "/code-quality" or "/pr create"
+  skill: string;        // e.g. "/check" or "/pr create"
   worktreePath: string; // host path of target worktree
   status: JobStatus;
   output: string[];     // accumulated stdout lines

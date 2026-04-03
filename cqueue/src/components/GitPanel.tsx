@@ -673,7 +673,7 @@ function ActionsSection({
           intent={Intent.SUCCESS}
           tooltip="Run format, lint, typecheck, and tests"
           disabled={busy}
-          onClick={() => { void runChain("/code-quality"); }}
+          onClick={() => { void runChain("/check"); }}
         />
 
         <ActionButton

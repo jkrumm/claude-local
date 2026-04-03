@@ -1,46 +1,54 @@
 ---
 name: check
-description: Run validation (format, lint, tsc, test) via forked haiku agent for token efficiency. Replaces /code-quality.
-context: fork
+description: Run validation (format, lint, tsc, test) via claude -p subprocess. Replaces /code-quality.
 model: haiku
-agent: general-purpose
 ---
 
 # Check — Lightweight Validation
 
-Run project validation commands and report results. This is the lightweight counterpart to `/analyze`.
+Runs project validation in a `claude -p` subprocess. Only the pass/fail report returns to main context.
 
-## Process
+## IMPORTANT — Subprocess Only
 
-1. **Discover commands** — Read `package.json` scripts. Look for:
-   - `pre` or `validate` (combined format + lint + tsc)
-   - `format` or `format:check`
-   - `lint`
-   - `typecheck` or `tsc` or `check:types`
-   - `test` or `test:unit`
+Always run via `claude -p`. Never execute inline. Never use the Agent tool.
+If the API key lookup fails, report the error — do not fall back to inline execution.
 
-2. **Run in order** — Format → Lint → Typecheck → Test. Stop on first failure category and report.
+## Execution
 
-3. **Report results** — Concise summary of what passed and what failed.
+```bash
+ANTHROPIC_API_KEY=$(security find-generic-password -s claude-sdk-api-key -w) \
+ANTHROPIC_BASE_URL=$(security find-generic-password -s claude-sdk-base-url -w) \
+  claude -p --model claude-haiku-4-5-20251001 --dangerously-skip-permissions "$(cat <<'EOF'
+Run project validation in the current directory.
 
-## Output Format
+Step 1 — Discover commands: Read package.json scripts. Look for:
+- Combined: pre, validate, check, ci
+- Format: format, format:check, fmt, biome:format
+- Lint: lint, eslint, biome:lint
+- Typecheck: typecheck, tsc, check:types, type-check
+- Test: test, test:unit, vitest, jest
 
-```
+Prefer combined scripts over individual ones.
+
+Step 2 — Run in order: Format → Lint → Typecheck → Test.
+Stop on first failure category and report. Only run tests if format + lint + typecheck pass.
+
+Step 3 — Report results.
+
+Output format (under 1500 chars):
+
 ## Check Results
 
-✓ Format (biome check)
-✓ Lint (eslint)
-✗ Typecheck — 3 errors:
-  - src/foo.ts:42 — Type 'string' is not assignable to type 'number'
-  - src/bar.ts:15 — Property 'x' does not exist on type 'Y'
-  - src/baz.ts:8 — Cannot find module './missing'
+✓/✗ Format ([command used])
+✓/✗ Lint ([command used])
+✓/✗ Typecheck — N errors:
+  - src/file.ts:42 — error message verbatim
 ⊘ Test (skipped — typecheck failed)
-```
 
-Keep response under 1500 characters. Show errors verbatim — the main agent needs exact locations to fix them.
-
-## Rules
-
-- Never fix code — only report. The main agent decides what to fix.
-- Only run tests if format + lint + typecheck pass.
+Rules:
+- Never fix code — only report.
+- Show errors verbatim with exact file:line locations.
 - If no validation scripts found, report that and suggest what to add.
+EOF
+)"
+```

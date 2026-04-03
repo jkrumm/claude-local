@@ -1,87 +1,70 @@
 ---
 name: review
-description: Multi-angle code review — CodeRabbit CLI, static analysis, architecture, KISS, race conditions, TS quality, test gaps, security
-context: fork
+description: Multi-angle code review via claude -p subprocess — fresh unbiased context, CodeRabbit CLI, architecture, KISS, security
 model: haiku
-agent: Explore
 ---
 
 # Review — Comprehensive Code Review
 
-Multi-angle review that catches issues locally before they reach PRs. Combines automated tools with semantic analysis.
+Launches a `claude -p` subprocess with fresh context — no bias from the current conversation.
+Multi-angle review: automated tools + semantic analysis. Only the findings report returns to main context.
+
+## IMPORTANT — Subprocess Only
+
+Always run via `claude -p`. Never execute inline. Never use the Agent tool.
+Fresh context is intentional — the reviewer must not be influenced by the current conversation.
+If the API key lookup fails, report the error — do not fall back to inline execution.
 
 ## Usage
 
-```bash
+```
 /review                    # Review staged/uncommitted changes
 /review HEAD~1             # Review last commit
 /review path/to/file.ts    # Review specific file
 ```
 
-## Process
+## Execution
 
-### Step 1: Load Project Rules
-Read CLAUDE.md and any ARCHITECTURE.md for project-specific patterns, conventions, and constraints.
+Build the prompt with the scope substituted and run:
 
-### Step 2: Get Changes
 ```bash
-# Staged changes (default)
-git diff --cached
-# If nothing staged, check uncommitted
-git diff
-# For last commit
-git show HEAD
-```
+ANTHROPIC_API_KEY=$(security find-generic-password -s claude-sdk-api-key -w) \
+ANTHROPIC_BASE_URL=$(security find-generic-password -s claude-sdk-base-url -w) \
+  claude -p --model claude-haiku-4-5-20251001 --dangerously-skip-permissions "$(cat <<'EOF'
+You are a senior code reviewer with fresh context — no prior knowledge of why these changes were made.
+Review the changes in the current directory at scope [SCOPE].
 
-### Step 3: CodeRabbit CLI (if available)
-```bash
-# Check if cr is installed
-which coderabbit 2>/dev/null
+Step 1 — Load project rules:
+Read CLAUDE.md and any ARCHITECTURE.md for conventions and constraints.
 
-# Run CodeRabbit on uncommitted changes
-coderabbit --prompt-only -t uncommitted 2>/dev/null
+Step 2 — Get changes:
+  git diff --cached              # staged (default)
+  git diff                       # uncommitted (if nothing staged)
+  git show HEAD                  # for HEAD~1 or specific commits
+  git diff [SCOPE] -- if path    # for specific files
 
-# Or on a specific target
-coderabbit --prompt-only -t HEAD~1 2>/dev/null
-```
-Parse the output for findings. CodeRabbit catches: style issues, potential bugs, security concerns, performance problems.
+Step 3 — CodeRabbit CLI (if available):
+  coderabbit --prompt-only -t uncommitted 2>/dev/null
 
-### Step 4: Quick Static Analysis
-```bash
-# Dead code in changed files (if knip available)
-npx knip --reporter json 2>/dev/null | jq '.counters // empty'
+Step 4 — Quick static analysis:
+  npx knip --reporter json 2>/dev/null | jq '.counters // empty'
 
-# Duplication check (if jscpd available)
-npx jscpd ./src --reporters json --output /tmp/jscpd-report 2>/dev/null
-```
+Step 5 — Semantic review from these angles:
+| Angle | What to check |
+| Architecture | Layer violations, coupling, fits existing patterns? |
+| KISS | Over-engineered, premature abstraction, could be simpler? |
+| TypeScript | any usage, missing types, type safety gaps |
+| Race conditions | Async issues, shared state, missing awaits |
+| Error handling | Unhandled rejections, swallowed errors |
+| Security | Injection, XSS, exposed secrets, OWASP top 10 |
+| Performance | N+1 queries, missing memoization, large bundles |
+| Test gaps | What tests should exist but don't? |
+| Bugs | Logic errors, null handling, edge cases |
 
-### Step 5: Semantic Review
+Step 6 — Test gap analysis: for each changed file, list missing test scenarios.
 
-Review from multiple angles — don't just check style:
+Output format:
 
-| Angle | What to Look For |
-|-|-|
-| **Architecture** | Does this fit the existing patterns? Layer violations? Coupling? |
-| **KISS** | Over-engineered? Premature abstraction? Could be simpler? |
-| **TypeScript Quality** | `any` usage, missing types, wrong generics, type safety gaps |
-| **Race Conditions** | Async issues, shared state, missing awaits, cleanup |
-| **Error Handling** | Unhandled promise rejections, swallowed errors, missing error paths |
-| **Security** | Injection, XSS, exposed secrets, auth bypass, OWASP top 10 |
-| **Performance** | Unnecessary re-renders, N+1 queries, missing memoization, large bundles |
-| **Test Gaps** | What tests should exist? Unit, integration, E2E? |
-| **Code Duplication** | Same logic in multiple places? Extract or consolidate? |
-| **Bugs** | Logic errors, off-by-one, null handling, edge cases |
-
-### Step 6: Test Gap Analysis
-
-For each changed file, assess:
-- Does it have tests? Should it?
-- What scenarios aren't covered?
-- Suggest specific test cases (name + what they verify)
-
-## Output Format
-
-```markdown
 ## Review: [scope]
 
 **Files reviewed:** N
@@ -91,29 +74,22 @@ For each changed file, assess:
 - **[file:line]** CATEGORY — description. Fix: ...
 
 ### Warnings
-- **[file:line]** CATEGORY — description. Fix: ...
+- **[file:line]** CATEGORY — description.
 
 ### Suggestions
 - **[file:line]** CATEGORY — description.
 
 ### Test Gaps
-- [file] — missing tests for: [scenarios]
-- Suggested test: `it("should [behavior]", ...)`
+- [file] — missing: [scenario]
 
 ### Summary
 [1-2 sentence assessment]
+
+Severity: Blocking = bugs/security/type errors. Warning = KISS/missing handling. Suggestion = simplifications.
+
+SCOPE: [SCOPE]
+EOF
+)"
 ```
 
-## Severity Levels
-
-- **Blocking** — Must fix: bugs, security, race conditions, type errors
-- **Warning** — Should fix: KISS violations, missing error handling, style
-- **Suggestion** — Nice to have: simplifications, test ideas, refactoring
-
-## Integration
-
-Use before committing:
-1. `/review` — Semantic review + CodeRabbit CLI
-2. `/check` — Automated validation (format, lint, tsc, test)
-3. `/commit` — Commit with conventional message
-4. Or just `/ship` — runs all of the above automatically
+Replace `[SCOPE]` with the skill arguments (default: `uncommitted`).

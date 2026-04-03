@@ -118,12 +118,12 @@ Run '/git-cleanup' now? [y/N/skip]
 - `y` → `Skill({ skill: "git-cleanup" })`, wait for completion, then continue
 - `N` or `skip` → continue without cleanup
 
-### Phase 3: Pre-flight Validation (Code Quality)
+### Phase 3: Pre-flight Validation
 
-**ALWAYS run /code-quality skill:**
+**ALWAYS run /check skill:**
 
 ```
-Skill({ skill: "code-quality" })
+Skill({ skill: "check" })
 ```
 
 **CRITICAL: Abort if validation fails.** Show errors and suggest fixes. Do not proceed with PR creation on failing code.
@@ -330,13 +330,13 @@ gh api --paginate "repos/$owner/$repo/pulls/$pr_number/reviews" \
 **If uncommitted changes exist:**
 ```
 You have uncommitted changes.
-Run `/code-quality` + `/commit` before checking PR status? [y/N]
+Run `/check` + `/commit` before checking PR status? [y/N]
 ```
 
 **If unpushed commits exist:**
 ```
 You have $unpushed unpushed commit(s).
-Run `/code-quality` and push first? [y/N]
+Run `/check` and push first? [y/N]
 ```
 
 ### Present Summary
@@ -386,7 +386,7 @@ CodeRabbit found 2 blocking issues:
 
 Implement fix for item 1? [y/N]
 ```
-- User says `y` → implement the fix in the main thread, run `/code-quality`, fold into last commit with `/commit --amend`, then ask for next blocking item
+- User says `y` → implement the fix in the main thread, run `/check`, fold into last commit with `/commit --amend`, then ask for next blocking item
 - User says `N` → skip that item, ask for next
 - After all blocking items addressed: "All blocking issues resolved. Run `/pr merge` once CI passes."
 
@@ -400,7 +400,7 @@ CodeRabbit has 3 suggestions (non-blocking):
 
 Implement any of these? (enter numbers like "1 3", or "none")
 ```
-- User enters numbers → implement selected suggestions, run `/code-quality`, `/commit --amend`
+- User enters numbers → implement selected suggestions, run `/check`, `/commit --amend`
 - User enters `none` → proceed
 
 ### Auto-update PR Description
@@ -424,13 +424,13 @@ Update PR description to reflect current state? [y/N]
 
 Update PR title, description, or status.
 
-**ALWAYS run code-quality first:**
+**ALWAYS run /check first:**
 
 ```
-Skill({ skill: "code-quality" })
+Skill({ skill: "check" })
 ```
 
-If code-quality fails → abort, show errors. Do not update PR on failing code.
+If /check fails → abort, show errors. Do not update PR on failing code.
 
 If passes → regenerate PR description using the improved template, show diff of old vs new, ask for confirmation before applying:
 
@@ -547,7 +547,7 @@ fi
 | Branch name mismatch detection | | Ask to rename |
 | Run /commit for uncommitted changes | | Invoke, wait |
 | git-cleanup suggestion (≥3 commits) | | Ask y/N/skip |
-| Run code-quality validation | Auto (abort on fail) | |
+| Run /check validation | Auto (abort on fail) | |
 | Rebase (no conflicts) | Auto | |
 | Auto-resolve safe conflicts | Auto (report) | |
 | Complex conflict resolution | | Ask |
@@ -569,7 +569,7 @@ fi
 |-|-|
 | On default branch | Abort: "Create a feature branch first" |
 | Detached HEAD | Abort: "Not on a branch. Check out a branch first." |
-| code-quality fails | Abort, show errors, suggest fixes |
+| /check fails | Abort, show errors, suggest fixes |
 | Not on git repo | Error: "Not in a git repository" |
 | No GitHub remote | Error: "No GitHub remote found" |
 | gh not authenticated | Prompt: "Run `gh auth login`" |
@@ -605,6 +605,6 @@ fi
 - Works with OpenSpec: Checks `.openspec/changes/*/proposal.md` for context (if directory exists)
 - Uses `/commit` skill: Invoked automatically if uncommitted changes found on create
 - Uses `/git-cleanup` skill: Offered when branch has ≥3 commits on create
-- Uses `/code-quality` skill: Validates before PR create and update
+- Uses `/check` skill: Validates before PR create and update
 - Trunk-based workflow: Rebase strategy, no merge commits
 - Solo dev workflow: No approval required, uses `--admin` bypass

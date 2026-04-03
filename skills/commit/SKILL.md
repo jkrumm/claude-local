@@ -305,6 +305,6 @@ When `--dry-run` is passed:
 ## Integration Notes
 
 - Works with OpenSpec: Reads `.openspec/changes/*/proposal.md` for context (if directory exists)
-- Works with code-quality: Does NOT auto-run validation (user's preference)
+- Works with /check: Does NOT auto-run validation (user's preference)
 - Respects git hooks: Never uses `--no-verify`
 - Works with `/pr`: Suggests PR creation after commit

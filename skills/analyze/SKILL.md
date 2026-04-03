@@ -1,45 +1,43 @@
 ---
 name: analyze
-description: Deep static analysis — dead code (knip), duplication (jscpd), circular deps (dependency-cruiser), complexity. Structured findings report.
-context: fork
+description: Deep static analysis (dead code, duplication, circular deps, complexity) via claude -p subprocess
 model: haiku
 ---
 
 # Analyze — Deep Static Analysis
 
-Run comprehensive static analysis tools and produce an actionable findings report.
+Runs static analysis tools in a `claude -p` subprocess. Only the findings report returns to main context.
 
-## Tools
+## IMPORTANT — Subprocess Only
 
-Run whichever tools are available in the project. Check `package.json` first — some may already be configured.
+Always run via `claude -p`. Never execute inline. Never use the Agent tool.
+If the API key lookup fails, report the error — do not fall back to inline execution.
 
-### Dead Code & Unused Exports (knip)
+## Execution
+
 ```bash
-npx knip --reporter json 2>/dev/null || npx knip 2>/dev/null
-```
-Detects: unused files, exports, dependencies, dev dependencies, unlisted dependencies.
+ANTHROPIC_API_KEY=$(security find-generic-password -s claude-sdk-api-key -w) \
+ANTHROPIC_BASE_URL=$(security find-generic-password -s claude-sdk-base-url -w) \
+  claude -p --model claude-haiku-4-5-20251001 --dangerously-skip-permissions "$(cat <<'EOF'
+Run comprehensive static analysis in the current directory. Check package.json first — some tools may already be configured.
 
-### Code Duplication (jscpd)
-```bash
-npx jscpd ./src --reporters json --output /tmp/jscpd-report 2>/dev/null
-```
-Detects: copy-pasted code blocks across files. Read `/tmp/jscpd-report/jscpd-report.json` for results.
+Tools to run (use whichever are available):
 
-### Circular Dependencies (dependency-cruiser)
-```bash
-npx depcruise src --output-type json 2>/dev/null | jq '.summary.violations[] | select(.rule.severity == "error")'
-```
-Detects: circular imports, orphaned modules, dependency rule violations.
+Dead code (knip):
+  npx knip --reporter json 2>/dev/null || npx knip 2>/dev/null
 
-### Complexity (via existing ESLint)
-If eslint is configured, check for complexity warnings:
-```bash
-npx eslint src --format json 2>/dev/null | jq '[.[] | .messages[] | select(.ruleId | test("complexity|cognitive"))]'
-```
+Duplication (jscpd):
+  npx jscpd ./src --reporters json --output /tmp/jscpd-report 2>/dev/null
+  Then read /tmp/jscpd-report/jscpd-report.json
 
-## Output Format
+Circular deps (dependency-cruiser):
+  npx depcruise src --output-type json 2>/dev/null | jq '.summary.violations[] | select(.rule.severity == "error")'
 
-```
+Complexity (ESLint, if configured):
+  npx eslint src --format json 2>/dev/null | jq '[.[] | .messages[] | select(.ruleId | test("complexity|cognitive"))]'
+
+Output format (under 2000 chars):
+
 ## Static Analysis Report
 
 **Dead code (knip):**
@@ -60,6 +58,8 @@ npx eslint src --format json 2>/dev/null | jq '[.[] | .messages[] | select(.rule
 1. [Highest impact action]
 2. [Second action]
 3. [Third action]
-```
 
-Keep response under 2000 characters. Prioritize actionable findings.
+Prioritize actionable findings. Skip sections where tools are unavailable.
+EOF
+)"
+```

@@ -1,112 +1,53 @@
 ---
 name: research
-description: Deep technical research via forked agent for library docs, web search, and architecture decisions
-context: fork
+description: Deep technical research via claude -p subprocess — library docs, web search, architecture decisions
 model: haiku
-agent: general-purpose
 ---
 
 # Research Skill
 
-Execute research queries via a forked agent. No MCPs — uses Context7 CLI, Tavily API, and WebFetch directly.
+Launches a `claude -p` subprocess to research a query. All searching and fetching stays isolated — only the final summary returns to main context.
 
-## Tools Available (no MCPs)
+## IMPORTANT — Subprocess Only
 
-### Context7 CLI — Library Documentation
+Always run via `claude -p`. Never execute inline. Never use the Agent tool.
+If the API key lookup fails, report the error — do not fall back to inline execution.
+
+## Execution
+
+Build the prompt with the arguments substituted and run:
+
 ```bash
-# Find library ID
-npx -y @vedanth/context7 resolve <library>
+ANTHROPIC_API_KEY=$(security find-generic-password -s claude-sdk-api-key -w) \
+ANTHROPIC_BASE_URL=$(security find-generic-password -s claude-sdk-base-url -w) \
+  claude -p --model claude-haiku-4-5-20251001 "$(cat <<'EOF'
+You are a research assistant. Research the query below using WebSearch and WebFetch.
+Cross-verify findings from 2+ sources before concluding.
 
-# Fetch topic-filtered docs
-npx -y @vedanth/context7 docs <library> <topic> --tokens 8000
-```
-Use for: API references, usage patterns, type signatures.
-Fallback to web search if library not in Context7.
+Research pattern:
+1. If library docs needed: try Context7 first — npx -y @vedanth/context7 docs <lib> <topic> --tokens 8000
+2. WebSearch the query — pick 2-3 most relevant URLs
+3. WebFetch each URL for details
+4. Cross-verify and synthesize
 
-### Tavily API — Web Search
-```bash
-TAVILY_KEY=$(security find-generic-password -s tavily-api-key -w 2>/dev/null)
-curl -s -X POST https://api.tavily.com/search \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TAVILY_KEY" \
-  -d '{"query": "...", "search_depth": "basic", "max_results": 5}'
-```
-API key is cached in macOS Keychain by `make setup` (source: `op://common/tavily/API_KEY`).
+Output format (under 2000 chars unless code examples require more):
 
-**Cost awareness:**
-- basic search = 1 credit (default, always start here)
-- advanced search = 2 credits (only if basic returns irrelevant results)
-- Never use tavily_research endpoint (4-250 credits) — manual search + WebFetch is always sufficient
-
-### WebFetch — Direct URL Content (FREE)
-Always try WebFetch before any paid extraction. Use for reading specific URLs found via search.
-
-### WebSearch — Built-in Fallback (FREE)
-Claude's built-in WebSearch works when other tools are unavailable. No credits needed.
-
-## Default Research Pattern (1 credit)
-
-```text
-1. Context7 CLI (if library docs needed)     → FREE
-2. Tavily search basic (if web search needed) → 1 credit
-3. WebFetch the best URL(s)                   → FREE
-```
-
-## Research Tiers
-
-### Tier 1: Library API/Usage
-Context7 CLI first → fallback to web search.
-```bash
-npx -y @vedanth/context7 docs react useTransition --tokens 8000
-```
-
-### Tier 2: Implementation Patterns
-Tavily search → WebFetch best URLs (blogs, GitHub, SO).
-
-### Tier 3: Debugging Errors
-Tavily search for GitHub issues + SO → WebFetch solutions.
-
-### Tier 4: Architecture/Comparison
-Multiple searches + WebFetch from different perspectives.
-
-## Escalation Strategy
-
-```text
-First attempt insufficient?
-├─ Missing API details    → Context7 CLI or official docs via WebFetch
-├─ Missing examples       → Web search (GitHub, blogs, SO)
-├─ Conflicting info       → Multiple source comparison
-├─ WebFetch returns blank → Try WebSearch, last resort: Tavily advanced
-└─ Still unclear          → Report uncertainty to user
-```
-
-## Output Format
-
-```markdown
 ## Research: [query]
-
 **Summary:** [2-3 sentences, confidence level]
-
 **Findings:**
-- [Finding 1 with source]
-- [Finding 2 with source]
-
-**Code Examples:** (when applicable)
-[Working snippets with imports and types]
-
-**Recommendation:** [Specific, actionable next step]
-
-**Confidence:** [High/Medium/Low] — [reasoning]
-
+- [finding] — [source URL]
+**Recommendation:** [specific actionable next step]
+**Confidence:** [High/Medium/Low] — [reason]
 **Sources:** [URLs]
+
+Anti-patterns:
+- Do NOT stop after first result
+- Do NOT return vague "it depends" without specifics
+- Do NOT hallucinate import paths or method signatures — verify via docs or WebFetch
+
+QUERY: [ARGUMENTS]
+EOF
+)"
 ```
 
-Keep response under 2000 characters unless code examples require more.
-
-## Anti-Patterns
-
-- Stopping after first search result
-- Using Tavily advanced when basic would work
-- Not trying WebFetch before paid extraction
-- Returning vague "it depends" without specifics
-- Not cross-verifying information from 2+ sources
+Replace `[ARGUMENTS]` with the skill arguments before running.
