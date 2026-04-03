@@ -23,12 +23,11 @@ If the API key lookup fails, report the error — do not fall back to inline exe
 
 ## Execution
 
-Build the prompt with the file path substituted and run:
+**Step 1** — Build the prompt by taking the template below and replacing `[FILE_PATH]` with the actual file path argument. Write the result to `/tmp/claude-read-drawing-prompt.txt` using the Write tool.
 
-```bash
-ANTHROPIC_API_KEY=$(security find-generic-password -s claude-sdk-api-key -w) \
-ANTHROPIC_BASE_URL=$(security find-generic-password -s claude-sdk-base-url -w) \
-  claude -p --model claude-haiku-4-5-20251001 "$(cat <<'EOF'
+Prompt template:
+
+```
 You are a diagram interpreter. Read and interpret the Excalidraw diagram at the path below.
 
 Step 1 — Resolve files:
@@ -77,8 +76,13 @@ Step 4 — Synthesize. Produce this output (under 2000 chars):
 **Implementation insight:** [the key actionable takeaway — what to build or understand]
 
 FILE PATH: [FILE_PATH]
-EOF
-)"
 ```
 
-Replace `[FILE_PATH]` with the skill arguments before running.
+**Step 2** — Run the subprocess:
+
+```bash
+ANTHROPIC_API_KEY=$(security find-generic-password -s claude-sdk-api-key -w) \
+ANTHROPIC_BASE_URL=$(security find-generic-password -s claude-sdk-base-url -w) \
+  claude -p --model claude-haiku-4-5-20251001 \
+  < /tmp/claude-read-drawing-prompt.txt
+```

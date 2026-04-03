@@ -13,7 +13,7 @@ Multi-angle review: automated tools + semantic analysis. Only the findings repor
 
 Always run via `claude -p`. Never execute inline. Never use the Agent tool.
 Fresh context is intentional — the reviewer must not be influenced by the current conversation.
-If the API key lookup fails, report the error — do not fall back to inline execution.
+If invocation fails, report the error — do not fall back to inline execution.
 
 ## Usage
 
@@ -25,10 +25,11 @@ If the API key lookup fails, report the error — do not fall back to inline exe
 
 ## Execution
 
-Build the prompt with the scope substituted and run:
+**Step 1** — Build the prompt by taking the template below and replacing `[SCOPE]` with the skill arguments (default: `uncommitted`). Write the result to `/tmp/claude-review-prompt.txt` using the Write tool.
 
-```bash
-claude -p --model claude-sonnet-4-6 --dangerously-skip-permissions "$(cat <<'EOF'
+Prompt template:
+
+```
 You are a senior code reviewer with fresh context — no prior knowledge of why these changes were made.
 Review the changes in the current directory at scope [SCOPE].
 
@@ -39,7 +40,7 @@ Step 2 — Get changes:
   git diff --cached              # staged (default)
   git diff                       # uncommitted (if nothing staged)
   git show HEAD                  # for HEAD~1 or specific commits
-  git diff [SCOPE] -- if path    # for specific files
+  # For specific file: git diff -- [SCOPE]
 
 Step 3 — CodeRabbit CLI (if available):
   coderabbit --prompt-only -t uncommitted 2>/dev/null
@@ -48,16 +49,15 @@ Step 4 — Quick static analysis:
   npx knip --reporter json 2>/dev/null | jq '.counters // empty'
 
 Step 5 — Semantic review from these angles:
-| Angle | What to check |
-| Architecture | Layer violations, coupling, fits existing patterns? |
-| KISS | Over-engineered, premature abstraction, could be simpler? |
-| TypeScript | any usage, missing types, type safety gaps |
-| Race conditions | Async issues, shared state, missing awaits |
-| Error handling | Unhandled rejections, swallowed errors |
-| Security | Injection, XSS, exposed secrets, OWASP top 10 |
-| Performance | N+1 queries, missing memoization, large bundles |
-| Test gaps | What tests should exist but don't? |
-| Bugs | Logic errors, null handling, edge cases |
+- Architecture: layer violations, coupling, fits existing patterns?
+- KISS: over-engineered, premature abstraction, could be simpler?
+- TypeScript: any usage, missing types, type safety gaps
+- Race conditions: async issues, shared state, missing awaits
+- Error handling: unhandled rejections, swallowed errors
+- Security: injection, XSS, exposed secrets, OWASP top 10
+- Performance: N+1 queries, missing memoization, large bundles
+- Test gaps: what tests should exist but don't?
+- Bugs: logic errors, null handling, edge cases
 
 Step 6 — Test gap analysis: for each changed file, list missing test scenarios.
 
@@ -86,8 +86,11 @@ Output format:
 Severity: Blocking = bugs/security/type errors. Warning = KISS/missing handling. Suggestion = simplifications.
 
 SCOPE: [SCOPE]
-EOF
-)"
 ```
 
-Replace `[SCOPE]` with the skill arguments (default: `uncommitted`).
+**Step 2** — Run the subprocess (subscription, no API key needed):
+
+```bash
+claude -p --model claude-sonnet-4-6 --dangerously-skip-permissions \
+  < /tmp/claude-review-prompt.txt
+```

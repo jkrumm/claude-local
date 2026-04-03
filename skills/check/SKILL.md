@@ -15,10 +15,9 @@ If the API key lookup fails, report the error — do not fall back to inline exe
 
 ## Execution
 
-```bash
-ANTHROPIC_API_KEY=$(security find-generic-password -s claude-sdk-api-key -w) \
-ANTHROPIC_BASE_URL=$(security find-generic-password -s claude-sdk-base-url -w) \
-  claude -p --model claude-haiku-4-5-20251001 --dangerously-skip-permissions "$(cat <<'EOF'
+**Step 1** — Write the prompt to `/tmp/claude-check-prompt.txt` using the Write tool:
+
+```
 Run project validation in the current directory.
 
 Step 1 — Discover commands: Read package.json scripts. Look for:
@@ -49,6 +48,13 @@ Rules:
 - Never fix code — only report.
 - Show errors verbatim with exact file:line locations.
 - If no validation scripts found, report that and suggest what to add.
-EOF
-)"
+```
+
+**Step 2** — Run the subprocess:
+
+```bash
+ANTHROPIC_API_KEY=$(security find-generic-password -s claude-sdk-api-key -w) \
+ANTHROPIC_BASE_URL=$(security find-generic-password -s claude-sdk-base-url -w) \
+  claude -p --model claude-haiku-4-5-20251001 --dangerously-skip-permissions \
+  < /tmp/claude-check-prompt.txt
 ```

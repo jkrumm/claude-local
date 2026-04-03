@@ -15,10 +15,9 @@ If the API key lookup fails, report the error — do not fall back to inline exe
 
 ## Execution
 
-```bash
-ANTHROPIC_API_KEY=$(security find-generic-password -s claude-sdk-api-key -w) \
-ANTHROPIC_BASE_URL=$(security find-generic-password -s claude-sdk-base-url -w) \
-  claude -p --model claude-haiku-4-5-20251001 --dangerously-skip-permissions "$(cat <<'EOF'
+**Step 1** — Write the prompt to `/tmp/claude-analyze-prompt.txt` using the Write tool (no substitution needed for this skill):
+
+```
 Run comprehensive static analysis in the current directory. Check package.json first — some tools may already be configured.
 
 Tools to run (use whichever are available):
@@ -60,6 +59,13 @@ Output format (under 2000 chars):
 3. [Third action]
 
 Prioritize actionable findings. Skip sections where tools are unavailable.
-EOF
-)"
+```
+
+**Step 2** — Run the subprocess:
+
+```bash
+ANTHROPIC_API_KEY=$(security find-generic-password -s claude-sdk-api-key -w) \
+ANTHROPIC_BASE_URL=$(security find-generic-password -s claude-sdk-base-url -w) \
+  claude -p --model claude-haiku-4-5-20251001 --dangerously-skip-permissions \
+  < /tmp/claude-analyze-prompt.txt
 ```

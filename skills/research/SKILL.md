@@ -11,14 +11,15 @@ Launches a `claude -p` subprocess to research a query. All searching and fetchin
 ## IMPORTANT — Subprocess Only
 
 Always run via `claude -p`. Never execute inline. Never use the Agent tool.
-If the API key lookup fails, report the error — do not fall back to inline execution.
+If invocation fails, report the error — do not fall back to inline execution.
 
 ## Execution
 
-Build the prompt with the arguments substituted and run:
+**Step 1** — Build the prompt by taking the template below and replacing `[ARGUMENTS]` with the actual skill arguments. Write the result to `/tmp/claude-research-prompt.txt` using the Write tool.
 
-```bash
-claude -p --model claude-sonnet-4-6 "$(cat <<'EOF'
+Prompt template:
+
+```
 You are a research assistant. Research the query below using WebSearch and WebFetch.
 Cross-verify findings from 2+ sources before concluding.
 
@@ -44,8 +45,10 @@ Anti-patterns:
 - Do NOT hallucinate import paths or method signatures — verify via docs or WebFetch
 
 QUERY: [ARGUMENTS]
-EOF
-)"
 ```
 
-Replace `[ARGUMENTS]` with the skill arguments before running.
+**Step 2** — Run the subprocess (subscription, no API key needed):
+
+```bash
+claude -p --model claude-sonnet-4-6 < /tmp/claude-research-prompt.txt
+```

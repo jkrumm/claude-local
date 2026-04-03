@@ -20,12 +20,11 @@ If the API key lookup fails, report the error — do not fall back to inline exe
 
 ## Execution
 
-Build the prompt with environment and investigation substituted and run:
+**Step 1** — Build the prompt by taking the template below and replacing `[ENV]` with `local` or `prod` and `[INVESTIGATION]` with the investigation description. Write the result to `/tmp/claude-otel-prompt.txt` using the Write tool.
 
-```bash
-ANTHROPIC_API_KEY=$(security find-generic-password -s claude-sdk-api-key -w) \
-ANTHROPIC_BASE_URL=$(security find-generic-password -s claude-sdk-base-url -w) \
-  claude -p --model claude-haiku-4-5-20251001 --dangerously-skip-permissions "$(cat <<'EOF'
+Prompt template:
+
+```
 You are an observability engineer debugging OTEL data in ClickHouse.
 
 ## Access
@@ -99,8 +98,13 @@ Only include raw table output if prose cannot convey it. Max 5-10 rows if tables
 
 INVESTIGATION: [INVESTIGATION]
 ENVIRONMENT: [ENV]
-EOF
-)"
 ```
 
-Replace `[INVESTIGATION]` with the investigation description and `[ENV]` with `local` or `prod`.
+**Step 2** — Run the subprocess:
+
+```bash
+ANTHROPIC_API_KEY=$(security find-generic-password -s claude-sdk-api-key -w) \
+ANTHROPIC_BASE_URL=$(security find-generic-password -s claude-sdk-base-url -w) \
+  claude -p --model claude-haiku-4-5-20251001 --dangerously-skip-permissions \
+  < /tmp/claude-otel-prompt.txt
+```
