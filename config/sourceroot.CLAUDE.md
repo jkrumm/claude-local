@@ -72,8 +72,8 @@ optimizeDeps: { exclude: ['basalt-ui'] }
 |-|-|-|-|
 | `/commit [options]` | Smart conventional commits | main | haiku |
 | `/check` | Format, lint, typecheck, test | **subprocess** | haiku |
-| `/review` | Multi-angle code review + CodeRabbit CLI | **subprocess** | haiku |
-| `/research <query>` | Deep technical research (WebSearch + WebFetch) | **subprocess** | haiku |
+| `/review` | Multi-angle code review + CodeRabbit CLI | **subprocess** | sonnet |
+| `/research <query>` | Deep technical research (WebSearch + WebFetch) | **subprocess** | sonnet |
 | `/grill` | Question until clear direction, generate PRD | main | (inherits) |
 | `/implement` | Guided implementation with research + explore + check | main | sonnet subagent |
 | `/ship` | Full flow: check → review → commit → PR → CodeRabbit → merge → release | main | haiku |

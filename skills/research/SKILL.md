@@ -1,7 +1,7 @@
 ---
 name: research
 description: Deep technical research via claude -p subprocess — library docs, web search, architecture decisions
-model: haiku
+model: sonnet
 ---
 
 # Research Skill
@@ -18,9 +18,7 @@ If the API key lookup fails, report the error — do not fall back to inline exe
 Build the prompt with the arguments substituted and run:
 
 ```bash
-ANTHROPIC_API_KEY=$(security find-generic-password -s claude-sdk-api-key -w) \
-ANTHROPIC_BASE_URL=$(security find-generic-password -s claude-sdk-base-url -w) \
-  claude -p --model claude-haiku-4-5-20251001 "$(cat <<'EOF'
+claude -p --model claude-sonnet-4-6 "$(cat <<'EOF'
 You are a research assistant. Research the query below using WebSearch and WebFetch.
 Cross-verify findings from 2+ sources before concluding.
 

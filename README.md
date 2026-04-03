@@ -35,7 +35,8 @@ Config files live here and are symlinked outward — `~/.zshrc`, `~/.gitconfig`,
 |-|-|-|
 | Opus | Strategy, planning, PRD, architecture | `/grill`, main conversation |
 | Sonnet | Implementation, complex code changes | `/ralph`, `/implement` |
-| Haiku | All delegated work — subprocess or fork | `/check`, `/review`, `/research`, `/analyze`, `/otel`, `/read-drawing` (subprocess) + `/browse` (fork) + `/commit`, `/pr`, `/ship`, `/secrets`, `/git-cleanup` (main) |
+| Sonnet | Reasoning-heavy subprocesses | `/review`, `/research` (subprocess, subscription) |
+| Haiku | Mechanical subprocesses + orchestration | `/check`, `/analyze`, `/otel`, `/read-drawing` (subprocess, API) + `/browse` (fork) + `/commit`, `/pr`, `/ship`, `/secrets`, `/git-cleanup` (main) |
 
 ### Workflow
 
@@ -105,8 +106,8 @@ coderabbit auth login   # one-time CodeRabbit CLI auth (GitHub OAuth)
 | `/pr` | haiku | main | GitHub PR workflow (create, status, merge) |
 | `/git-cleanup` | haiku | main | Squash and group noisy branch commits |
 | `/check` | haiku | subprocess | Validation: format, lint, typecheck, test |
-| `/review` | haiku | subprocess | Multi-angle code review + CodeRabbit CLI |
-| `/research` | haiku | subprocess | WebSearch + WebFetch |
+| `/review` | sonnet | subprocess | Multi-angle code review + CodeRabbit CLI |
+| `/research` | sonnet | subprocess | WebSearch + WebFetch |
 | `/browse` | haiku | fork | Chrome DevTools debugging (isolated MCP) |
 | `/analyze` | haiku | subprocess | Deep static analysis (knip, jscpd, dep-cruiser) |
 | `/otel` | haiku | subprocess | Debug OTEL traces/logs in ClickHouse |
