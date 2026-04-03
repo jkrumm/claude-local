@@ -15,9 +15,10 @@ If invocation fails, report the error — do not fall back to inline execution.
 
 ## Execution
 
-**Step 1** — Build the prompt by taking the template below and replacing `[ARGUMENTS]` with the actual skill arguments. Write the result to `/tmp/claude-research-prompt.txt` using the Write tool.
+**Step 1** — Generate a unique temp path for this invocation: `/tmp/claude-research-<timestamp>.txt`
+(Use current epoch ms, e.g. `1711234567890`. This avoids conflicts if skill runs in parallel.)
 
-Prompt template:
+**Step 2** — Write the prompt below to that path using the Write tool. Replace `[ARGUMENTS]` with the actual skill arguments.
 
 ```
 You are a research assistant. Research the query below using WebSearch and WebFetch.
@@ -47,8 +48,9 @@ Anti-patterns:
 QUERY: [ARGUMENTS]
 ```
 
-**Step 2** — Run the subprocess (subscription, no API key needed):
+**Step 3** — Run the subprocess and clean up (subscription, no API key needed):
 
 ```bash
-claude -p --model claude-sonnet-4-6 < /tmp/claude-research-prompt.txt
+claude -p --model claude-sonnet-4-6 < /tmp/claude-research-<timestamp>.txt
+rm -f /tmp/claude-research-<timestamp>.txt
 ```

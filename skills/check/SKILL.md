@@ -15,9 +15,11 @@ If the API key lookup fails, report the error — do not fall back to inline exe
 
 ## Execution
 
-**Step 1** — Write the prompt to `/tmp/claude-check-prompt.txt` using the Write tool:
+Single bash command — `mktemp` ensures no collision if run in parallel:
 
-```
+```bash
+TMPFILE=$(mktemp /tmp/claude-check-XXXXXX.txt)
+cat > "$TMPFILE" << 'PROMPT_END'
 Run project validation in the current directory.
 
 Step 1 — Discover commands: Read package.json scripts. Look for:
@@ -30,7 +32,7 @@ Step 1 — Discover commands: Read package.json scripts. Look for:
 Prefer combined scripts over individual ones.
 
 Step 2 — Run in order: Format → Lint → Typecheck → Test.
-Stop on first failure category and report. Only run tests if format + lint + typecheck pass.
+Stop on first failure category. Only run tests if format + lint + typecheck pass.
 
 Step 3 — Report results.
 
@@ -48,13 +50,9 @@ Rules:
 - Never fix code — only report.
 - Show errors verbatim with exact file:line locations.
 - If no validation scripts found, report that and suggest what to add.
-```
-
-**Step 2** — Run the subprocess:
-
-```bash
+PROMPT_END
 ANTHROPIC_API_KEY=$(security find-generic-password -s claude-sdk-api-key -w) \
 ANTHROPIC_BASE_URL=$(security find-generic-password -s claude-sdk-base-url -w) \
-  claude -p --model claude-haiku-4-5-20251001 --dangerously-skip-permissions \
-  < /tmp/claude-check-prompt.txt
+  claude -p --model claude-haiku-4-5-20251001 --dangerously-skip-permissions < "$TMPFILE"
+rm -f "$TMPFILE"
 ```

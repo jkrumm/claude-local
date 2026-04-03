@@ -15,9 +15,11 @@ If the API key lookup fails, report the error — do not fall back to inline exe
 
 ## Execution
 
-**Step 1** — Write the prompt to `/tmp/claude-analyze-prompt.txt` using the Write tool (no substitution needed for this skill):
+Single bash command — `mktemp` ensures no collision if run in parallel:
 
-```
+```bash
+TMPFILE=$(mktemp /tmp/claude-analyze-XXXXXX.txt)
+cat > "$TMPFILE" << 'PROMPT_END'
 Run comprehensive static analysis in the current directory. Check package.json first — some tools may already be configured.
 
 Tools to run (use whichever are available):
@@ -59,13 +61,9 @@ Output format (under 2000 chars):
 3. [Third action]
 
 Prioritize actionable findings. Skip sections where tools are unavailable.
-```
-
-**Step 2** — Run the subprocess:
-
-```bash
+PROMPT_END
 ANTHROPIC_API_KEY=$(security find-generic-password -s claude-sdk-api-key -w) \
 ANTHROPIC_BASE_URL=$(security find-generic-password -s claude-sdk-base-url -w) \
-  claude -p --model claude-haiku-4-5-20251001 --dangerously-skip-permissions \
-  < /tmp/claude-analyze-prompt.txt
+  claude -p --model claude-haiku-4-5-20251001 --dangerously-skip-permissions < "$TMPFILE"
+rm -f "$TMPFILE"
 ```

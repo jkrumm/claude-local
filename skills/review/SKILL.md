@@ -25,9 +25,10 @@ If invocation fails, report the error — do not fall back to inline execution.
 
 ## Execution
 
-**Step 1** — Build the prompt by taking the template below and replacing `[SCOPE]` with the skill arguments (default: `uncommitted`). Write the result to `/tmp/claude-review-prompt.txt` using the Write tool.
+**Step 1** — Generate a unique temp path for this invocation: `/tmp/claude-review-<timestamp>.txt`
+(Use current epoch ms. This avoids conflicts if skill runs in parallel.)
 
-Prompt template:
+**Step 2** — Write the prompt below to that path using the Write tool. Replace `[SCOPE]` with the skill arguments (default: `uncommitted`).
 
 ```
 You are a senior code reviewer with fresh context — no prior knowledge of why these changes were made.
@@ -88,9 +89,9 @@ Severity: Blocking = bugs/security/type errors. Warning = KISS/missing handling.
 SCOPE: [SCOPE]
 ```
 
-**Step 2** — Run the subprocess (subscription, no API key needed):
+**Step 3** — Run the subprocess and clean up (subscription, no API key needed):
 
 ```bash
-claude -p --model claude-sonnet-4-6 --dangerously-skip-permissions \
-  < /tmp/claude-review-prompt.txt
+claude -p --model claude-sonnet-4-6 --dangerously-skip-permissions < /tmp/claude-review-<timestamp>.txt
+rm -f /tmp/claude-review-<timestamp>.txt
 ```
