@@ -15,7 +15,7 @@ If invocation fails, report the error — do not fall back to inline execution.
 
 ## Execution
 
-**Step 1** — Generate a unique temp path for this invocation: `/tmp/claude-research-<timestamp>.txt`
+**Step 1** — Generate a unique temp path for this invocation: `/tmp/claude-research-<timestamp>`
 (Use current epoch ms, e.g. `1711234567890`. This avoids conflicts if skill runs in parallel.)
 
 **Step 2** — Write the prompt below to that path using the Write tool. Replace `[ARGUMENTS]` with the actual skill arguments.
@@ -51,6 +51,6 @@ QUERY: [ARGUMENTS]
 **Step 3** — Run the subprocess and clean up (subscription, no API key needed):
 
 ```bash
-claude -p --model claude-sonnet-4-6 < /tmp/claude-research-<timestamp>.txt
-rm -f /tmp/claude-research-<timestamp>.txt
+claude -p --model claude-sonnet-4-6 < /tmp/claude-research-<timestamp>
+rm -f /tmp/claude-research-<timestamp>
 ```

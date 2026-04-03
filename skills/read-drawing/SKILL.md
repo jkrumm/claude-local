@@ -23,7 +23,7 @@ If the API key lookup fails, report the error — do not fall back to inline exe
 
 ## Execution
 
-**Step 1** — Generate a unique temp path for this invocation: `/tmp/claude-read-drawing-<timestamp>.txt`
+**Step 1** — Generate a unique temp path for this invocation: `/tmp/claude-read-drawing-<timestamp>`
 (Use current epoch ms. This avoids conflicts if skill runs in parallel.)
 
 **Step 2** — Write the prompt below to that path using the Write tool. Replace `[FILE_PATH]` with the actual file path argument.
@@ -84,6 +84,6 @@ FILE PATH: [FILE_PATH]
 ```bash
 ANTHROPIC_API_KEY=$(security find-generic-password -s claude-sdk-api-key -w) \
 ANTHROPIC_BASE_URL=$(security find-generic-password -s claude-sdk-base-url -w) \
-  claude -p --model claude-haiku-4-5-20251001 < /tmp/claude-read-drawing-<timestamp>.txt
-rm -f /tmp/claude-read-drawing-<timestamp>.txt
+  claude -p --model claude-haiku-4-5-20251001 < /tmp/claude-read-drawing-<timestamp>
+rm -f /tmp/claude-read-drawing-<timestamp>
 ```

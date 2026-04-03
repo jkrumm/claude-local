@@ -25,7 +25,7 @@ If invocation fails, report the error — do not fall back to inline execution.
 
 ## Execution
 
-**Step 1** — Generate a unique temp path for this invocation: `/tmp/claude-review-<timestamp>.txt`
+**Step 1** — Generate a unique temp path for this invocation: `/tmp/claude-review-<timestamp>`
 (Use current epoch ms. This avoids conflicts if skill runs in parallel.)
 
 **Step 2** — Write the prompt below to that path using the Write tool. Replace `[SCOPE]` with the skill arguments (default: `uncommitted`).
@@ -92,6 +92,6 @@ SCOPE: [SCOPE]
 **Step 3** — Run the subprocess and clean up (subscription, no API key needed):
 
 ```bash
-claude -p --model claude-sonnet-4-6 --dangerously-skip-permissions < /tmp/claude-review-<timestamp>.txt
-rm -f /tmp/claude-review-<timestamp>.txt
+claude -p --model claude-sonnet-4-6 --dangerously-skip-permissions < /tmp/claude-review-<timestamp>
+rm -f /tmp/claude-review-<timestamp>
 ```

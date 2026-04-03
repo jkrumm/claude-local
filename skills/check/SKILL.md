@@ -18,7 +18,7 @@ If the API key lookup fails, report the error — do not fall back to inline exe
 Single bash command — `mktemp` ensures no collision if run in parallel:
 
 ```bash
-TMPFILE=$(mktemp /tmp/claude-check-XXXXXX.txt)
+TMPFILE=$(mktemp /tmp/claude-check-XXXXXX)
 cat > "$TMPFILE" << 'PROMPT_END'
 Run project validation in the current directory.
 
