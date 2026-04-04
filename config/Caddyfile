@@ -18,6 +18,11 @@
 	tls internal
 }
 
+# Redirect all HTTP *.test traffic to HTTPS
+http://*.test {
+	redir https://{host}{uri} 301
+}
+
 # rollhook
 rollhook.test {
 	import local
