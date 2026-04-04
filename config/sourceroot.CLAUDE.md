@@ -102,7 +102,7 @@ optimizeDeps: { exclude: ['basalt-ui'] }
 
 **Or use `/ship` directly** — it auto-detects state and runs the right steps.
 
-**Direct-to-master repos:** homelab, homelab-private, vps, claude-local, sideclaw — `/ship` skips PR flow.
+**Direct-to-master repos:** homelab, homelab-private, vps, claude-local, sideclaw, basalt-ui-playground — `/ship` skips PR flow.
 
 **`/pr create` automatically:** errors on default branch, proposes branch rename, runs `/commit` if uncommitted, offers `/git-cleanup` if ≥3 commits, runs `/check` pre-flight.
 
