@@ -11,6 +11,9 @@ alias gback="git reset --soft HEAD~1"                     # undo last commit, ke
 alias homelab="ssh homelab"
 alias vps="ssh vps"
 
+# Local dev proxy
+alias caddy-reload="caddy reload --config $(brew --prefix)/etc/Caddyfile"
+
 # Apps
 alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 zed() { /opt/homebrew/bin/zed "${1:-.}" }                 # open dir (or cwd) in Zed
