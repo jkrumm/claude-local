@@ -19,8 +19,9 @@ outward — edit at either end, git always sees the change here.
 | `config/gitconfig-personal` | `~/.gitconfig-personal` | jkrumm@pm.me + 1Password signing |
 | `config/gitconfig-work` | `~/.gitconfig-work` | johannes.krumm@iu.org + 1Password signing |
 | `config/gitignore_global` | `~/.gitignore_global` | sc-queue.md, sc-note.md |
-| `config/ghostty/config` | `~/.config/ghostty/config` | Ghostty terminal config + auto theme switching |
-| `config/ghostty/themes/*` | `~/.config/ghostty/themes/` | Blueprint v6 light/dark terminal themes |
+| `config/ghostty/config` | `~/.config/ghostty/config` | Shell integration + option key settings |
+| `config/ghostty/config.cmux` | `~/Library/Application Support/com.mitchellh.ghostty/config` | Primary cmux config — font, theme, cursor, padding |
+| `config/ghostty/themes/*` | `~/.config/ghostty/themes/` | Blueprint v6 light/dark terminal themes (copied, not symlinked — cmux symlink bug) |
 | `config/localias.yaml` | `~/Library/Application Support/localias.yaml` | localias proxy config (sideclaw.local → 7705) |
 | `scripts/wakeup.sh` | `~/.wakeup` | sleepwatcher hook — runs `localias reload` on wake |
 | `hooks/notify.ts` | `~/.claude/hooks/notify.ts` | All 4 hook events |
@@ -93,9 +94,14 @@ cat ~/.claude/logs/$(date +%Y-%m-%d).jsonl | jq 'select(.src == "fetch_usage")'
 
 **cmux** (`/Applications/cmux.app`) is the primary terminal — a macOS-native multiplexer built on top of Ghostty. It is **not tmux**. cmux reads `~/.config/ghostty/config` for terminal rendering (same syntax as Ghostty) and stores its own app preferences (appearance mode, sidebar, etc.) in macOS defaults under `com.cmuxterm.app`.
 
+**Config files (two separate files, both managed in claude-local):**
+- `~/Library/Application Support/com.mitchellh.ghostty/config` — **primary cmux config** (font, theme, cursor, padding). This is what cmux actually reads.
+- `~/.config/ghostty/config` — shell integration + option key settings only; lower priority
+
 **Theme auto-switching:**
 - cmux app chrome: `appearanceMode = system` (stored in plist — follows macOS appearance)
-- Terminal colors: `theme = light:basalt-ui-light,dark:basalt-ui-dark` in `~/.config/ghostty/config`
+- Terminal colors: `theme = dark:basalt-ui-dark,light:basalt-ui-light` in the cmux config above
+- Theme files: copied (not symlinked) to `~/.config/ghostty/themes/` — cmux has a bug where it skips symlinked theme files
 - Claude Code: `c()` in `claude.zsh` writes `theme` key to `~/.claude.json` via `jq` on each launch
 
 ## Key Technical Facts

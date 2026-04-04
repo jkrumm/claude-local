@@ -346,6 +346,19 @@ _setup-ghostty:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/config/ghostty/config" \
 		DST="$(HOME)/.config/ghostty/config"
+	@# cmux primary config (path has spaces — inline instead of _link)
+	@_src="$(CLAUDE_LOCAL)/config/ghostty/config.cmux"; \
+	_dst="$(HOME)/Library/Application Support/com.mitchellh.ghostty/config"; \
+	if [ -L "$$_dst" ] && [ "$$(readlink "$$_dst")" = "$$_src" ]; then \
+		echo "    · config.cmux (ok)"; \
+	else \
+		if [ -e "$$_dst" ] && [ ! -L "$$_dst" ]; then \
+			mv "$$_dst" "$$_dst.bak"; \
+			echo "    Backing up $$_dst"; \
+		fi; \
+		ln -sfn "$$_src" "$$_dst"; \
+		echo "    ✓ config.cmux"; \
+	fi
 	@$(MAKE) --no-print-directory _copy \
 		SRC="$(CLAUDE_LOCAL)/config/ghostty/themes/basalt-ui-light" \
 		DST="$(HOME)/.config/ghostty/themes/basalt-ui-light"
@@ -458,6 +471,11 @@ status:
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitignore_global"
 	@echo "  Ghostty"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.config/ghostty/config"
+	@if [ -L "$(HOME)/Library/Application Support/com.mitchellh.ghostty/config" ]; then \
+		echo "    ✓ config.cmux"; \
+	else \
+		echo "    ✗ config.cmux [not symlinked — run make setup]"; \
+	fi
 	@$(MAKE) --no-print-directory _check-copy \
 		SRC="$(CLAUDE_LOCAL)/config/ghostty/themes/basalt-ui-light" \
 		DST="$(HOME)/.config/ghostty/themes/basalt-ui-light"

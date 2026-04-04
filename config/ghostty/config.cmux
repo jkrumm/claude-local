@@ -1,0 +1,31 @@
+# cmux / Ghostty config — tuned for Warp-like feel
+# Reload: Cmd+Shift+, inside cmux (or restart)
+
+# ── Themes (Blueprint v6 light/dark) ─────────────────────────────────────────
+theme = dark:basalt-ui-dark,light:basalt-ui-light
+
+# ── Font (matches Warp settings) ─────────────────────────────────────────────
+font-family = JetBrains Mono
+font-size = 13
+
+# ── Cursor — Warp default is solid block, no blink ───────────────────────────
+cursor-style = block
+cursor-style-blink = false
+
+# ── Padding — Warp has subtle inset ──────────────────────────────────────────
+window-padding-x = 10
+window-padding-y = 6
+
+# ── Scrollback — Warp is effectively unlimited ───────────────────────────────
+scrollback-limit = 100000
+
+# ── Window chrome ─────────────────────────────────────────────────────────────
+window-decoration = auto
+background-opacity = 1.0
+
+# ── Behaviour ─────────────────────────────────────────────────────────────────
+mouse-hide-while-typing = true
+copy-on-select = false
+
+# ── Splits (unfocused slightly dimmed, like Warp) ────────────────────────────
+unfocused-split-opacity = 0.92
