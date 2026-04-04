@@ -46,7 +46,7 @@ All services use static ports with `.test` domains (HTTPS via Caddy + dnsmasq).
 Port assignments and domains are in `~/SourceRoot/claude-local/config/Caddyfile` — that's the source of truth.
 
 **Every app:** static port, kill port before starting (`npx kill-port PORT && ...`), `--strictPort`, entry in Caddyfile.
-**Adding a service:** add block to Caddyfile, run `caddy reload`, commit in `claude-local`.
+**Adding a service:** add block to Caddyfile, run `caddy-reload`, commit in `claude-local`.
 
 ---
 
