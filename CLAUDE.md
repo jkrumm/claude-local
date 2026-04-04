@@ -18,13 +18,12 @@ outward — edit at either end, git always sees the change here.
 | `config/gitconfig` | `~/.gitconfig` | includeIf per workspace |
 | `config/gitconfig-personal` | `~/.gitconfig-personal` | jkrumm@pm.me + 1Password signing |
 | `config/gitconfig-work` | `~/.gitconfig-work` | johannes.krumm@iu.org + 1Password signing |
-| `config/gitignore_global` | `~/.gitignore_global` | cqueue.md, cnotes.md |
+| `config/gitignore_global` | `~/.gitignore_global` | sc-queue.md, sc-note.md |
 | `config/ghostty/config` | `~/.config/ghostty/config` | Ghostty terminal config + auto theme switching |
 | `config/ghostty/themes/*` | `~/.config/ghostty/themes/` | Blueprint v6 light/dark terminal themes |
-| `config/localias.yaml` | `~/Library/Application Support/localias.yaml` | localias proxy config (cqueue.local → 7705) |
+| `config/localias.yaml` | `~/Library/Application Support/localias.yaml` | localias proxy config (sideclaw.local → 7705) |
 | `scripts/wakeup.sh` | `~/.wakeup` | sleepwatcher hook — runs `localias reload` on wake |
 | `hooks/notify.ts` | `~/.claude/hooks/notify.ts` | All 4 hook events |
-| `scripts/queue.ts` | `~/.claude/queue.ts` | cq CLI |
 | `scripts/statusline.sh` | `~/.claude/statusline.sh` | 3-line statusline |
 | `scripts/fetch_usage.py` | `~/.claude/fetch_usage.py` | Claude.ai usage % fetcher (uv script) |
 | `rules/` | `~/.claude/rules/` (dir symlink) | Global rules (see `rules/*.md`, e.g., attribution, commit conventions, formatting, research-first, security, TypeScript, code style) |
@@ -92,7 +91,7 @@ cat ~/.claude/logs/$(date +%Y-%m-%d).jsonl | jq 'select(.src == "fetch_usage")'
 
 ## Key Technical Facts
 
-- `cqueue.md` blocks separated by `\n---\n`. Block types: plain text (◆), `/slash` (⚡), `STOP` (⏹).
+- `sc-queue.md` blocks separated by `\n---\n`. Block types: plain text (◆), `/slash` (⚡), `STOP` (⏹).
 - Stop hook: JSON `{"decision":"block","reason":task}` to stdout + `process.exit(0)` continues session. Queue empties = natural stop.
 - STOP exits with code 0 synchronously — no async notification call before exit.
 - Skills have optional `model:` frontmatter (`haiku` for fast forks, default = sonnet).

@@ -188,7 +188,7 @@ function findQueueFile(cwd: string): string | null {
       stderr: "pipe",
     });
     if (result.exitCode !== 0) return null;
-    return join(result.stdout.toString().trim(), "cqueue.md");
+    return join(result.stdout.toString().trim(), "sc-queue.md");
   } catch {
     return null;
   }
@@ -794,7 +794,7 @@ async function handleStopEvent(
   }
 
   if (nextTask === "STOP") {
-    process.stderr.write("[cq] STOPPED — resume with: cq add\n");
+    process.stderr.write("[sc] STOPPED\n");
     logEvent("hook", "stop_decision", "info", { decision: "stop_sentinel" });
     process.exit(0);
   }

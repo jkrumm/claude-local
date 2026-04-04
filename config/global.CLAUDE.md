@@ -80,17 +80,11 @@ Don't echo back file contents you just read. Don't narrate tool calls. Keep expl
 
 ---
 
-## Task Queue (`cq`)
+## Task Queue (`sc-queue.md`)
 
-Automates unattended multi-task Claude Code sessions. The Stop hook pops the next task from per-repo `cqueue.md` and injects it as the next user message.
+Automates unattended multi-task Claude Code sessions. The Stop hook pops the next task from per-repo `sc-queue.md` and injects it as the next user message.
 
-| Command | Effect |
-|-|-|
-| `cq add "text"` | Append a task |
-| `cq list` | Show all tasks |
-| `cq status` | Pending count |
-| `cq stop` | Append STOP sentinel |
-| `cq clear` | Empty the queue |
+Edit `sc-queue.md` directly to add tasks. Blocks separated by `\n---\n`. Append `STOP` as a standalone block to end the session.
 
 ---
 
