@@ -346,10 +346,10 @@ _setup-ghostty:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/config/ghostty/config" \
 		DST="$(HOME)/.config/ghostty/config"
-	@$(MAKE) --no-print-directory _link \
+	@$(MAKE) --no-print-directory _copy \
 		SRC="$(CLAUDE_LOCAL)/config/ghostty/themes/basalt-ui-light" \
 		DST="$(HOME)/.config/ghostty/themes/basalt-ui-light"
-	@$(MAKE) --no-print-directory _link \
+	@$(MAKE) --no-print-directory _copy \
 		SRC="$(CLAUDE_LOCAL)/config/ghostty/themes/basalt-ui-dark" \
 		DST="$(HOME)/.config/ghostty/themes/basalt-ui-dark"
 	@# Clean up old unmanaged theme files
@@ -366,6 +366,16 @@ _setup-browser:
 	@claude mcp remove chrome-devtools --scope user 2>/dev/null || true
 	@claude mcp add chrome-devtools --scope user -- npx -y chrome-devtools-mcp@latest --isolated --headless --usageStatistics=false
 	@echo "    ✓ chrome-devtools MCP registered (use via /browse skill only)"
+
+# Copy (not symlink) — for apps like cmux that don't follow symlinks for theme files
+.PHONY: _copy
+_copy:
+	@if [ -f "$(DST)" ] && cmp -s "$(SRC)" "$(DST)"; then \
+		echo "    · $(notdir $(DST)) (ok)"; \
+	else \
+		cp "$(SRC)" "$(DST)"; \
+		echo "    ✓ $(notdir $(DST)) (copied)"; \
+	fi
 
 .PHONY: _link
 _link:
@@ -448,8 +458,12 @@ status:
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitignore_global"
 	@echo "  Ghostty"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.config/ghostty/config"
-	@$(MAKE) --no-print-directory _check DST="$(HOME)/.config/ghostty/themes/basalt-ui-light"
-	@$(MAKE) --no-print-directory _check DST="$(HOME)/.config/ghostty/themes/basalt-ui-dark"
+	@$(MAKE) --no-print-directory _check-copy \
+		SRC="$(CLAUDE_LOCAL)/config/ghostty/themes/basalt-ui-light" \
+		DST="$(HOME)/.config/ghostty/themes/basalt-ui-light"
+	@$(MAKE) --no-print-directory _check-copy \
+		SRC="$(CLAUDE_LOCAL)/config/ghostty/themes/basalt-ui-dark" \
+		DST="$(HOME)/.config/ghostty/themes/basalt-ui-dark"
 	@echo "  Skills ($(shell ls $(CLAUDE_LOCAL)/skills/ | wc -l | xargs) — SourceRoot only)"
 	@for skill in $(CLAUDE_LOCAL)/skills/*/; do \
 		name=$$(basename "$$skill"); \
@@ -495,6 +509,17 @@ _check:
 		echo "    ✗ $(notdir $(DST)) [BROKEN]"; \
 	elif [ -e "$(DST)" ]; then \
 		echo "    ✗ $(notdir $(DST)) [real file — run make setup]"; \
+	else \
+		echo "    ✗ $(notdir $(DST)) [missing — run make setup]"; \
+	fi
+
+# Check for copied (not symlinked) files — used for cmux theme files
+.PHONY: _check-copy
+_check-copy:
+	@if [ -f "$(DST)" ] && ! [ -L "$(DST)" ] && cmp -s "$(SRC)" "$(DST)"; then \
+		echo "    ✓ $(notdir $(DST)) (copy)"; \
+	elif [ -f "$(DST)" ] && ! [ -L "$(DST)" ]; then \
+		echo "    ✗ $(notdir $(DST)) [stale copy — run make setup]"; \
 	else \
 		echo "    ✗ $(notdir $(DST)) [missing — run make setup]"; \
 	fi
