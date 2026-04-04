@@ -1,6 +1,7 @@
 CLAUDE_LOCAL := $(shell pwd)
 CLAUDE_DIR   := $(HOME)/.claude
 SOURCEROOT   := $(HOME)/SourceRoot
+BREW_PREFIX  := $(shell brew --prefix 2>/dev/null || echo /opt/homebrew)
 
 # ============================================================================
 # Setup — idempotent, safe to run on a fresh machine or re-run after changes
@@ -23,7 +24,7 @@ setup:
 	@$(MAKE) --no-print-directory _setup-gitignore
 	@$(MAKE) --no-print-directory _setup-ghostty
 	@$(MAKE) --no-print-directory _setup-tools
-	@$(MAKE) --no-print-directory _setup-localias
+	@$(MAKE) --no-print-directory _setup-caddy
 	@$(MAKE) --no-print-directory _setup-browser
 	@$(MAKE) --no-print-directory _setup-pnpm
 	@$(MAKE) --no-print-directory _setup-viteplus
@@ -107,17 +108,6 @@ _setup-config:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/config/gitconfig-work" \
 		DST="$(HOME)/.gitconfig-work"
-	@LOCALIAS_SRC="$(CLAUDE_LOCAL)/config/localias.yaml"; \
-	 LOCALIAS_DST="$(HOME)/Library/Application Support/localias.yaml"; \
-	 if [ -L "$$LOCALIAS_DST" ] && [ "$$(readlink "$$LOCALIAS_DST")" = "$$LOCALIAS_SRC" ]; then \
-	   echo "    · localias.yaml (ok)"; \
-	 else \
-	   if [ -e "$$LOCALIAS_DST" ] && [ ! -L "$$LOCALIAS_DST" ]; then \
-	     mv "$$LOCALIAS_DST" "$$LOCALIAS_DST.bak"; \
-	   fi; \
-	   ln -sfn "$$LOCALIAS_SRC" "$$LOCALIAS_DST"; \
-	   echo "    ✓ localias.yaml"; \
-	 fi
 
 .PHONY: _setup-tools
 _setup-tools:
@@ -169,13 +159,48 @@ _setup-tools:
 		echo "    ✓ bun installed"; \
 	fi
 
-.PHONY: _setup-localias
-_setup-localias:
-	@echo "  Localias..."
-	@brew list peterldowns/tap/localias &>/dev/null || brew install peterldowns/tap/localias
-	@localias start >/dev/null 2>&1 || true
-	@localias reload >/dev/null 2>&1 || true
-	@echo "    ✓ localias daemon"
+.PHONY: _setup-caddy
+_setup-caddy:
+	@echo "  Caddy (local HTTPS reverse proxy)..."
+	@brew list caddy &>/dev/null || brew install caddy
+	@echo "    ✓ caddy $$(caddy version 2>/dev/null | head -1)"
+	@mkdir -p $(BREW_PREFIX)/etc/caddy
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(CLAUDE_LOCAL)/config/Caddyfile" \
+		DST="$(BREW_PREFIX)/etc/caddy/Caddyfile"
+	@# Trust Caddy local CA (one-time — installs to macOS Keychain)
+	@if security find-certificate -c "Caddy Local Authority" /Library/Keychains/System.keychain >/dev/null 2>&1; then \
+		echo "    · Caddy CA trusted (ok)"; \
+	else \
+		echo "    Trusting Caddy local CA (may prompt for password)..."; \
+		sudo caddy trust 2>/dev/null && echo "    ✓ Caddy CA trusted" \
+			|| echo "    ✗ caddy trust failed — run manually: sudo caddy trust"; \
+	fi
+	@# Start Caddy as LaunchDaemon (root — required for port 443)
+	@sudo brew services restart caddy >/dev/null 2>&1 \
+		&& echo "    ✓ caddy service" \
+		|| echo "    ✗ caddy service failed — check: sudo brew services list"
+	@echo "  dnsmasq (wildcard *.test → 127.0.0.1)..."
+	@brew list dnsmasq &>/dev/null || brew install dnsmasq
+	@echo "    ✓ dnsmasq installed"
+	@# Add wildcard entry (idempotent)
+	@if grep -q "address=/.test/127.0.0.1" "$(BREW_PREFIX)/etc/dnsmasq.conf" 2>/dev/null; then \
+		echo "    · *.test wildcard (ok)"; \
+	else \
+		echo "address=/.test/127.0.0.1" >> "$(BREW_PREFIX)/etc/dnsmasq.conf"; \
+		echo "    ✓ *.test wildcard added to dnsmasq.conf"; \
+	fi
+	@# Register *.test resolver with macOS (one-time sudo)
+	@if [ -f "/etc/resolver/test" ]; then \
+		echo "    · /etc/resolver/test (ok)"; \
+	else \
+		sudo mkdir -p /etc/resolver && printf "nameserver 127.0.0.1\n" | sudo tee /etc/resolver/test >/dev/null; \
+		echo "    ✓ /etc/resolver/test created"; \
+	fi
+	@sudo brew services restart dnsmasq >/dev/null 2>&1 \
+		&& echo "    ✓ dnsmasq service" \
+		|| echo "    ✗ dnsmasq service failed — check: sudo brew services list"
+	@# sleepwatcher fires wakeup.sh on sleep wake → caddy reload
 	@brew list sleepwatcher &>/dev/null || brew install sleepwatcher
 	@brew services start sleepwatcher >/dev/null 2>&1 || brew services restart sleepwatcher >/dev/null 2>&1 || true
 	@echo "    ✓ sleepwatcher service"
@@ -427,14 +452,6 @@ status:
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitconfig"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitconfig-personal"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.gitconfig-work"
-	@LOCALIAS_DST="$(HOME)/Library/Application Support/localias.yaml"; \
-	 if [ -L "$$LOCALIAS_DST" ] && [ -e "$$LOCALIAS_DST" ]; then \
-	   echo "    ✓ localias.yaml"; \
-	 elif [ -L "$$LOCALIAS_DST" ]; then \
-	   echo "    ✗ localias.yaml [BROKEN]"; \
-	 else \
-	   echo "    ✗ localias.yaml [real file — run make setup]"; \
-	 fi
 	@echo "  1Password (personal account)"
 	@if op whoami >/dev/null 2>&1; then \
 		echo "    ✓ op session active ($$(op whoami --format=json 2>/dev/null | jq -r '.email // "unknown"'))"; \
@@ -493,9 +510,15 @@ status:
 			&& echo "    ✓ $$tool" \
 			|| echo "    ✗ $$tool [not installed — run make setup]"; \
 	done
-	@echo "  Localias"
-	@brew list peterldowns/tap/localias &>/dev/null && echo "    ✓ localias" || echo "    ✗ localias [not installed — run make setup]"
-	@localias status 2>&1 | grep -q "running" && echo "    ✓ localias daemon running" || echo "    ✗ localias daemon [not running — run make setup]"
+	@echo "  Caddy + dnsmasq"
+	@brew list caddy &>/dev/null && echo "    ✓ caddy" || echo "    ✗ caddy [not installed — run make setup]"
+	@$(MAKE) --no-print-directory _check DST="$(BREW_PREFIX)/etc/caddy/Caddyfile"
+	@pgrep -x caddy >/dev/null && echo "    ✓ caddy service running" || echo "    ✗ caddy service [not running — run: sudo brew services start caddy]"
+	@security find-certificate -c "Caddy Local Authority" /Library/Keychains/System.keychain >/dev/null 2>&1 \
+		&& echo "    ✓ Caddy CA trusted" || echo "    ✗ Caddy CA [not trusted — run: sudo caddy trust]"
+	@brew list dnsmasq &>/dev/null && echo "    ✓ dnsmasq" || echo "    ✗ dnsmasq [not installed — run make setup]"
+	@[ -f /etc/resolver/test ] && echo "    ✓ /etc/resolver/test" || echo "    ✗ /etc/resolver/test [missing — run make setup]"
+	@pgrep -x dnsmasq >/dev/null && echo "    ✓ dnsmasq service running" || echo "    ✗ dnsmasq service [not running — run: sudo brew services start dnsmasq]"
 	@brew list sleepwatcher &>/dev/null && echo "    ✓ sleepwatcher" || echo "    ✗ sleepwatcher [not installed — run make setup]"
 	@brew services list | grep sleepwatcher | grep -q started && echo "    ✓ sleepwatcher service started" || echo "    ✗ sleepwatcher service [not started — run make setup]"
 	@$(MAKE) --no-print-directory _check DST="$(HOME)/.wakeup"
@@ -598,7 +621,7 @@ help:
 	@echo "  make github-config      Apply branch protection + merge settings to all repos"
 	@echo "  make github-config-dry  Preview without applying"
 	@echo ""
-	@echo "  make up         Start cqueue dashboard  (http://cqueue.local)"
+	@echo "  make up         Start cqueue dashboard"
 	@echo "  make down       Stop cqueue"
 	@echo "  make rebuild    Force-recreate cqueue container"
 	@echo "  make logs       Tail cqueue logs"

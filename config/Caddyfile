@@ -1,0 +1,32 @@
+# Local development reverse proxy — version-controlled in claude-local
+#
+# Adding a service:  name.test { import local; reverse_proxy localhost:PORT }
+# Reload config:     caddy reload   (no sudo needed)
+#
+# Stack:
+#   dnsmasq  — wildcard *.test → 127.0.0.1 (no per-domain DNS config ever)
+#   Caddy    — reverse proxy + HTTPS via local CA (tls internal)
+#
+# One-time setup: make setup  (sudo required for dnsmasq + Caddy services only)
+# Day-to-day:     edit this file → caddy reload
+
+(local) {
+	tls internal
+}
+
+# rollhook
+rollhook.test                 { import local; reverse_proxy localhost:7700 }
+rollhook-marketing.test       { import local; reverse_proxy localhost:7701 }
+rollhook-dashboard.test       { import local; reverse_proxy localhost:7702 }
+
+# sideclaw
+sideclaw.test                 { import local; reverse_proxy localhost:7705 }
+
+# observability
+hyperdx.test                  { import local; reverse_proxy localhost:7707 }
+
+# basalt-ui
+basalt.test                   { import local; reverse_proxy localhost:7710 }
+basalt-example.test           { import local; reverse_proxy localhost:7711 }
+basalt-ui-playground.test     { import local; reverse_proxy localhost:7712 }
+basalt-ui-playground-api.test { import local; reverse_proxy localhost:7713 }
