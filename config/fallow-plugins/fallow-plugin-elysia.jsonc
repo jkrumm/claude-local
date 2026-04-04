@@ -1,0 +1,30 @@
+{
+  // Fallow plugin for Elysia — auto-detected when "elysia" is in dependencies.
+  // Marks standard entry points and tooling deps so they are never flagged as unused.
+  // Plugin authoring: https://docs.fallow.tools/frameworks/custom
+  "name": "elysia",
+  "enablers": ["elysia"],
+  "entryPoints": [
+    // Standard Elysia app entry points
+    "src/index.ts",
+    "src/app.ts",
+    "src/main.ts",
+    // Route modules are imported via .use() — trace from index, not flagged directly
+    "src/routes/**/*.ts",
+    "src/middleware/**/*.ts"
+  ],
+  "toolingDependencies": [
+    // Elysia ecosystem packages — runtime deps, never flag as unused
+    "@elysiajs/cors",
+    "@elysiajs/opentelemetry",
+    "@elysiajs/openapi",
+    "@elysiajs/eden",
+    "@elysiajs/static",
+    "@elysiajs/jwt",
+    "@elysiajs/bearer"
+  ],
+  "alwaysUsed": [
+    // Drizzle schema files are referenced via db.query.* at runtime
+    "src/schema/**/*.ts"
+  ]
+}

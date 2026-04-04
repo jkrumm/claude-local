@@ -46,8 +46,8 @@ Step 2 — Get changes:
 Step 3 — CodeRabbit CLI (if available):
   coderabbit --prompt-only -t uncommitted 2>/dev/null
 
-Step 4 — Quick static analysis:
-  npx knip --reporter json 2>/dev/null | jq '.counters // empty'
+Step 4 — Quick dead code scan (changed files only):
+  npx fallow dead-code --changed-since HEAD --summary 2>/dev/null
 
 Step 5 — Semantic review from these angles:
 - Architecture: layer violations, coupling, fits existing patterns?

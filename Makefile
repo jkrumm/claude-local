@@ -153,6 +153,13 @@ _setup-tools:
 		brew install coderabbit 2>/dev/null || curl -fsSL https://cli.coderabbit.ai/install.sh | sh; \
 		echo "    ✓ coderabbit installed (run: coderabbit auth login)"; \
 	fi
+	@# fallow — project-graph static analyzer (dead code, dupes, complexity — replaces knip/jscpd)
+	@if command -v fallow >/dev/null 2>&1; then \
+		echo "    · fallow $$(fallow --version 2>/dev/null | head -1) (ok)"; \
+	else \
+		npm install -g fallow 2>/dev/null || true; \
+		command -v fallow >/dev/null 2>&1 && echo "    ✓ fallow installed" || echo "    · fallow (use npx fallow as fallback)"; \
+	fi
 	@# bun — JS runtime (cq alias, hooks)
 	@if command -v bun >/dev/null 2>&1; then \
 		echo "    · bun $$(bun --version) (ok)"; \
@@ -449,7 +456,7 @@ status:
 		$(MAKE) --no-print-directory _check DST="$(SOURCEROOT)/.claude/skills/$$name"; \
 	done
 	@echo "  Tools"
-	@for tool in jq gh fzf zoxide wtp fnm bun uv age coderabbit; do \
+	@for tool in jq gh fzf zoxide wtp fnm bun uv age coderabbit fallow; do \
 		command -v $$tool >/dev/null 2>&1 \
 			&& echo "    ✓ $$tool" \
 			|| echo "    ✗ $$tool [not installed — run make setup]"; \
