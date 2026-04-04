@@ -40,6 +40,55 @@ All secrets managed via 1Password with `op run --env-file=.env.tpl -- <command>`
 
 ---
 
+## Local Dev Proxy
+
+All local services run on **static ports** with **`.test` domains** via Caddy + dnsmasq.
+Config lives in `~/SourceRoot/claude-local/config/Caddyfile` (version-controlled).
+
+### Port Registry
+
+| Domain | Port | Project |
+|-|-|-|
+| `rollhook.test` | 7700 | rollhook API |
+| `rollhook-marketing.test` | 7701 | rollhook marketing |
+| `rollhook-dashboard.test` | 7702 | rollhook dashboard |
+| `sideclaw.test` | 7705 | sideclaw |
+| `hyperdx.test` | 7707 | HyperDX observability |
+| `basalt.test` | 7710 | basalt-ui dev |
+| `basalt-example.test` | 7711 | basalt-ui example |
+| `basalt-ui-playground.test` | 7712 | basalt-ui playground frontend |
+| `basalt-ui-playground-api.test` | 7713 | basalt-ui playground API |
+
+### Conventions
+
+**Every app must:**
+1. Use a **static port** — never random, never default (3000/5173). Reserve it in the table above.
+2. Kill the port before starting — so `dev`/`serve`/`start` works regardless of prior state:
+   ```json
+   "dev": "npx kill-port 7705 && vite --port 7705 --strictPort"
+   ```
+   Or for bun/other runtimes: prefix the start command with `kill -9 $(lsof -ti:PORT) 2>/dev/null; `.
+3. Use `--strictPort` (Vite) or equivalent — fail loudly if port is taken rather than silently picking another.
+4. Have a **`.test` domain** registered in `claude-local/config/Caddyfile`.
+
+### Adding a New Service
+
+1. Pick the next available port (increment from last in registry above).
+2. Add to `~/SourceRoot/claude-local/config/Caddyfile`:
+   ```caddyfile
+   myapp.test {
+       import local
+       reverse_proxy localhost:PORT
+   }
+   ```
+3. Run `caddy reload` — no sudo, instant, zero downtime.
+4. Update the port registry table above.
+5. Commit both changes together in `claude-local`.
+
+Access via `https://myapp.test` — HTTP redirects to HTTPS automatically.
+
+---
+
 ## BasaltUI Integration
 
 **Repository:** https://github.com/jkrumm/basalt-ui
