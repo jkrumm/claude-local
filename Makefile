@@ -178,8 +178,9 @@ _setup-caddy:
 		&& echo "    ✓ caddy service" \
 		|| echo "    ✗ caddy service failed — check: sudo brew services list"
 	@# Trust Caddy local CA via admin API — sudo caddy trust connects to :2019,
-	@# fetches the cert, and installs it to the system keychain
-	@if security find-certificate -c "Caddy Local Authority" >/dev/null 2>&1; then \
+	@# fetches the cert, and installs it to the system keychain.
+	@# Check actual trust settings (not just cert presence) to avoid false positives.
+	@if security dump-trust-settings -d 2>/dev/null | grep -q "Caddy"; then \
 		echo "    · Caddy CA trusted (ok)"; \
 	else \
 		echo "    Waiting for Caddy admin API (5s)..."; \
@@ -530,8 +531,8 @@ status:
 	@brew list caddy &>/dev/null && echo "    ✓ caddy" || echo "    ✗ caddy [not installed — run make setup]"
 	@$(MAKE) --no-print-directory _check DST="$(BREW_PREFIX)/etc/Caddyfile"
 	@pgrep -x caddy >/dev/null && echo "    ✓ caddy service running" || echo "    ✗ caddy service [not running — run: sudo brew services start caddy]"
-	@security find-certificate -c "Caddy Local Authority" >/dev/null 2>&1 \
-		&& echo "    ✓ Caddy CA trusted" || echo "    ✗ Caddy CA [not trusted — run: caddy trust]"
+	@security dump-trust-settings -d 2>/dev/null | grep -q "Caddy" \
+		&& echo "    ✓ Caddy CA trusted" || echo "    ✗ Caddy CA [not trusted — run: make setup]"
 	@brew list dnsmasq &>/dev/null && echo "    ✓ dnsmasq" || echo "    ✗ dnsmasq [not installed — run make setup]"
 	@[ -f /etc/resolver/test ] && echo "    ✓ /etc/resolver/test" || echo "    ✗ /etc/resolver/test [missing — run make setup]"
 	@pgrep -x dnsmasq >/dev/null && echo "    ✓ dnsmasq service running" || echo "    ✗ dnsmasq service [not running — run: sudo brew services start dnsmasq]"
