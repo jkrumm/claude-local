@@ -78,7 +78,7 @@ optimizeDeps: { exclude: ['basalt-ui'] }
 | `/implement` | Guided implementation with research + explore + check | main | sonnet subagent |
 | `/ship` | Full flow: check → review → commit → PR → CodeRabbit → merge → release | main | haiku |
 | `/browse` | Chrome DevTools debugging via subagent | **fork** | haiku |
-| `/analyze` | Deep static analysis (knip, jscpd, dependency-cruiser) | **subprocess** | haiku |
+| `/analyze` | Deep static analysis (fallow — dead code, dupes, complexity) | **subprocess** | haiku |
 | `/git-cleanup` | Squash and group noisy branch commits | main | haiku |
 | `/pr [action]` | GitHub PR workflow (create, status, merge) | main | haiku |
 | `/ralph [cmd]` | Autonomous multi-group implementation loop | main | sonnet |
@@ -102,7 +102,7 @@ optimizeDeps: { exclude: ['basalt-ui'] }
 
 **Or use `/ship` directly** — it auto-detects state and runs the right steps.
 
-**Direct-to-master repos:** homelab, homelab-private, vps, claude-local — `/ship` skips PR flow.
+**Direct-to-master repos:** homelab, homelab-private, vps, claude-local, sideclaw — `/ship` skips PR flow.
 
 **`/pr create` automatically:** errors on default branch, proposes branch rename, runs `/commit` if uncommitted, offers `/git-cleanup` if ≥3 commits, runs `/check` pre-flight.
 

@@ -29,7 +29,7 @@ gh pr view --json state,statusCheckRollup,reviews,url 2>/dev/null
 ## Flow Decision
 
 ### Direct-to-Master Repos
-If the repo name matches: `homelab`, `homelab-private`, `vps`, `claude-local` — OR if on the default branch with small changes:
+If the repo name matches: `homelab`, `homelab-private`, `vps`, `claude-local`, `sideclaw` — OR if on the default branch with small changes:
 1. Run `/check`
 2. Run `/commit` (if uncommitted changes)
 3. `git push`
