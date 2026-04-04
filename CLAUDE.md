@@ -22,7 +22,7 @@ outward — edit at either end, git always sees the change here.
 | `config/ghostty/config` | `~/.config/ghostty/config` | Shell integration + option key settings |
 | `config/ghostty/config.cmux` | `~/Library/Application Support/com.mitchellh.ghostty/config` | Primary cmux config — font, theme, cursor, padding |
 | `config/ghostty/themes/*` | `~/.config/ghostty/themes/` | Blueprint v6 light/dark terminal themes (copied, not symlinked — cmux symlink bug) |
-| `config/Caddyfile` | `/opt/homebrew/etc/caddy/Caddyfile` | Local HTTPS reverse proxy — edit here, then `caddy reload` |
+| `config/Caddyfile` | `$(brew --prefix)/etc/Caddyfile` | Local HTTPS reverse proxy — edit here, then `caddy reload` |
 | `scripts/wakeup.sh` | `~/.wakeup` | sleepwatcher hook — runs `caddy reload` on wake |
 | `hooks/notify.ts` | `~/.claude/hooks/notify.ts` | All 4 hook events |
 | `scripts/statusline.sh` | `~/.claude/statusline.sh` | 3-line statusline |

@@ -164,23 +164,29 @@ _setup-caddy:
 	@echo "  Caddy (local HTTPS reverse proxy)..."
 	@brew list caddy &>/dev/null || brew install caddy
 	@echo "    ✓ caddy $$(caddy version 2>/dev/null | head -1)"
-	@mkdir -p $(BREW_PREFIX)/etc/caddy
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/config/Caddyfile" \
-		DST="$(BREW_PREFIX)/etc/caddy/Caddyfile"
+		DST="$(BREW_PREFIX)/etc/Caddyfile"
 	@# Start Caddy as LaunchDaemon first (root — required for port 443)
 	@sudo brew services restart caddy >/dev/null 2>&1 \
 		&& echo "    ✓ caddy service" \
 		|| echo "    ✗ caddy service failed — check: sudo brew services list"
-	@# Trust Caddy local CA — requires Caddy to be running (admin API on :2019)
+	@# Trust Caddy local CA — install cert directly from PKI storage
+	@# (caddy trust uses admin API which is unreliable for root LaunchDaemons)
 	@if security find-certificate -c "Caddy Local Authority" /Library/Keychains/System.keychain >/dev/null 2>&1; then \
 		echo "    · Caddy CA trusted (ok)"; \
 	else \
-		echo "    Waiting for Caddy admin API..."; \
-		sleep 3; \
-		echo "    Trusting Caddy local CA (may prompt for password)..."; \
-		sudo caddy trust 2>/dev/null && echo "    ✓ Caddy CA trusted" \
-			|| echo "    ✗ caddy trust failed — re-run: sudo caddy trust"; \
+		echo "    Waiting for Caddy to generate local CA..."; \
+		sleep 4; \
+		if sudo cp "/var/root/Library/Application Support/Caddy/pki/authorities/local/root.crt" /tmp/caddy-ca.crt 2>/dev/null; then \
+			sudo security add-trusted-cert -d -r trustRoot \
+				-k /Library/Keychains/System.keychain /tmp/caddy-ca.crt 2>/dev/null \
+				&& echo "    ✓ Caddy CA trusted" \
+				|| echo "    ✗ CA trust failed — run: sudo caddy trust"; \
+			rm -f /tmp/caddy-ca.crt; \
+		else \
+			echo "    ✗ CA cert not found — re-run: make setup (Caddy may need more time to start)"; \
+		fi; \
 	fi
 	@echo "  dnsmasq (wildcard *.test → 127.0.0.1)..."
 	@brew list dnsmasq &>/dev/null || brew install dnsmasq
@@ -514,7 +520,7 @@ status:
 	done
 	@echo "  Caddy + dnsmasq"
 	@brew list caddy &>/dev/null && echo "    ✓ caddy" || echo "    ✗ caddy [not installed — run make setup]"
-	@$(MAKE) --no-print-directory _check DST="$(BREW_PREFIX)/etc/caddy/Caddyfile"
+	@$(MAKE) --no-print-directory _check DST="$(BREW_PREFIX)/etc/Caddyfile"
 	@pgrep -x caddy >/dev/null && echo "    ✓ caddy service running" || echo "    ✗ caddy service [not running — run: sudo brew services start caddy]"
 	@security find-certificate -c "Caddy Local Authority" /Library/Keychains/System.keychain >/dev/null 2>&1 \
 		&& echo "    ✓ Caddy CA trusted" || echo "    ✗ Caddy CA [not trusted — run: sudo caddy trust]"
