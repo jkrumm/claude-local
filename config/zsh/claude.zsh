@@ -25,13 +25,11 @@ c() {
 
   while true; do
     # Auto-sync Claude Code theme with macOS appearance (no "system" theme exists)
-    local appearance
+    local appearance claude_theme
     appearance=$(defaults read -g AppleInterfaceStyle 2>/dev/null)
-    if [[ "$appearance" == "Dark" ]]; then
-      sed -i '' 's/"theme": "light-ansi"/"theme": "dark-ansi"/' ~/.claude.json 2>/dev/null
-    else
-      sed -i '' 's/"theme": "dark-ansi"/"theme": "light-ansi"/' ~/.claude.json 2>/dev/null
-    fi
+    [[ "$appearance" == "Dark" ]] && claude_theme="dark-ansi" || claude_theme="light-ansi"
+    jq --arg t "$claude_theme" '.theme = $t' ~/.claude.json > /tmp/.claude.json.tmp \
+      && mv /tmp/.claude.json.tmp ~/.claude.json
 
     if [[ "$PWD" == "$HOME/SourceRoot"* ]]; then
       ENABLE_TOOL_SEARCH=true ANTHROPIC_API_KEY="" ANTHROPIC_BASE_URL="" claude --dangerously-skip-permissions --plugin-dir ~/SourceRoot/.claude "${claude_args[@]}"

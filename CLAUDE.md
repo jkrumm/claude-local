@@ -89,6 +89,15 @@ cat ~/.claude/logs/$(date +%Y-%m-%d).jsonl | jq 'select(.src == "fetch_usage")'
 - fetch_usage broken → `fetch_error` with `type` field shows which exception class failed
 - Unexpected stop behavior → `stop_decision` shows exact decision taken
 
+## Terminal Setup
+
+**cmux** (`/Applications/cmux.app`) is the primary terminal — a macOS-native multiplexer built on top of Ghostty. It is **not tmux**. cmux reads `~/.config/ghostty/config` for terminal rendering (same syntax as Ghostty) and stores its own app preferences (appearance mode, sidebar, etc.) in macOS defaults under `com.cmuxterm.app`.
+
+**Theme auto-switching:**
+- cmux app chrome: `appearanceMode = system` (stored in plist — follows macOS appearance)
+- Terminal colors: `theme = light:basalt-ui-light,dark:basalt-ui-dark` in `~/.config/ghostty/config`
+- Claude Code: `c()` in `claude.zsh` writes `theme` key to `~/.claude.json` via `jq` on each launch
+
 ## Key Technical Facts
 
 - `sc-queue.md` blocks separated by `\n---\n`. Block types: plain text (◆), `/slash` (⚡), `STOP` (⏹).
