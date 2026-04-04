@@ -168,18 +168,20 @@ _setup-caddy:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/config/Caddyfile" \
 		DST="$(BREW_PREFIX)/etc/caddy/Caddyfile"
-	@# Trust Caddy local CA (one-time — installs to macOS Keychain)
-	@if security find-certificate -c "Caddy Local Authority" /Library/Keychains/System.keychain >/dev/null 2>&1; then \
-		echo "    · Caddy CA trusted (ok)"; \
-	else \
-		echo "    Trusting Caddy local CA (may prompt for password)..."; \
-		sudo caddy trust 2>/dev/null && echo "    ✓ Caddy CA trusted" \
-			|| echo "    ✗ caddy trust failed — run manually: sudo caddy trust"; \
-	fi
-	@# Start Caddy as LaunchDaemon (root — required for port 443)
+	@# Start Caddy as LaunchDaemon first (root — required for port 443)
 	@sudo brew services restart caddy >/dev/null 2>&1 \
 		&& echo "    ✓ caddy service" \
 		|| echo "    ✗ caddy service failed — check: sudo brew services list"
+	@# Trust Caddy local CA — requires Caddy to be running (admin API on :2019)
+	@if security find-certificate -c "Caddy Local Authority" /Library/Keychains/System.keychain >/dev/null 2>&1; then \
+		echo "    · Caddy CA trusted (ok)"; \
+	else \
+		echo "    Waiting for Caddy admin API..."; \
+		sleep 3; \
+		echo "    Trusting Caddy local CA (may prompt for password)..."; \
+		sudo caddy trust 2>/dev/null && echo "    ✓ Caddy CA trusted" \
+			|| echo "    ✗ caddy trust failed — re-run: sudo caddy trust"; \
+	fi
 	@echo "  dnsmasq (wildcard *.test → 127.0.0.1)..."
 	@brew list dnsmasq &>/dev/null || brew install dnsmasq
 	@echo "    ✓ dnsmasq installed"
