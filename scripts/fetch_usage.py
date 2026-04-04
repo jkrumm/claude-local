@@ -31,7 +31,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 CACHE_DIR = Path("/tmp/claude_sl")
 CACHE_FILE = CACHE_DIR / "usage_api.json"
 COOKIE_DB = Path.home() / "Library/Application Support/Google/Chrome/Default/Cookies"
-CLAUDE_CFG = Path.home() / ".claude/.claude.json"
+CLAUDE_CFG = Path.home() / ".claude.json"
 LOG_DIR = Path.home() / ".claude" / "logs"
 
 

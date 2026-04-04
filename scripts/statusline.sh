@@ -97,7 +97,7 @@ elif [ -f "$_USAGE_CACHE" ] && jq -e '.five_hour.utilization != null' "$_USAGE_C
   _5h_reset=$(jq -r '.five_hour.resets_at_epoch // 0' "$_USAGE_CACHE")
   _wk_util=$(jq -r '.seven_day.utilization // empty' "$_USAGE_CACHE")
 
-  _5h_pct=$(printf "%.0f" "$_5h_util" 2>/dev/null || echo "?")
+  _5h_pct=$(jq -rn "$_5h_util | round")
 
   # Color-code the 5h percentage
   if [ "${_5h_pct:-0}" -lt 50 ]; then
@@ -118,7 +118,7 @@ elif [ -f "$_USAGE_CACHE" ] && jq -e '.five_hour.utilization != null' "$_USAGE_C
   usage_parts="${_uc}${_5h_pct}%${reset}/5h${_mins_left}"
 
   if [ -n "$_wk_util" ]; then
-    _wk_pct=$(printf "%.0f" "$_wk_util" 2>/dev/null || echo "?")
+    _wk_pct=$(jq -rn "$_wk_util | round")
     usage_parts="${usage_parts} · ${_wk_pct}%/wk"
   fi
 fi
