@@ -1,12 +1,12 @@
 ---
 name: update-agent-rules
-description: Update frontend agent rules (React best practices, TanStack Query/Router/Start) from upstream GitHub repos. Use this skill when the user wants to update, sync, check versions, add new rule sets, or troubleshoot the frontend rules setup. Also trigger when the user mentions "agent skills", "agent rules", "react rules", "tanstack rules", or asks about the rules architecture.
+description: Update agent rules (React, TanStack, Elysia best practices) from upstream GitHub repos. Use this skill when the user wants to update, sync, check versions, add new rule sets, or troubleshoot the rules setup. Also trigger when the user mentions "agent skills", "agent rules", "react rules", "tanstack rules", "elysia rules", or asks about the rules architecture.
 model: haiku
 ---
 
 # Update Agent Rules
 
-Manages the frontend best-practice rules sourced from community agent-skills repos. These rules give Claude context-aware guidance when writing React/TanStack code.
+Manages best-practice rules sourced from community agent-skills repos. These rules give Claude context-aware guidance when writing React/TanStack frontend code and Elysia backend code.
 
 ## Architecture
 
@@ -16,14 +16,15 @@ Two layers — lightweight index files auto-load during development, full refere
 
 Location: `~/SourceRoot/claude-local/rules/`
 
-| File | Source Repo | Rules |
-|-|-|-|
-| `react-best-practices.md` | `vercel-labs/agent-skills` | 69 rules — async, bundle, server, client, re-render, rendering, JS perf, advanced |
-| `tanstack-query.md` | `DeckardGer/tanstack-agent-skills` | 21 rules — query keys, caching, mutations, error handling, prefetching, SSR |
-| `tanstack-router.md` | `DeckardGer/tanstack-agent-skills` | 15 rules — type safety, route org, data loading, search params, navigation |
-| `tanstack-start.md` | `DeckardGer/tanstack-agent-skills` | 13+4 rules — server functions, security, middleware, auth + integration patterns |
+| File | Source Repo | Paths | Rules |
+|-|-|-|-|
+| `react-best-practices.md` | `vercel-labs/agent-skills` | `**/*.tsx`, `**/*.jsx` | 69 rules — async, bundle, server, client, re-render, rendering, JS perf, advanced |
+| `tanstack-query.md` | `DeckardGer/tanstack-agent-skills` | `**/*.tsx`, `**/*.jsx` | 21 rules — query keys, caching, mutations, error handling, prefetching, SSR |
+| `tanstack-router.md` | `DeckardGer/tanstack-agent-skills` | `**/*.tsx`, `**/*.jsx` | 15 rules — type safety, route org, data loading, search params, navigation |
+| `tanstack-start.md` | `DeckardGer/tanstack-agent-skills` | `**/*.tsx`, `**/*.jsx` | 13+4 rules — server functions, security, middleware, auth + integration patterns |
+| `elysia.md` | `elysiajs/skills` | `**/api/**/*.ts`, `**/server/**/*.ts` | Key concepts — method chaining, encapsulation, validation, MVC, plugins |
 
-Each file has `paths: ["**/*.tsx", "**/*.jsx"]` frontmatter — loads automatically when touching React files, zero cost on backend work. Total ~5K tokens.
+Frontend rules load on `.tsx`/`.jsx` files (~5K tokens). Elysia rule loads on backend `.ts` files in `api/` or `server/` dirs (~3.5K tokens). Zero cross-contamination.
 
 ### Layer 2: Full Reference (manual reads)
 
@@ -36,9 +37,17 @@ reference/
   tanstack-router/         # 15 .md files
   tanstack-start/          # 13 .md files
   tanstack-integration/    #  4 .md files
+  elysia/                  # 52 files across 5 subdirs
+    references/            # 11 .md — core docs (route, validation, lifecycle, plugin, etc.)
+    plugins/               # 11 .md — official plugin docs (cors, jwt, openapi, otel, etc.)
+    integrations/          # 15 .md — drizzle, better-auth, tanstack-start, etc.
+    patterns/              #  1 .md — MVC pattern
+    examples/              # 14 .ts — code examples
 ```
 
-These are the original rule files from the upstream repos — unmodified. Each contains explanation, incorrect example, correct example, and context. Total ~81K tokens. The `/review` skill reads these when reviewing `.tsx` code.
+These are the original files from the upstream repos — unmodified. Frontend rules total ~81K tokens. Elysia reference total ~152KB. The `/review` skill reads these when reviewing code.
+
+**Elysia live docs:** For the latest API (beyond local reference), fetch `https://elysiajs.com/llms.txt` and follow specific topic URLs.
 
 ### Version Tracking
 
@@ -47,6 +56,7 @@ Each index rule file has a `source:` field in its YAML frontmatter:
 ```yaml
 source: vercel-labs/agent-skills@73140fc (2026-04-02)
 source: DeckardGer/tanstack-agent-skills@0e8bcdc (2026-04-03)
+source: elysiajs/skills@8fd8031 (2026-01-20)
 ```
 
 Format: `{org}/{repo}@{short-sha} ({date})`. Compare against upstream to check for updates.
@@ -60,10 +70,12 @@ Format: `{org}/{repo}@{short-sha} ({date})`. Compare against upstream to check f
 cd /tmp
 git clone --depth 1 https://github.com/vercel-labs/agent-skills.git
 git clone --depth 1 https://github.com/DeckardGer/tanstack-agent-skills.git
+git clone --depth 1 https://github.com/elysiajs/skills.git elysia-skills
 
 # Compare commit hashes against source: fields in rules/
 git -C /tmp/agent-skills log -1 --format="%h %ci"
 git -C /tmp/tanstack-agent-skills log -1 --format="%h %ci"
+git -C /tmp/elysia-skills log -1 --format="%h %ci"
 ```
 
 If the hashes match what's in the `source:` frontmatter, no update needed.
@@ -87,6 +99,17 @@ for skill in tanstack-query tanstack-router tanstack-start tanstack-integration;
   mkdir -p "$CLAUDE_LOCAL/reference/$skill"
   cp "/tmp/tanstack-agent-skills/skills/$skill/rules/"*.md "$CLAUDE_LOCAL/reference/$skill/"
 done
+
+# Elysia (preserves subdirectory structure)
+rm -rf "$CLAUDE_LOCAL/reference/elysia"
+for subdir in references plugins integrations patterns examples; do
+  mkdir -p "$CLAUDE_LOCAL/reference/elysia/$subdir"
+done
+cp /tmp/elysia-skills/elysia/references/*.md "$CLAUDE_LOCAL/reference/elysia/references/"
+cp /tmp/elysia-skills/elysia/plugins/*.md "$CLAUDE_LOCAL/reference/elysia/plugins/"
+cp /tmp/elysia-skills/elysia/integrations/*.md "$CLAUDE_LOCAL/reference/elysia/integrations/"
+cp /tmp/elysia-skills/elysia/patterns/*.md "$CLAUDE_LOCAL/reference/elysia/patterns/"
+cp /tmp/elysia-skills/elysia/examples/*.ts "$CLAUDE_LOCAL/reference/elysia/examples/"
 ```
 
 ### 3. Update index rules
@@ -99,6 +122,7 @@ Read the upstream SKILL.md files — they contain the quick-reference lists:
 /tmp/tanstack-agent-skills/skills/tanstack-router/SKILL.md
 /tmp/tanstack-agent-skills/skills/tanstack-start/SKILL.md
 /tmp/tanstack-agent-skills/skills/tanstack-integration/SKILL.md
+/tmp/elysia-skills/elysia/SKILL.md
 ```
 
 For each, diff against the existing index rule in `rules/`. Look for:
@@ -119,6 +143,8 @@ source: {org}/{repo}@{new-short-sha} ({new-date})
 
 The tanstack-start index file also includes tanstack-integration rules at the bottom — update both sections.
 
+The elysia index file distills the SKILL.md to key concepts (method chaining, encapsulation, validation, MVC, plugins) and points to reference files + llms.txt for deep dives. It uses `paths: ["**/api/**/*.ts", "**/server/**/*.ts"]` to scope to backend workspaces.
+
 ### 4. Verify and clean up
 
 ```bash
@@ -126,12 +152,15 @@ The tanstack-start index file also includes tanstack-integration rules at the bo
 for d in react-best-practices tanstack-query tanstack-router tanstack-start tanstack-integration; do
   echo "$d: $(ls ~/SourceRoot/claude-local/reference/$d/*.md | wc -l | tr -d ' ') files"
 done
+for subdir in references plugins integrations patterns examples; do
+  echo "elysia/$subdir: $(ls ~/SourceRoot/claude-local/reference/elysia/$subdir/* | wc -l | tr -d ' ') files"
+done
 
 # Verify rules are visible via symlink
-ls ~/.claude/rules/react-best-practices.md ~/.claude/rules/tanstack-query.md ~/.claude/rules/tanstack-router.md ~/.claude/rules/tanstack-start.md
+ls ~/.claude/rules/react-best-practices.md ~/.claude/rules/tanstack-query.md ~/.claude/rules/tanstack-router.md ~/.claude/rules/tanstack-start.md ~/.claude/rules/elysia.md
 
 # Clean up
-rm -rf /tmp/agent-skills /tmp/tanstack-agent-skills
+rm -rf /tmp/agent-skills /tmp/tanstack-agent-skills /tmp/elysia-skills
 ```
 
 ### 5. Commit
