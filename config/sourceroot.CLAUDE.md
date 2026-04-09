@@ -99,6 +99,7 @@ optimizeDeps: { exclude: ['basalt-ui'] }
 | `/read-drawing` | Interpret Excalidraw diagrams | **subprocess** | haiku |
 | `/frontend-design` | Production-grade frontend interfaces | main | (inherits) |
 | `/skill-creator` | Create, modify, and test skills | main | (inherits) |
+| `/localai [cmd]` | Manage local AI stack (setup, status, update, monitor, swap-model) | main | haiku |
 
 ---
 

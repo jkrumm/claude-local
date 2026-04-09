@@ -5,6 +5,10 @@
 VCS source of truth for Johannes's Claude Code setup. Everything is symlinked
 outward — edit at either end, git always sees the change here.
 
+Also contains `localai/` — configuration and documentation for the dedicated M2 Max
+local AI server stack (Gemma 4 + Qwen3-TTS + WhisperKit). See `localai/README.md`
+and the `/localai` skill for setup and management.
+
 **After any edit: commit here.**
 
 ## Symlink Map
