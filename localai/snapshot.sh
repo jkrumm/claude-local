@@ -30,9 +30,10 @@ battery_charging=$(pmset -g batt | grep -c 'AC Power')
 ollama_models=$(curl -sf localhost:11434/api/ps 2>/dev/null | jq -c '[.models[].name]' 2>/dev/null || echo '[]')
 ollama_vram_gb=$(curl -sf localhost:11434/api/ps 2>/dev/null | jq '[.models[].size_vram] | add / 1073741824 | . * 100 | floor / 100' 2>/dev/null || echo 0)
 
-# Service health (1=up, 0=down)
-tts_up=$(curl -sf localhost:8000/health >/dev/null 2>&1 && echo 1 || echo 0)
-stt_up=$(curl -sf localhost:50060/health >/dev/null 2>&1 && echo 1 || echo 0)
+# Service health (1=up, 0=down) — single mlx-audio server handles both TTS+STT
+audio_up=$(curl -sf localhost:8000/v1/models >/dev/null 2>&1 && echo 1 || echo 0)
+tts_up=$audio_up
+stt_up=$audio_up
 
 # Insert snapshot (use parameterized-ish approach — single quotes escaped)
 mem_pressure_escaped="${mem_pressure//\'/\'\'}"

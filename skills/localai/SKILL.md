@@ -8,12 +8,11 @@ model: haiku
 
 Manages the always-on local AI server stack on the dedicated M2 Max 32GB MacBook.
 
-**Full documentation:** Read `~/SourceRoot/claude-local/localai/README.md` first — it contains architecture decisions, memory budget, model selection reasoning, and all component details.
+**Full documentation:** Read `~/SourceRoot/claude-local/localai/README.md` first.
 
 ## Machine Guard
 
-This skill only applies to the dedicated AI MacBook. Before executing any command, verify:
-
+Before executing any command:
 ```bash
 chip=$(sysctl -n machdep.cpu.brand_string 2>/dev/null)
 if [[ "$chip" != *"M2 Max"* ]]; then
@@ -22,13 +21,20 @@ if [[ "$chip" != *"M2 Max"* ]]; then
 fi
 ```
 
-If not on the right machine, tell the user and stop.
+## Stack Overview
 
-## Auth & Secrets
+| Component | Service | Port |
+|-|-|-|
+| Ollama (Gemma 4 26B MoE) | com.localai.ollama | 11434 |
+| mlx-audio (TTS + STT) | com.localai.audio | 8000 |
+| Monitoring (snapshot.sh) | com.localai.monitor | — |
+| Caddy (HTTPS proxy) | homebrew.mxcl.caddy | 443 |
 
-**No auth needed.** All services run without API keys or tokens. Tailscale is the only access control layer — only devices on the tailnet can reach the endpoints via Caddy. No 1Password secrets, no env vars.
-
-If the user later wants to add auth (e.g., shared tailnet), add `basicauth` directive to the Caddy block.
+**Models (lazy-loaded per request):**
+- STT fast: `mlx-community/whisper-large-v3-turbo-asr-fp16`
+- STT quality: `mlx-community/whisper-large-v3-asr-fp16`
+- TTS fast: `mlx-community/Kokoro-82M-bf16`
+- TTS quality: `mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16`
 
 ## Commands
 
@@ -41,60 +47,44 @@ Full setup from scratch. Execute interactively, confirming each step.
 **Step 1 — Prerequisites:**
 ```bash
 system_profiler SPHardwareDataType | grep -E "Chip|Memory"
-# Expect: Apple M2 Max, 32 GB
-
 which brew ollama tailscale
-xcode-select -p  # needed for WhisperKit Swift build
 ```
 
 **Step 2 — Install components:**
 ```bash
-# Ollama (LLM runtime — MLX backend on Apple Silicon)
 brew install ollama
-
-# batt (battery charge limiter — Apple Silicon native)
 brew install charlie0129/homebrew-tap/batt
-
-# mlx-audio (TTS — native MLX for Apple Silicon)
-uv tool install mlx-audio
-
-# WhisperKit (STT — Neural Engine, not GPU)
-brew install argmaxinc/tap/whisperkit-cli
-# Fallback if not in tap:
-# git clone https://github.com/argmaxinc/WhisperKit.git
-# cd WhisperKit && BUILD_ALL=1 swift build --product whisperkit-cli
+uv tool install "mlx-audio[all]"
+uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 "setuptools<81"
+uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 python-multipart
+brew install ffmpeg  # for audio format conversion (m4a → wav)
 ```
 
 **Step 3 — Pull models:**
 ```bash
 ollama pull gemma4:26b
 ollama create gemma4-agent -f ~/SourceRoot/claude-local/localai/Modelfile.gemma4
-# TTS + STT models auto-download on first serve
+# Audio models auto-download on first request
 ```
 
 **Step 4 — Power management:**
 ```bash
-sudo pmset -c sleep 0 displaysleep 0 disksleep 0 standby 0 \
-  autopoweroff 0 hibernatemode 0 powernap 0 proximitywake 0 \
-  tcpkeepalive 1 womp 1
+sudo pmset -a sleep 0 displaysleep 0 disksleep 0
 sudo batt limit 70
 ```
 
 **Step 5 — Monitoring database:**
-The `snapshot.sh` script auto-creates the schema on first run. Verify it works:
 ```bash
 bash ~/SourceRoot/claude-local/localai/snapshot.sh
 sqlite3 ~/SourceRoot/claude-local/localai/monitor.db "SELECT COUNT(*) FROM snapshots;"
 ```
 
 **Step 6 — Caddy config:**
-Read current Caddyfile at `~/SourceRoot/claude-local/config/Caddyfile`.
-Add the Tailscale reverse proxy block from `localai/README.md`.
-Run `tailscale cert <hostname>.ts.net` to generate certs.
+Read `~/SourceRoot/claude-local/config/Caddyfile` for the LocalAI block.
+Generate certs: `tailscale cert <hostname>.ts.net`
 Reload: `caddy-reload`
 
 **Step 7 — Launchd services:**
-Create plist files in `~/Library/LaunchAgents/` for auto-start:
 
 `com.localai.ollama.plist`:
 ```xml
@@ -110,9 +100,11 @@ Create plist files in `~/Library/LaunchAgents/` for auto-start:
   </array>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>OLLAMA_HOST</key><string>0.0.0.0</string>
+    <key>OLLAMA_HOST</key><string>0.0.0.0:11434</string>
     <key>OLLAMA_KEEP_ALIVE</key><string>30m</string>
     <key>OLLAMA_MAX_LOADED_MODELS</key><string>3</string>
+    <key>OLLAMA_FLASH_ATTENTION</key><string>0</string>
+    <key>OLLAMA_KV_CACHE_TYPE</key><string>q8_0</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -122,57 +114,33 @@ Create plist files in `~/Library/LaunchAgents/` for auto-start:
 </plist>
 ```
 
-`com.localai.tts.plist`:
+`com.localai.audio.plist`:
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.localai.tts</string>
+  <key>Label</key><string>com.localai.audio</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/johannes.krumm/.local/bin/mlx-audio</string>
-    <string>serve</string>
-    <string>--model</string>
-    <string>mlx-community/Qwen3-TTS-1.7B</string>
+    <string>/Users/johannes.krumm/.local/bin/mlx_audio.server</string>
     <string>--host</string>
     <string>0.0.0.0</string>
     <string>--port</string>
     <string>8000</string>
+    <string>--log-dir</string>
+    <string>/tmp/mlx-audio-logs</string>
   </array>
+  <key>WorkingDirectory</key><string>/tmp</string>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>/tmp/tts.log</string>
-  <key>StandardErrorPath</key><string>/tmp/tts.err</string>
+  <key>StandardOutPath</key><string>/tmp/audio.log</string>
+  <key>StandardErrorPath</key><string>/tmp/audio.err</string>
 </dict>
 </plist>
 ```
 
-`com.localai.stt.plist`:
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>com.localai.stt</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/opt/homebrew/bin/whisperkit-cli</string>
-    <string>serve</string>
-    <string>--host</string>
-    <string>0.0.0.0</string>
-    <string>--port</string>
-    <string>50060</string>
-  </array>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>/tmp/stt.log</string>
-  <key>StandardErrorPath</key><string>/tmp/stt.err</string>
-</dict>
-</plist>
-```
-
-`com.localai.monitor.plist` (snapshot every 5 minutes):
+`com.localai.monitor.plist`:
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -191,22 +159,17 @@ Create plist files in `~/Library/LaunchAgents/` for auto-start:
 </plist>
 ```
 
-Load all:
 ```bash
 launchctl load ~/Library/LaunchAgents/com.localai.ollama.plist
-launchctl load ~/Library/LaunchAgents/com.localai.tts.plist
-launchctl load ~/Library/LaunchAgents/com.localai.stt.plist
+launchctl load ~/Library/LaunchAgents/com.localai.audio.plist
 launchctl load ~/Library/LaunchAgents/com.localai.monitor.plist
 ```
 
-**Step 8 — Verify:**
-Run `/localai status` (see below).
+**Step 8 — Verify:** Run `/localai status`.
 
 ---
 
 ### `/localai status`
-
-Quick health check of all components.
 
 ```bash
 echo "=== Ollama ==="
@@ -214,12 +177,8 @@ curl -sf localhost:11434/api/tags | jq -r '.models[] | "\(.name) — \(.size / 1
 curl -sf localhost:11434/api/ps | jq -r '.models[] | "\(.name) — VRAM: \(.size_vram / 1073741824 * 100 | floor / 100)GB — \(.processor)"' 2>/dev/null || echo "No models loaded"
 
 echo ""
-echo "=== TTS (Qwen3-TTS) ==="
-curl -sf localhost:8000/health && echo " OK" || echo "TTS: DOWN"
-
-echo ""
-echo "=== STT (WhisperKit) ==="
-curl -sf localhost:50060/health && echo " OK" || echo "STT: DOWN"
+echo "=== Audio (mlx-audio — TTS + STT) ==="
+curl -sf localhost:8000/v1/models | jq -r '.data[] | .id' 2>/dev/null && echo "Audio server: UP" || echo "Audio server: DOWN"
 
 echo ""
 echo "=== System ==="
@@ -241,97 +200,67 @@ tailscale status --self | head -1
 
 ### `/localai update`
 
-Two-phase update: (1) upgrade tools and pull latest model versions, (2) research if better models exist.
-
-**Phase 1 — Upgrade current stack:**
+**Phase 1 — Upgrade stack:**
 ```bash
 brew upgrade ollama
 ollama pull gemma4:26b
 ollama create gemma4-agent -f ~/SourceRoot/claude-local/localai/Modelfile.gemma4
 uv tool upgrade mlx-audio
-brew upgrade argmaxinc/tap/whisperkit-cli
+uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 "setuptools<81"
+uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 python-multipart
 
-# Restart services
+# Check Caddy cloudflare module survived brew upgrade
+caddy list-modules 2>/dev/null | grep -q cloudflare || echo "WARNING: Caddy cloudflare module missing — rebuild with xcaddy"
+
 launchctl kickstart -k gui/$(id -u)/com.localai.ollama
-launchctl kickstart -k gui/$(id -u)/com.localai.tts
-launchctl kickstart -k gui/$(id -u)/com.localai.stt
+launchctl kickstart -k gui/$(id -u)/com.localai.audio
 ```
 
 **Phase 2 — Research better models:**
+Use `/research` to check for newer models in each category:
+1. **LLM:** Compare vs Gemma 4 26B-A4B — must fit ~20 GB, need tool use
+2. **TTS fast:** Compare vs Kokoro 82M — must be small, multilingual
+3. **TTS quality:** Compare vs Qwen3-TTS 1.7B — voice cloning, streaming
+4. **STT:** Compare vs Whisper Large v3 Turbo — OpenAI API compatible
 
-Use the `/research` skill to investigate whether better models have been released since the current selection. Research each category independently:
-
-1. **LLM:** `/research "best open source LLM for Apple Silicon M2 Max 32GB <current-year> — compare current leaders vs Gemma 4 26B-A4B, must fit 18-20GB Q4, need 64K context, tool use"`
-2. **TTS:** `/research "best open source TTS model <current-year> Apple Silicon MLX — compare vs Qwen3-TTS 1.7B, need streaming, OpenAI API, high quality"`
-3. **STT:** `/research "best open source STT model <current-year> Apple Silicon Neural Engine — compare vs WhisperKit Large v3 Turbo, need OpenAI API, low WER"`
-
-Present findings in a comparison table. Recommend a swap only if the new model is clearly better (not just marginally). If recommending a swap, use `/localai swap-model` to execute.
-
-Update the README.md with any new findings (add to the comparison tables, mark date of last research).
+Update README.md with findings and date.
 
 ---
 
 ### `/localai swap-model <component> <model>`
 
-Swap a model for a different one. Components: `llm`, `tts`, `stt`.
+Components: `llm`, `tts`, `stt`.
 
-**LLM example:** `/localai swap-model llm qwen3.5:27b`
+**LLM:** `ollama pull <model>`, update Modelfile, `ollama create`.
+
+**TTS/STT:** Models are per-request — just use the new model name in API calls. Pre-load:
 ```bash
-ollama pull qwen3.5:27b
-# Update Modelfile FROM line and recreate
-ollama create custom-agent -f updated-modelfile
+curl -X POST localhost:8000/v1/models -H 'Content-Type: application/json' -d '{"model":"<model-id>"}'
 ```
 
-**TTS example:** `/localai swap-model tts orpheus-3b`
-Update the `--model` argument in `com.localai.tts.plist` and restart:
-```bash
-launchctl kickstart -k gui/$(id -u)/com.localai.tts
-```
-
-After any swap, update `localai/README.md` model selection tables with the change and reasoning.
+Update README.md after any swap.
 
 ---
 
 ### `/localai monitor`
 
-Show monitoring data from the SQLite database.
-
-**Recent snapshots:**
 ```bash
+# Recent snapshots
 sqlite3 -header -column ~/SourceRoot/claude-local/localai/monitor.db \
-  "SELECT ts, mem_used_gb, mem_pressure, battery_pct, ollama_vram_gb, tts_up, stt_up
+  "SELECT ts, mem_used_gb, battery_pct, ollama_vram_gb, tts_up, stt_up
    FROM snapshots ORDER BY ts DESC LIMIT 20;"
-```
 
-**Daily averages (last 7 days):**
-```bash
+# Daily averages
 sqlite3 -header -column ~/SourceRoot/claude-local/localai/monitor.db \
-  "SELECT date(ts) as day,
-          ROUND(AVG(mem_used_gb),1) as avg_mem_gb,
-          ROUND(AVG(ollama_vram_gb),1) as avg_vram_gb,
-          ROUND(AVG(battery_pct),0) as avg_battery,
-          SUM(CASE WHEN tts_up=0 OR stt_up=0 THEN 1 ELSE 0 END) as downtime_samples
-   FROM snapshots
-   WHERE ts > datetime('now','-7 days','localtime')
-   GROUP BY date(ts)
-   ORDER BY day DESC;"
-```
+  "SELECT date(ts) as day, ROUND(AVG(mem_used_gb),1) as avg_mem,
+          ROUND(AVG(battery_pct),0) as avg_batt,
+          SUM(CASE WHEN tts_up=0 OR stt_up=0 THEN 1 ELSE 0 END) as down
+   FROM snapshots WHERE ts > datetime('now','-7 days','localtime')
+   GROUP BY date(ts) ORDER BY day DESC;"
 
-**Uptime percentage:**
-```bash
-sqlite3 ~/SourceRoot/claude-local/localai/monitor.db \
-  "SELECT 'Ollama: ' || ROUND(100.0 * SUM(CASE WHEN ollama_vram_gb > 0 THEN 1 ELSE 0 END) / COUNT(*), 1) || '%, ' ||
-          'TTS: ' || ROUND(100.0 * SUM(tts_up) / COUNT(*), 1) || '%, ' ||
-          'STT: ' || ROUND(100.0 * SUM(stt_up) / COUNT(*), 1) || '%'
-   FROM snapshots WHERE ts > datetime('now','-30 days','localtime');"
+# Live
+watch -n 5 'ollama ps 2>/dev/null; echo ""; memory_pressure | head -3'
 ```
-
-**Live view:**
-```bash
-watch -n 5 'ollama ps 2>/dev/null; echo ""; memory_pressure | head -3; echo ""; batt status 2>/dev/null'
-```
-
-**Database retention:** The snapshot.sh script auto-prunes entries older than 90 days.
 
 ---
 
@@ -340,14 +269,12 @@ watch -n 5 'ollama ps 2>/dev/null; echo ""; memory_pressure | head -3; echo ""; 
 ```bash
 # Stop all
 launchctl unload ~/Library/LaunchAgents/com.localai.ollama.plist
-launchctl unload ~/Library/LaunchAgents/com.localai.tts.plist
-launchctl unload ~/Library/LaunchAgents/com.localai.stt.plist
+launchctl unload ~/Library/LaunchAgents/com.localai.audio.plist
 launchctl unload ~/Library/LaunchAgents/com.localai.monitor.plist
 
 # Start all
 launchctl load ~/Library/LaunchAgents/com.localai.ollama.plist
-launchctl load ~/Library/LaunchAgents/com.localai.tts.plist
-launchctl load ~/Library/LaunchAgents/com.localai.stt.plist
+launchctl load ~/Library/LaunchAgents/com.localai.audio.plist
 launchctl load ~/Library/LaunchAgents/com.localai.monitor.plist
 ```
 
@@ -355,28 +282,25 @@ launchctl load ~/Library/LaunchAgents/com.localai.monitor.plist
 
 ## Troubleshooting
 
-**Model won't load / OOM:**
-- Check `ollama ps` — another model may be hogging memory
-- Reduce `OLLAMA_MAX_LOADED_MODELS` to 2
-- Swap Qwen3-TTS 1.7B → 0.6B (`mlx-community/Qwen3-TTS-0.6B`)
-- Reduce context: edit Modelfile `num_ctx 32768`
+**OOM / model won't load:**
+- `ollama ps` — check if other models are loaded
+- `curl -X DELETE localhost:8000/v1/models -d '{"model":"..."}'` — unload audio models
+- Reduce Modelfile `num_ctx` to 32768
 
 **Slow inference:**
-- Verify MLX backend: `ollama ps` should show 100% GPU
-- Check memory pressure: `memory_pressure` — if "critical", models are swapping
-- Kill other apps: this is a dedicated machine
+- Verify `OLLAMA_FLASH_ATTENTION=0` in plist (Gemma 4 MoE incompatible with FA)
+- Check `memory_pressure` — if "critical", models are swapping
 
-**Service won't start:**
-- Check logs: `tail -50 /tmp/ollama.err`
-- Verify binary paths in plists match actual install locations
-- Check port conflicts: `lsof -i :11434` / `:8000` / `:50060`
+**mlx-audio won't start:**
+- Check `tail -50 /tmp/audio.err`
+- `pkg_resources` error → `uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 "setuptools<81"`
+- Port conflict → `lsof -i :8000`
 
-**Tailscale can't reach services:**
-- Verify services bind to `0.0.0.0` (not `127.0.0.1`)
-- Check Caddy config and reload: `caddy-reload`
-- Verify Tailscale status: `tailscale status`
+**MacWhisper "incorrect format" error:**
+- Ensure using Whisper model (not Parakeet — incompatible response format)
+- Ensure going through Caddy (rewrites Content-Type to application/json)
+- Base URL: `https://<ts-hostname>.ts.net` (not localhost)
 
-**Monitoring DB missing data:**
-- Check: `launchctl list | grep localai.monitor`
-- Check logs: `cat /tmp/localai-monitor.err`
-- Verify script: `bash ~/SourceRoot/claude-local/localai/snapshot.sh`
+**Caddy cloudflare module missing after brew upgrade:**
+- Rebuild: `xcaddy build --with github.com/caddy-dns/cloudflare`
+- Replace: `sudo cp caddy /opt/homebrew/Cellar/caddy/*/bin/caddy`
