@@ -33,8 +33,8 @@ fi
 **Models (lazy-loaded per request):**
 - STT fast: `mlx-community/whisper-large-v3-turbo-asr-fp16`
 - STT quality: `mlx-community/whisper-large-v3-asr-fp16`
-- TTS fast: `mlx-community/Kokoro-82M-bf16`
-- TTS quality: `mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16`
+- TTS fast: `mlx-community/Kokoro-82M-bf16` (named voices, e.g. `af_heart`)
+- TTS quality: `mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16` (voice via `instruct` param)
 
 ## Commands
 
@@ -54,10 +54,13 @@ which brew ollama tailscale
 ```bash
 brew install ollama
 brew install charlie0129/homebrew-tap/batt
+brew install ffmpeg  # required for mp3/flac encoding in mlx-audio
 uv tool install "mlx-audio[all]"
 uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 "setuptools<81"
 uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 python-multipart
-brew install ffmpeg  # for audio format conversion (m4a → wav)
+# Kokoro TTS deps (misaki >=0.9 breaks espeakng_loader API)
+uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 "misaki[en]<0.9" num2words phonemizer espeakng_loader spacy
+uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 en-core-web-sm@https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
 ```
 
 **Step 3 — Pull models:**
@@ -131,6 +134,10 @@ Reload: `caddy-reload`
     <string>--log-dir</string>
     <string>/tmp/mlx-audio-logs</string>
   </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
   <key>WorkingDirectory</key><string>/tmp</string>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -208,6 +215,8 @@ ollama create gemma4-agent -f ~/SourceRoot/claude-local/localai/Modelfile.gemma4
 uv tool upgrade mlx-audio
 uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 "setuptools<81"
 uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 python-multipart
+uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 "misaki[en]<0.9" num2words phonemizer espeakng_loader spacy
+uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 en-core-web-sm@https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
 
 # Check Caddy cloudflare module survived brew upgrade
 caddy list-modules 2>/dev/null | grep -q cloudflare || echo "WARNING: Caddy cloudflare module missing — rebuild with xcaddy"
@@ -237,6 +246,8 @@ Components: `llm`, `tts`, `stt`.
 ```bash
 curl -X POST localhost:8000/v1/models -H 'Content-Type: application/json' -d '{"model":"<model-id>"}'
 ```
+
+**Note:** Qwen3-TTS VoiceDesign uses `instruct` parameter (natural language voice description), not named `voice` presets.
 
 Update README.md after any swap.
 
@@ -295,6 +306,12 @@ launchctl load ~/Library/LaunchAgents/com.localai.monitor.plist
 - Check `tail -50 /tmp/audio.err`
 - `pkg_resources` error → `uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 "setuptools<81"`
 - Port conflict → `lsof -i :8000`
+
+**Kokoro TTS errors:**
+- `No module named 'misaki'/'num2words'/'phonemizer'/'espeakng_loader'/'spacy'` → re-run Kokoro deps from setup step 2
+- `EspeakWrapper.set_data_path` AttributeError → pin `misaki<0.9`
+- `spacy.cli.download` fails → install model directly: `uv pip install --python ... en-core-web-sm@https://...`
+- `ffmpeg not found` → ensure plist has `PATH` env var including `/opt/homebrew/bin`; use `response_format: wav` as workaround
 
 **MacWhisper "incorrect format" error:**
 - Ensure using Whisper model (not Parakeet — incompatible response format)

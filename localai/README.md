@@ -41,7 +41,7 @@ MacWhisper configured to use the turbo model via custom OpenAI endpoint. Caddy r
 | Quick / interactive | `mlx-community/Kokoro-82M-bf16` | 0.4 GB | <0.3s, 210x RT |
 | Podcast / voice cloning | `mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16` | 4.2 GB | 97ms TTFB |
 
-Kokoro: 8 languages, 54 voices, MOS 4.5, Apache 2.0. Qwen3-TTS: voice cloning from 3s sample, voice design via natural language, streaming.
+Kokoro: 8 languages, 54 voices, MOS 4.5, Apache 2.0. Qwen3-TTS VoiceDesign: voice design via natural language `instruct` parameter (no named voices — describe the voice instead), streaming.
 
 ## Memory Budget
 
@@ -73,6 +73,10 @@ uv tool install "mlx-audio[all]"
 # Fix webrtcvad dependency (setuptools v81+ removed pkg_resources)
 uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 "setuptools<81"
 uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 python-multipart
+# Kokoro TTS deps (misaki >=0.9 breaks espeakng_loader API)
+uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 "misaki[en]<0.9" num2words phonemizer espeakng_loader spacy
+uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 en-core-web-sm@https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+brew install ffmpeg  # required for mp3/flac encoding
 ```
 
 Server binary: `~/.local/bin/mlx_audio.server`
@@ -101,7 +105,7 @@ Three plists in `~/Library/LaunchAgents/`:
 | Plist | Service | Key Config |
 |-|-|-|
 | `com.localai.ollama.plist` | Ollama serve | FA=0, q8_0 KV, 0.0.0.0:11434 |
-| `com.localai.audio.plist` | mlx-audio server | 0.0.0.0:8000, log-dir=/tmp/mlx-audio-logs |
+| `com.localai.audio.plist` | mlx-audio server | 0.0.0.0:8000, PATH includes homebrew, log-dir=/tmp/mlx-audio-logs |
 | `com.localai.monitor.plist` | snapshot.sh (5 min) | → SQLite monitor.db |
 
 ```bash
@@ -135,11 +139,12 @@ audio = client.audio.speech.create(
     voice="af_heart"
 )
 
-# TTS (quality, voice cloning)
+# TTS (quality, voice design — describe the voice via extra_body instruct)
 audio = client.audio.speech.create(
     model="mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16",
     input="Hello, how are you?",
-    voice="Chelsie"
+    voice="",
+    extra_body={"instruct": "A warm, clear female voice with medium pitch and natural pace"}
 )
 
 # STT (fast)
