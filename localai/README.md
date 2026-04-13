@@ -79,6 +79,15 @@ uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 en-core-we
 brew install ffmpeg  # required for mp3/flac encoding
 ```
 
+**Apply local patch** (fixes M4A format rejection — MacWhisper sends M4A for long recordings):
+```bash
+patch -p1 \
+  -d ~/.local/share/uv/tools/mlx-audio/lib/python3.12/site-packages \
+  < ~/SourceRoot/claude-local/localai/patches/mlx-audio-m4a-stt.patch
+```
+
+**After `uv tool upgrade mlx-audio`:** re-apply the patch above. The upgrade overwrites server.py.
+
 Server binary: `~/.local/bin/mlx_audio.server`
 
 ### 3. Caddy (HTTPS reverse proxy)
