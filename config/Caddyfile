@@ -69,21 +69,5 @@ basalt-ui-playground-api.test {
 
 # LocalAI stack — only active on M2 Max (certs only exist there)
 # Generate certs: tailscale cert iu-mac-book.dinosaur-sole.ts.net
-iu-mac-book.dinosaur-sole.ts.net {
-	tls /opt/homebrew/etc/certs/iu-mac-book.dinosaur-sole.ts.net.crt /opt/homebrew/etc/certs/iu-mac-book.dinosaur-sole.ts.net.key
-
-	handle /v1/chat/* {
-		reverse_proxy localhost:11434
-	}
-	handle /v1/models* {
-		reverse_proxy localhost:11434
-	}
-	handle /v1/audio/speech* {
-		reverse_proxy localhost:8000
-	}
-	handle /v1/audio/transcriptions* {
-		reverse_proxy localhost:8000 {
-			header_down Content-Type "application/json"
-		}
-	}
-}
+# Stored in a separate file so Caddy doesn't fail on machines without the certs.
+import /opt/homebrew/etc/Caddyfile.localai.*

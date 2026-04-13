@@ -179,6 +179,15 @@ _setup-caddy:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/config/Caddyfile" \
 		DST="$(BREW_PREFIX)/etc/Caddyfile"
+	@# LocalAI block — only copy on machines that have the Tailscale certs
+	@LOCALAI_CONF="$(BREW_PREFIX)/etc/Caddyfile.localai.conf"; \
+	LOCALAI_CERTS="$(BREW_PREFIX)/etc/certs/iu-mac-book.dinosaur-sole.ts.net.crt"; \
+	if [ -f "$$LOCALAI_CERTS" ]; then \
+		cp "$(CLAUDE_LOCAL)/config/Caddyfile.localai.template" "$$LOCALAI_CONF" \
+			&& echo "    ✓ Caddyfile.localai.conf (M2 Max)"; \
+	elif [ -f "$$LOCALAI_CONF" ]; then \
+		rm "$$LOCALAI_CONF" && echo "    ✓ removed stale Caddyfile.localai.conf"; \
+	fi
 	@# Clean up any root-owned Caddy data left in user Library from earlier failed runs
 	@CADDY_LIB="$(HOME)/Library/Application Support/Caddy"; \
 	if [ -d "$$CADDY_LIB" ] && [ "$$(stat -f %Su "$$CADDY_LIB" 2>/dev/null)" = "root" ]; then \
@@ -189,24 +198,13 @@ _setup-caddy:
 	@sudo brew services restart caddy >/dev/null 2>&1 \
 		&& echo "    ✓ caddy service" \
 		|| echo "    ✗ caddy service failed — check: sudo brew services list"
-	@# Trust Caddy local CA — extract cert from Caddy's data dir and install trust.
-	@# Uses security dump-trust-settings to check actual trust (not just cert presence).
-	@# Caddy data dir set via HOME=/opt/homebrew/var/lib in LaunchDaemon plist.
+	@# Trust Caddy local CA — caddy trust handles keychain install + NSS
 	@if security dump-trust-settings -d 2>/dev/null | grep -q "Caddy"; then \
 		echo "    · Caddy CA trusted (ok)"; \
 	else \
-		echo "    Waiting for Caddy to generate CA (5s)..."; \
-		sleep 5; \
-		CADDY_CA="$(BREW_PREFIX)/var/lib/caddy/pki/authorities/local/root.crt"; \
-		if sudo cp "$$CADDY_CA" /tmp/caddy-ca.crt 2>/dev/null; then \
-			sudo security add-trusted-cert -d -r trustRoot \
-				-k /Library/Keychains/System.keychain /tmp/caddy-ca.crt \
-				&& echo "    ✓ Caddy CA trusted" \
-				|| echo "    ✗ CA trust failed — re-run: make setup"; \
-			sudo rm -f /tmp/caddy-ca.crt; \
-		else \
-			echo "    ✗ CA cert not found at $$CADDY_CA — re-run: make setup"; \
-		fi; \
+		sudo caddy trust \
+			&& echo "    ✓ Caddy CA trusted" \
+			|| echo "    ✗ CA trust failed — re-run: sudo caddy trust"; \
 	fi
 	@echo "  dnsmasq (wildcard *.test → 127.0.0.1)..."
 	@brew list dnsmasq &>/dev/null || brew install dnsmasq
