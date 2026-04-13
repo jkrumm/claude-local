@@ -1,6 +1,11 @@
 # PATH + runtime environments
 # Loaded first so all subsequent modules can find their binaries.
 
+# Remove any lingering hooks from uninstalled tools (e.g. direnv)
+unfunction _direnv_hook 2>/dev/null
+precmd_functions=(${precmd_functions:#_direnv_hook})
+chpwd_functions=(${chpwd_functions:#_direnv_hook})
+
 HOMEBREW_PREFIX="/opt/homebrew"
 
 export PATH="$HOMEBREW_PREFIX/bin:/usr/local/bin:$PATH"  # homebrew, claude cli
