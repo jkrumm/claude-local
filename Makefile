@@ -229,8 +229,6 @@ _setup-caddy:
 _setup-pnpm:
 	@echo "  pnpm..."
 	@if command -v pnpm >/dev/null 2>&1; then \
-		echo "    Updating pnpm..."; \
-		pnpm self-update 2>&1 | tail -1; \
 		echo "    · pnpm $$(pnpm --version) (ok)"; \
 	else \
 		echo "    Installing pnpm..."; \
@@ -377,7 +375,7 @@ _setup-gitignore:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/config/gitignore_global" \
 		DST="$(HOME)/.gitignore_global"
-	@git config --global core.excludesfile "$(HOME)/.gitignore_global"
+	@git config --global core.excludesfile "~/.gitignore_global"
 	@echo "    ✓ git config core.excludesfile"
 
 .PHONY: _setup-ghostty
@@ -397,6 +395,7 @@ _setup-ghostty:
 			mv "$$_dst" "$$_dst.bak"; \
 			echo "    Backing up $$_dst"; \
 		fi; \
+		mkdir -p "$$(dirname "$$_dst")"; \
 		ln -sfn "$$_src" "$$_dst"; \
 		echo "    ✓ config.cmux"; \
 	fi

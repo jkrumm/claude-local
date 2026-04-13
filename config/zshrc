@@ -1,6 +1,6 @@
 # OPENSPEC:START
 # OpenSpec shell completions — must run before any compdef calls
-fpath=("/Users/johannes.krumm/.zsh/completions" $fpath)
+fpath=("$HOME/.zsh/completions" $fpath)
 autoload -Uz compinit
 if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
   compinit
@@ -72,3 +72,6 @@ fi
 
 for f in ~/.zsh/conf.d/*.zsh(N); do source "$f"; done
 
+
+# Vite+ bin (https://viteplus.dev)
+. "$HOME/.vite-plus/env"

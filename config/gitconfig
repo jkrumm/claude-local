@@ -1,6 +1,6 @@
 [core]
     autocrlf = input
-	excludesfile = /Users/johannes.krumm/.gitignore_global
+	excludesfile = ~/.gitignore_global
 
 [user]
     name = jkrumm

@@ -5,6 +5,7 @@
 #   Switches to an existing branch (local or remote-only) and rebases onto
 #   origin/default. Creates a new branch from origin/default if it doesn't
 #   exist. Interactively offers to carry ahead commits to the new branch.
+unalias nb 2>/dev/null
 nb() {
   if [[ -z "$1" ]]; then
     echo "Usage: nb <branch-name>"
