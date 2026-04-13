@@ -133,10 +133,10 @@ _setup-tools:
 	@# uv — Python runner (required by statusline.sh + fetch_usage.py)
 	@brew list uv &>/dev/null || brew install uv
 	@echo "    ✓ uv $$(uv --version)"
-	@# python@3.13 — ensure current version; remove 3.11/3.12 if no dependents
-	@brew list python@3.13 &>/dev/null || brew install python@3.13
-	@echo "    ✓ python $$(python3.13 --version 2>/dev/null || echo ok)"
-	@for old in python@3.11 python@3.12; do \
+	@# python@3.14 — ensure current version; remove older if no dependents
+	@brew list python@3.14 &>/dev/null || brew install python@3.14
+	@echo "    ✓ python $$(python3.14 --version 2>/dev/null || echo ok)"
+	@for old in python@3.11 python@3.12 python@3.13; do \
 		if brew list "$$old" &>/dev/null; then \
 			if [ -z "$$(brew uses --installed "$$old" 2>/dev/null)" ]; then \
 				brew uninstall "$$old" && echo "    ✓ removed $$old (no dependents)"; \
