@@ -133,6 +133,18 @@ _setup-tools:
 	@# uv — Python runner (required by statusline.sh + fetch_usage.py)
 	@brew list uv &>/dev/null || brew install uv
 	@echo "    ✓ uv $$(uv --version)"
+	@# python@3.13 — ensure current version; remove 3.11/3.12 if no dependents
+	@brew list python@3.13 &>/dev/null || brew install python@3.13
+	@echo "    ✓ python $$(python3.13 --version 2>/dev/null || echo ok)"
+	@for old in python@3.11 python@3.12; do \
+		if brew list "$$old" &>/dev/null; then \
+			if [ -z "$$(brew uses --installed "$$old" 2>/dev/null)" ]; then \
+				brew uninstall "$$old" && echo "    ✓ removed $$old (no dependents)"; \
+			else \
+				echo "    · $$old kept (required by: $$(brew uses --installed $$old | tr '\n' ' '))"; \
+			fi; \
+		fi; \
+	done
 	@# age — encryption for 1Password backup
 	@brew list age &>/dev/null || brew install age
 	@echo "    ✓ age $$(age --version)"
@@ -623,6 +635,20 @@ ps:
 	cd cqueue && docker compose ps
 
 # ============================================================================
+# Clean — purge caches (brew, npm, pnpm, bun)
+# ============================================================================
+
+.PHONY: clean
+clean:
+	@echo ""
+	@echo "  Cleaning caches..."
+	@brew cleanup && echo "    ✓ brew cache"
+	@find $(HOME)/.npm -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null; echo "    ✓ npm cache ($$(du -sh $(HOME)/.npm 2>/dev/null | cut -f1 || echo 0) freed)"
+	@rm -rf $(HOME)/Library/pnpm/store && echo "    ✓ pnpm store"
+	@bun pm cache rm 2>/dev/null && echo "    ✓ bun cache"
+	@echo ""
+
+# ============================================================================
 # Help
 # ============================================================================
 
@@ -632,6 +658,7 @@ help:
 	@echo "  claude-local"
 	@echo ""
 	@echo "  make setup              Idempotent full setup — symlinks, secrets, settings, browser"
+	@echo "  make clean              Purge brew/npm/pnpm/bun caches"
 	@echo "  make status             Verify symlink health + Keychain secrets"
 	@echo "  make github-config      Apply branch protection + merge settings to all repos"
 	@echo "  make github-config-dry  Preview without applying"
