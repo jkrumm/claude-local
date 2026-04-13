@@ -21,9 +21,9 @@ SSH config is in `~/.ssh/config` — key auth via Tailscale IPs. For sudo on ser
 
 ```bash
 # Homelab (requires password for sudo)
-ROOT_PW=$(op read "op://Private/homelab-server/password") && ssh homelab "echo '$ROOT_PW' | sudo -S <cmd>"
+ROOT_PW=$(op read "op://Private/homelab-server/password" --account tkrumm) && ssh homelab "echo '$ROOT_PW' | sudo -S <cmd>"
 # VPS (has NOPASSWD sudo — root pw rarely needed)
-ROOT_PW=$(op read "op://Private/vps-server/password") && ssh vps "echo '$ROOT_PW' | sudo -S <cmd>"
+ROOT_PW=$(op read "op://Private/vps-server/password" --account tkrumm) && ssh vps "echo '$ROOT_PW' | sudo -S <cmd>"
 ```
 
 ### Repos
@@ -36,7 +36,14 @@ ROOT_PW=$(op read "op://Private/vps-server/password") && ssh vps "echo '$ROOT_PW
 
 ### Secrets (1Password)
 
-All secrets managed via 1Password with `op run --env-file=.env.tpl -- <command>` pattern. Use `/secrets` skill for vault ops.
+All secrets managed via 1Password. **Always pass `--account tkrumm`** to every `op` CLI command in this workspace.
+
+```bash
+op read "op://vault/item/field" --account tkrumm
+op run --account tkrumm --env-file=.env.tpl -- <command>
+```
+
+Use `/secrets` skill for vault ops.
 
 ---
 

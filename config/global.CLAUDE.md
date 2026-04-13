@@ -15,11 +15,13 @@
 - GitHub for version control and PRs
 - Has its own CLAUDE.md with conventions and workflow
 - Skills: `/commit`, `/pr`, `/check`, `/research`, `/review`, `/ship`, `/upgrade-deps`
+- **1Password account:** `tkrumm` — always pass `--account tkrumm` to all `op` CLI commands
 
 ### Work Projects: `/Users/johannes.krumm/IuRoot/`
 - Project-specific CLAUDE.md files (e.g., `epos.student-enrolment/CLAUDE.md`)
 - Each project has its own conventions (DDD, NestJS, Vue patterns)
 - No root-level configuration (colleagues have own setups)
+- **1Password account:** `careerpartner` — always pass `--account careerpartner` to all `op` CLI commands
 
 ---
 

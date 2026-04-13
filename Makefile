@@ -282,7 +282,7 @@ _setup-sdk-keys:
 	@if security find-generic-password -s claude-sdk-api-key -w >/dev/null 2>&1; then \
 		echo "    · CLAUDE_SDK_API_KEY (ok)"; \
 	else \
-		KEY=$$(op read "op://common/anthropic/API_KEY" 2>/dev/null || echo ""); \
+		KEY=$$(op read "op://common/anthropic/API_KEY" --account tkrumm 2>/dev/null || echo ""); \
 		if [ -n "$$KEY" ]; then \
 			security add-generic-password -a "$$USER" -s claude-sdk-api-key -w "$$KEY" -T /usr/bin/security; \
 			echo "    ✓ CLAUDE_SDK_API_KEY cached in Keychain"; \
@@ -293,7 +293,7 @@ _setup-sdk-keys:
 	@if security find-generic-password -s claude-sdk-base-url -w >/dev/null 2>&1; then \
 		echo "    · CLAUDE_SDK_BASE_URL (ok)"; \
 	else \
-		URL=$$(op read "op://common/anthropic/BASE_URL" 2>/dev/null || echo ""); \
+		URL=$$(op read "op://common/anthropic/BASE_URL" --account tkrumm 2>/dev/null || echo ""); \
 		if [ -n "$$URL" ]; then \
 			security add-generic-password -a "$$USER" -s claude-sdk-base-url -w "$$URL" -T /usr/bin/security; \
 			echo "    ✓ CLAUDE_SDK_BASE_URL cached in Keychain"; \
@@ -304,7 +304,7 @@ _setup-sdk-keys:
 	@if security find-generic-password -s tavily-api-key -w >/dev/null 2>&1; then \
 		echo "    · TAVILY_API_KEY (ok)"; \
 	else \
-		KEY=$$(op read "op://common/tavily/API_KEY" 2>/dev/null || echo ""); \
+		KEY=$$(op read "op://common/tavily/API_KEY" --account tkrumm 2>/dev/null || echo ""); \
 		if [ -n "$$KEY" ]; then \
 			security add-generic-password -a "$$USER" -s tavily-api-key -w "$$KEY" -T /usr/bin/security; \
 			echo "    ✓ TAVILY_API_KEY cached in Keychain"; \

@@ -14,8 +14,8 @@
 # delegates to c() — bypasses subscription, routes through custom endpoint.
 capi() {
   local api_key base_url
-  api_key=$(op read "op://common/anthropic/API_KEY") || return 1
-  base_url=$(op read "op://common/anthropic/BASE_URL") || return 1
+  api_key=$(op read "op://common/anthropic/API_KEY" --account tkrumm) || return 1
+  base_url=$(op read "op://common/anthropic/BASE_URL" --account tkrumm) || return 1
   ANTHROPIC_API_KEY="$api_key" ANTHROPIC_BASE_URL="$base_url" c "$@"
 }
 

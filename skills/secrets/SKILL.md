@@ -6,19 +6,30 @@ model: haiku
 
 # Secrets Management — 1Password
 
+## Account Selection
+
+Always pass `--account` to every `op` CLI command — there are multiple 1Password accounts configured:
+
+| Workspace | Account flag |
+|-|-|
+| `~/SourceRoot/` (personal) | `--account tkrumm` |
+| `~/IuRoot/` (work) | `--account careerpartner` |
+
+Never omit `--account` — without it, `op` may pick the wrong account or prompt interactively.
+
 ## Discovery First
 
 Before answering questions about vault contents, **always query the live state** — don't rely on memorized vault structures:
 
 ```bash
 # List vaults accessible to current session
-op vault list
+op vault list --account tkrumm
 
 # List items in a vault
-op item list --vault <vault>
+op item list --vault <vault> --account tkrumm
 
 # Show item fields
-op item get <item> --vault <vault> --format=json | jq '.fields[] | select(.value != "") | .label'
+op item get <item> --vault <vault> --account tkrumm --format=json | jq '.fields[] | select(.value != "") | .label'
 ```
 
 Vault contents change over time. The patterns below are stable; the specific items are not.
@@ -61,7 +72,7 @@ CONFIG_VAR=some-value
 ## Reading a Single Secret
 
 ```bash
-op read "op://vault/item/field"
+op read "op://vault/item/field" --account tkrumm
 ```
 
 ## Vault Design Principles

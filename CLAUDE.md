@@ -40,7 +40,11 @@ template wins on structural keys (hooks, statusLine, plugins, env); permissions 
 
 ## Secrets Strategy
 
-Currently using **personal 1Password account** (biometric/session token). `make setup` calls `op signin` to authenticate; `op` CLI then works interactively with Touch ID.
+Two 1Password accounts are configured:
+- **`tkrumm`** — personal account, used in `~/SourceRoot/`. Always pass `--account tkrumm` to `op` CLI.
+- **`careerpartner`** — work account, used in `~/IuRoot/`. Always pass `--account careerpartner` to `op` CLI.
+
+`make setup` uses `--account tkrumm` (biometric/session token via Touch ID).
 
 `ANTHROPIC_API_KEY` is intentionally **not exported** — Claude Code falls back to the subscription when the key is absent. Exporting it would cause Claude Code to bill API credits instead.
 
