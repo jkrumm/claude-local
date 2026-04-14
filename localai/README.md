@@ -103,8 +103,14 @@ Note: `brew upgrade caddy` overwrites the custom binary. Rebuild if `caddy list-
 ### 4. Power management
 
 ```bash
+# Prevent idle + lid-close sleep (required for headless clamshell operation)
 sudo pmset -a sleep 0 displaysleep 0 disksleep 0
-brew install charlie0129/homebrew-tap/batt && sudo batt limit 70
+sudo pmset -a disablesleep 1
+
+# Battery health — cap charge at 70% since it's always on AC
+brew install batt
+sudo brew services start batt
+sudo batt limit 70
 ```
 
 ### 5. Launchd services
@@ -122,6 +128,30 @@ launchctl load ~/Library/LaunchAgents/com.localai.ollama.plist
 launchctl load ~/Library/LaunchAgents/com.localai.audio.plist
 launchctl load ~/Library/LaunchAgents/com.localai.monitor.plist
 ```
+
+### 6. SSH remote access
+
+Enable Remote Login in **System Settings → General → Sharing → Remote Login**, then:
+
+```bash
+# Key-only auth — disable password and PAM keyboard-interactive challenge
+sudo sh -c 'printf "PubkeyAuthentication yes\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n" > /etc/ssh/sshd_config.d/50-keyonly.conf'
+sudo launchctl kickstart -k system/com.openssh.sshd
+
+# Authorize jkrumm SSH key (ed25519 from 1Password)
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+op item get "jkrumm" --account tkrumm --fields "public key" >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+Add to `~/.ssh/config` on client machines:
+```
+Host localai
+    HostName <tailscale-ip>
+    User johannes.krumm
+```
+
+Tailscale IP: visible via `tailscale status --self`. The `IdentityAgent` 1Password wildcard block handles key auth on the client side.
 
 ## API Endpoints
 
