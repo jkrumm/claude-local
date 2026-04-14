@@ -30,6 +30,7 @@ setup:
 	@$(MAKE) --no-print-directory _setup-viteplus
 	@$(MAKE) --no-print-directory _setup-op-token
 	@$(MAKE) --no-print-directory _setup-sdk-keys
+	@$(MAKE) --no-print-directory _setup-ssh
 	@$(MAKE) --no-print-directory _setup-rules
 	@echo ""
 	@echo "  Done. Reload your shell: source ~/.zshrc"
@@ -319,6 +320,20 @@ _setup-sdk-keys:
 		else \
 			echo "    ✗ Could not read op://common/tavily/API_KEY — skipping"; \
 		fi; \
+	fi
+
+.PHONY: _setup-ssh
+_setup-ssh:
+	@echo "  SSH config (~/.ssh/config)..."
+	@mkdir -p "$(HOME)/.ssh"
+	@chmod 700 "$(HOME)/.ssh"
+	@HOSTNAME=$$(op read "op://Private/iumac-server/hostname" --account tkrumm 2>/dev/null || echo ""); \
+	if [ -n "$$HOSTNAME" ]; then \
+		sed "s/__IUMAC_HOSTNAME__/$$HOSTNAME/" "$(CLAUDE_LOCAL)/config/ssh_config" > "$(HOME)/.ssh/config"; \
+		chmod 600 "$(HOME)/.ssh/config"; \
+		echo "    ✓ ~/.ssh/config written (iumac → $$HOSTNAME)"; \
+	else \
+		echo "    ✗ Could not read iumac-server hostname from 1Password — skipping"; \
 	fi
 
 .PHONY: _setup-rules

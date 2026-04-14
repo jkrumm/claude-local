@@ -34,6 +34,8 @@ and the `/localai` skill for setup and management.
 | `rules/` | `~/.claude/rules/` (dir symlink) | Global rules (see `rules/*.md`, e.g., attribution, commit conventions, formatting, research-first, security, TypeScript, code style) |
 | `skills/{name}/` | `~/SourceRoot/.claude/skills/{name}/` | SourceRoot-only |
 
+**Generated (not symlinked):** `~/.ssh/config` — written by `_setup-ssh` from `config/ssh_config` template; hostname injected from `op://Private/iumac-server/hostname`.
+
 **Not symlinked:** `~/.claude/settings.json` — machine-specific permissions.
 `make setup` creates from template if missing, otherwise jq-merges:
 template wins on structural keys (hooks, statusLine, plugins, env); permissions + model/effortLevel/alwaysThinkingEnabled preserved from live file.

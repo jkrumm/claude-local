@@ -1,0 +1,3 @@
+Host iumac
+    HostName __IUMAC_HOSTNAME__
+    User johannes.krumm
