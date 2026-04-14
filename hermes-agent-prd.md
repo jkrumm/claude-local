@@ -42,8 +42,8 @@ All connected via Tailscale. Hermes on Mac Mini reaches all other machines over 
 ### LLM Strategy
 
 - **Primary**: Gemma 4 26B-A4B on M2 Max via OpenAI-compatible API (`https://<localai-tailscale>/v1/chat/completions`)
-- **Fallback**: Anthropic Claude Sonnet or Gemini Flash via API (when M2 Max is off or for heavy reasoning tasks)
-- **Auxiliary models** (compression, session search summarization): Gemini Flash (cheap, fast)
+- **Fallback**: Anthropic Claude Sonnet via API (when M2 Max is off or for heavy reasoning tasks)
+- **Auxiliary models** (compression, vision, session search): Anthropic Claude Haiku (fast, cheap, no data to Google)
 - Provider fallback chain configured in `~/.hermes/config.yaml`
 
 ### Voice Pipeline
@@ -124,8 +124,7 @@ All secrets via 1Password CLI (`op run --env-file=.env.tpl`). Template file comm
 Required secrets (new vault: `hermes` in 1Password):
 - `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` — Slack app credentials
 - `ANTHROPIC_API_KEY` — fallback LLM provider
-- `GEMINI_API_KEY` — auxiliary model (compression, search summarization)
-- `OPENAI_API_KEY` — optional fallback
+- `ANTHROPIC_BASE_URL` — Anthropic API base URL
 - `TICKTICK_CLIENT_ID` + `TICKTICK_CLIENT_SECRET` — TickTick API OAuth
 - `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` — Gmail + Calendar OAuth (read-only)
 - `GITHUB_TOKEN` — for GitHub Issue creation
