@@ -65,6 +65,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 
 RECIPIENT = "age1eg6cypgrjv48urgvmxe9wua9d8a7x9e6jxt6w2phcfg46gxzpqdq9f3jke"  # public key — not a secret
+OP_ACCOUNT = ["--account", "tkrumm"]
 
 # Archived items are excluded automatically (op item list omits them without --include-archive).
 # To exclude a vault entirely, add its name here.
@@ -74,7 +75,7 @@ SKIP_VAULTS: set[str] = {"Shared"}
 WORKERS = 8
 
 def op_json(cmd: list[str]) -> ...:
-    return json.loads(subprocess.check_output(["op"] + cmd))
+    return json.loads(subprocess.check_output(["op"] + cmd + OP_ACCOUNT))
 
 def fetch_item(item_id: str, vault_id: str) -> dict:
     return op_json(["item", "get", item_id, "--vault", vault_id, "--format", "json"])
@@ -82,7 +83,7 @@ def fetch_item(item_id: str, vault_id: str) -> dict:
 def main():
     # Auth check — triggers biometric if 1Password desktop is unlocked
     try:
-        subprocess.check_output(["op", "vault", "list", "--format", "json"], stderr=subprocess.DEVNULL)
+        subprocess.check_output(["op", "vault", "list"] + OP_ACCOUNT + ["--format", "json"], stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError:
         print("1Password not unlocked — open the app and retry")
         sys.exit(1)
@@ -134,7 +135,7 @@ def main():
         )
         # Push to Uptime Kuma
         push_url = subprocess.check_output(
-            ["op", "read", "op://homelab/config/1PASSWORD_BACKUP_PUSH_URL"]
+            ["op", "read", "op://homelab/config/1PASSWORD_BACKUP_PUSH_URL"] + OP_ACCOUNT
         ).decode().strip()
         subprocess.run(["curl", "-fsS", push_url], capture_output=True, check=True)
 
