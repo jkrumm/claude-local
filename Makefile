@@ -387,7 +387,7 @@ _setup-settings:
 		echo "    ✓ settings.json created from template"; \
 	else \
 		jq --slurpfile existing "$(CLAUDE_DIR)/settings.json" \
-			'del(._NOTE) * {permissions: $$existing[0].permissions} * ($$existing[0] | {model, effortLevel, alwaysThinkingEnabled} | with_entries(select(.value != null)))' \
+			'del(._NOTE) * {permissions: ($$existing[0].permissions // .permissions)} * ($$existing[0] | {model, effortLevel, alwaysThinkingEnabled} | with_entries(select(.value != null)))' \
 			"$(CLAUDE_LOCAL)/config/settings.template.json" \
 			> /tmp/claude-settings-merged.json \
 		&& mv /tmp/claude-settings-merged.json "$(CLAUDE_DIR)/settings.json"; \
