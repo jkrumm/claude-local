@@ -662,20 +662,40 @@ clean:
 	@echo ""
 
 # ============================================================================
-# LocalAI — Ollama + mlx-audio + monitor (launchd services on M2 Max server)
+# LocalAI — Ollama + mlx-audio + monitor + API (launchd services on M2 Max)
 # ============================================================================
+
+LOCALAI_PLISTS := com.localai.api com.localai.ollama com.localai.audio com.localai.monitor
+LAUNCHAGENTS   := $(HOME)/Library/LaunchAgents
+LOCALAI_DIR    := $(CLAUDE_LOCAL)/localai
+
+# Install (or update) all plists from repo → LaunchAgents and reload changed ones.
+# Safe to re-run: skips plists that are already identical.
+.PHONY: localai-setup
+localai-setup:
+	@echo "  LocalAI plists..."
+	@for label in $(LOCALAI_PLISTS); do \
+		src="$(LOCALAI_DIR)/$$label.plist"; \
+		dst="$(LAUNCHAGENTS)/$$label.plist"; \
+		if [ ! -f "$$dst" ] || ! diff -q "$$src" "$$dst" >/dev/null 2>&1; then \
+			cp "$$src" "$$dst"; \
+			launchctl unload "$$dst" 2>/dev/null || true; \
+			launchctl load "$$dst"; \
+			echo "    ✓ $$label (installed + loaded)"; \
+		else \
+			echo "    · $$label (up to date)"; \
+		fi; \
+	done
 
 .PHONY: start
 start:
-	launchctl load ~/Library/LaunchAgents/com.localai.ollama.plist
-	launchctl load ~/Library/LaunchAgents/com.localai.audio.plist
-	launchctl load ~/Library/LaunchAgents/com.localai.monitor.plist
+	@$(MAKE) --no-print-directory localai-setup
 
 .PHONY: stop
 stop:
-	launchctl unload ~/Library/LaunchAgents/com.localai.ollama.plist
-	launchctl unload ~/Library/LaunchAgents/com.localai.audio.plist
-	launchctl unload ~/Library/LaunchAgents/com.localai.monitor.plist
+	@for label in com.localai.ollama com.localai.audio com.localai.monitor com.localai.api; do \
+		launchctl unload "$(LAUNCHAGENTS)/$$label.plist" 2>/dev/null && echo "  · $$label stopped" || true; \
+	done
 
 # ============================================================================
 # Help
@@ -692,8 +712,9 @@ help:
 	@echo "  make github-config      Apply branch protection + merge settings to all repos"
 	@echo "  make github-config-dry  Preview without applying"
 	@echo ""
-	@echo "  make start      Start LocalAI stack (Ollama + mlx-audio + monitor)"
-	@echo "  make stop       Stop LocalAI stack"
+	@echo "  make localai-setup  Install/update plists from repo + reload changed ones"
+	@echo "  make start          Install plists + start all LocalAI services"
+	@echo "  make stop           Stop all LocalAI services"
 	@echo ""
 	@echo "  make up         Start cqueue dashboard"
 	@echo "  make down       Stop cqueue"

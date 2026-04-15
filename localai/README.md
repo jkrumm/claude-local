@@ -117,19 +117,24 @@ sudo batt limit 70
 
 ### 5. Launchd services
 
-Three plists in `~/Library/LaunchAgents/`:
+Four plists in `~/Library/LaunchAgents/`:
 
 | Plist | Service | Key Config |
 |-|-|-|
+| `com.localai.api.plist` | Management API | 127.0.0.1:9001, logs → /tmp/localai-api*.log |
 | `com.localai.ollama.plist` | Ollama serve | FA=0, q8_0 KV, 0.0.0.0:11434 |
 | `com.localai.audio.plist` | mlx-audio server | 0.0.0.0:8000, PATH includes homebrew, log-dir=/tmp/mlx-audio-logs |
 | `com.localai.monitor.plist` | snapshot.sh (5 min) | → SQLite monitor.db |
 
+All four plists are version-controlled in `localai/`. `make start` (which calls `make localai-setup`) installs them idempotently — copies changed plists to `~/Library/LaunchAgents/` and reloads only the ones that changed:
+
 ```bash
-launchctl load ~/Library/LaunchAgents/com.localai.ollama.plist
-launchctl load ~/Library/LaunchAgents/com.localai.audio.plist
-launchctl load ~/Library/LaunchAgents/com.localai.monitor.plist
+make start          # install plists + start all services
+make stop           # stop all services
+make localai-setup  # sync plists from repo (no-op if already up to date)
 ```
+
+`KeepAlive=true` on all plists means launchd auto-restarts any crashed service.
 
 ### 6. SSH remote access
 
@@ -155,7 +160,37 @@ Host localai
 
 Tailscale IP: visible via `tailscale status --self`. The `IdentityAgent` 1Password wildcard block handles key auth on the client side.
 
-## API Endpoints
+## Management API
+
+Control the stack and query monitoring data without SSH. Accessible from any Tailscale device at `https://<ts-hostname>.ts.net/api/*`. Tailscale is the sole auth layer.
+
+| Method | Path | Description |
+|-|-|-|
+| GET | `/api/health` | Liveness probe |
+| GET | `/api/status` | Loaded services + port liveness |
+| POST | `/api/start` | Load ollama + audio + monitor via launchctl |
+| POST | `/api/stop` | Unload ollama + audio + monitor via launchctl |
+| POST | `/api/restart` | Unload, wait 2s, reload |
+| GET | `/api/snapshots` | Recent rows from monitor.db (`?limit=N`, max 500) |
+| GET | `/api/snapshots/summary` | 24h uptime %, avg VRAM, avg memory, battery stats |
+
+The API service itself (`com.localai.api`) is not stopped by `/api/stop` — only the AI services are affected. Use `make stop` to bring down everything including the API.
+
+```bash
+# Check stack health
+curl https://<ts-hostname>.ts.net/api/status | jq .
+
+# Restart Ollama + audio without SSH
+curl -X POST https://<ts-hostname>.ts.net/api/restart | jq .
+
+# Last hour of snapshots
+curl "https://<ts-hostname>.ts.net/api/snapshots?limit=12" | jq .
+
+# 24h summary
+curl https://<ts-hostname>.ts.net/api/snapshots/summary | jq .
+```
+
+## AI API Endpoints
 
 All endpoints OpenAI-compatible. From any Tailscale device:
 

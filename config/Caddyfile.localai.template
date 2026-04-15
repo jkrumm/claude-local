@@ -17,4 +17,7 @@ iu-mac-book.dinosaur-sole.ts.net {
 			header_down Content-Type "application/json"
 		}
 	}
+	handle /api/* {
+		reverse_proxy localhost:9001
+	}
 }
