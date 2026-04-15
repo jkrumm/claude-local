@@ -662,6 +662,22 @@ clean:
 	@echo ""
 
 # ============================================================================
+# LocalAI — Ollama + mlx-audio + monitor (launchd services on M2 Max server)
+# ============================================================================
+
+.PHONY: start
+start:
+	launchctl load ~/Library/LaunchAgents/com.localai.ollama.plist
+	launchctl load ~/Library/LaunchAgents/com.localai.audio.plist
+	launchctl load ~/Library/LaunchAgents/com.localai.monitor.plist
+
+.PHONY: stop
+stop:
+	launchctl unload ~/Library/LaunchAgents/com.localai.ollama.plist
+	launchctl unload ~/Library/LaunchAgents/com.localai.audio.plist
+	launchctl unload ~/Library/LaunchAgents/com.localai.monitor.plist
+
+# ============================================================================
 # Help
 # ============================================================================
 
@@ -675,6 +691,9 @@ help:
 	@echo "  make status             Verify symlink health + Keychain secrets"
 	@echo "  make github-config      Apply branch protection + merge settings to all repos"
 	@echo "  make github-config-dry  Preview without applying"
+	@echo ""
+	@echo "  make start      Start LocalAI stack (Ollama + mlx-audio + monitor)"
+	@echo "  make stop       Stop LocalAI stack"
 	@echo ""
 	@echo "  make up         Start cqueue dashboard"
 	@echo "  make down       Stop cqueue"

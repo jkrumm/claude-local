@@ -106,6 +106,8 @@ Note: `brew upgrade caddy` overwrites the custom binary. Rebuild if `caddy list-
 # Prevent idle + lid-close sleep (required for headless clamshell operation)
 sudo pmset -a sleep 0 displaysleep 0 disksleep 0
 sudo pmset -a disablesleep 1
+# Prevent standby/hibernation (standby can engage even with sleep=0 and drop SSH)
+sudo pmset -a standby 0 hibernatemode 0 autopoweroff 0
 
 # Battery health — cap charge at 70% since it's always on AC
 brew install batt
