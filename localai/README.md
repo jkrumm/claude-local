@@ -162,32 +162,43 @@ Tailscale IP: visible via `tailscale status --self`. The `IdentityAgent` 1Passwo
 
 ## Management API
 
-Control the stack and query monitoring data without SSH. Accessible from any Tailscale device at `https://<ts-hostname>.ts.net/api/*`. Tailscale is the sole auth layer.
+Control the stack and query monitoring data without SSH. Accessible from any Tailscale device at `https://<ts-hostname>.ts.net/api/*`. Tailscale is the sole auth layer. Full spec at `/api/openapi.json`.
 
 | Method | Path | Description |
 |-|-|-|
 | GET | `/api/health` | Liveness probe |
-| GET | `/api/status` | Loaded services + port liveness |
+| GET | `/api/status` | launchd loaded flags + port liveness for all services |
+| GET | `/api/system` | Live: memory used/total/%, battery, load avg, memory pressure |
+| GET | `/api/models` | Models currently hot in Ollama VRAM + per-model sizes |
+| GET | `/api/logs/{service}` | Tail stdout+stderr (`?lines=N`, max 1000). Services: ollama, audio, api, monitor |
+| GET | `/api/snapshots` | Raw monitoring rows from SQLite (`?limit=N`, max 500, newest-first) |
+| GET | `/api/snapshots/summary` | 24h aggregated: uptime %, avg VRAM, memory, battery |
+| GET | `/api/analytics` | Time-bucketed series for charting (`?hours=N`, max 720). Auto bucket: 10m/30m/1h/2h |
 | POST | `/api/start` | Load ollama + audio + monitor via launchctl |
-| POST | `/api/stop` | Unload ollama + audio + monitor via launchctl |
-| POST | `/api/restart` | Unload, wait 2s, reload |
-| GET | `/api/snapshots` | Recent rows from monitor.db (`?limit=N`, max 500) |
-| GET | `/api/snapshots/summary` | 24h uptime %, avg VRAM, avg memory, battery stats |
+| POST | `/api/stop` | Unload ollama + audio + monitor (API itself stays up) |
+| POST | `/api/restart` | Unload AI services, wait 2s, reload |
+| GET | `/api/openapi.json` | This spec as OpenAPI 3.0 JSON |
 
-The API service itself (`com.localai.api`) is not stopped by `/api/stop` — only the AI services are affected. Use `make stop` to bring down everything including the API.
+`/api/stop` does not kill the API itself — only the AI services. `make stop` brings down everything.
 
 ```bash
-# Check stack health
-curl https://<ts-hostname>.ts.net/api/status | jq .
+# Live health snapshot
+curl https://<ts-hostname>.ts.net/api/system | jq .
 
-# Restart Ollama + audio without SSH
+# What's loaded in VRAM right now
+curl https://<ts-hostname>.ts.net/api/models | jq .
+
+# Tail last 50 lines of Ollama stderr
+curl "https://<ts-hostname>.ts.net/api/logs/ollama?lines=50" | jq .stderr[]
+
+# Restart without SSH
 curl -X POST https://<ts-hostname>.ts.net/api/restart | jq .
 
-# Last hour of snapshots
-curl "https://<ts-hostname>.ts.net/api/snapshots?limit=12" | jq .
+# 24h charting data (30-min buckets)
+curl "https://<ts-hostname>.ts.net/api/analytics?hours=24" | jq .series[]
 
-# 24h summary
-curl https://<ts-hostname>.ts.net/api/snapshots/summary | jq .
+# 7-day summary
+curl "https://<ts-hostname>.ts.net/api/analytics?hours=168" | jq '{hours: .hours, bucket_minutes, points: (.series | length)}'
 ```
 
 ## AI API Endpoints
