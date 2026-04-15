@@ -62,6 +62,28 @@ Two 1Password accounts are configured:
 1. Install 1Password + enable CLI integration (Settings → Developer → Enable CLI)
 2. `make setup` — will fail fast with instructions if 1Password isn't ready
 
+## Hermes Agent
+
+Config templates, skill files, and .env.tpl are versioned here under `hermes/`. Deploy to `~/.hermes/` on Mac Mini.
+
+**Symlinks into `~/.hermes/`:**
+
+| File here | Live path | Notes |
+|-|-|-|
+| `hermes/config.yaml` | `~/.hermes/config.yaml` | symlink — edit here, live immediately |
+| `hermes/.env.tpl` | `~/.hermes/.env.tpl` | symlink |
+| `hermes/SOUL.md` | `~/.hermes/SOUL.md` | symlink |
+| `hermes/cron/` | `~/.hermes/cron/` | symlink — add cron jobs here |
+| `hermes/hooks/` | `~/.hermes/hooks/` | symlink — add hooks here |
+| `hermes/skills/{name}/` | `~/.hermes/skills/{name}/` | symlink per skill |
+| `hermes/USER.md` | `~/.hermes/memories/USER.md` | copied — Hermes writes to it |
+
+**Homelab API integration:** `hermes/skills/homelab-api/reference.md` is auto-generated from `https://api.jkrumm.com/docs/json`. Do not edit manually — run `/docs` in homelab after API route changes.
+
+**API secret:** `op://common/api/SECRET` (account `tkrumm`) — wired in `.env.tpl`.
+
+**Local modifications to upstream:** `~/.hermes/hermes-agent/tools/tts_tool.py` has custom TTS metadata generation. See `/hermes-update` skill for re-apply instructions after `hermes update`.
+
 ## Editing Rules
 
 **Adding a skill:** create `skills/{name}/SKILL.md` here, then `make setup`.
