@@ -107,6 +107,7 @@ optimizeDeps: { exclude: ['basalt-ui'] }
 | `/frontend-design` | Production-grade frontend interfaces | main | (inherits) |
 | `/skill-creator` | Create, modify, and test skills | main | (inherits) |
 | `/localai [cmd]` | Manage local AI stack (setup, status, update, monitor, swap-model) | main | haiku |
+| `/hermes-validate` | Test Hermes skill routing, read session traces, fix SOUL.md/SKILL.md | main | (inherits) |
 
 ---
 
