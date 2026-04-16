@@ -139,6 +139,8 @@ Then re-send the same test message and compare `api_calls` and `time` in `agent.
 | LocalAI health (Ollama/VRAM) | `localai-debug` | 3 | ~50s | Working |
 | UptimeKuma status | `homelab-api` | 3 | ~40s | Working |
 | Docker homelab + VPS summary | `homelab-api` | ~9 | ~150s | Working but slow |
+| Weather forecast (weekend) | `weather` | 2 | ~66s | Working |
+| Weather UV query (sunscreen) | `weather` | 2 | ~60s | Working |
 | TickTick tasks | `homelab-api` | TBD | TBD | Not yet tested |
 | Gmail / Calendar | `homelab-api` | TBD | TBD | Not yet tested |
 
@@ -153,6 +155,7 @@ Update this table after each validation run.
 | `hermes/SOUL.md` | System prompt — skill routing hints live here |
 | `hermes/skills/homelab-api/SKILL.md` | homelab API reference for Hermes |
 | `hermes/skills/localai-debug/SKILL.md` | localAI management API reference |
+| `hermes/skills/weather/SKILL.md` | Weather forecast skill (Open-Meteo via homelab API) |
 | `~/.hermes/logs/agent.log` | Structured run log (api_calls, time, inbound messages) |
 | `~/.hermes/sessions/*.jsonl` | Full turn-by-turn session traces |
 | `~/.hermes/logs/gateway.log` | Gateway stdout (startup, tool progress bars) |
