@@ -77,14 +77,17 @@ Config templates, skill files, and .env.tpl are versioned here under `hermes/`. 
 | `hermes/SOUL.md` | `~/.hermes/SOUL.md` | symlink |
 | `hermes/cron/` | `~/.hermes/cron/` | symlink — add cron jobs here |
 | `hermes/hooks/` | `~/.hermes/hooks/` | symlink — add hooks here |
-| `hermes/skills/{name}/` | `~/.hermes/skills/{name}/` | symlink per skill (homelab-api, infrastructure, tasks, schedule, weather, localai-debug) |
+| `hermes/skills/{name}/` | `~/.hermes/skills/{name}/` | symlink per skill (homelab-api, infrastructure, tasks, schedule, weather, slack, localai-debug) |
 | `hermes/USER.md` | `~/.hermes/memories/USER.md` | copied — Hermes writes to it |
 
-**Homelab API integration:** `hermes/skills/homelab-api/reference.md` is auto-generated from `https://api.jkrumm.com/docs/json`. Do not edit manually — run `/docs` in homelab after API route changes.
+**Homelab API integration:** `hermes/skills/homelab-api/SKILL.md` endpoint tables are regenerated from `https://api.jkrumm.com/docs/json` by the homelab `/docs` skill. Domain skills (infrastructure, tasks, schedule, weather, slack) are updated in the same pass if their endpoints changed.
 
 **API secret:** `op://common/api/SECRET` (account `tkrumm`) — wired in `.env.tpl`.
 
-**Local modifications to upstream:** `~/.hermes/hermes-agent/tools/tts_tool.py` has custom TTS metadata generation. See `/hermes-update` skill for re-apply instructions after `hermes update`.
+**Local modifications to upstream (re-apply after `hermes update`):**
+- `~/.hermes/hermes-agent/tools/tts_tool.py` — custom TTS metadata generation
+- `~/.hermes/hermes-agent/gateway/platforms/slack.py` — (1) metadata builder adds `is_real_thread` flag; `_resolve_thread_ts()` uses it so `reply_in_thread: false` works for top-level messages. (2) `format_message()` pre-steps: normalize `*` list markers to `-`, strip backticks from inline code containing emoji shortcodes
+- `~/.hermes/hermes-agent/gateway/config.py` — bridge `reply_in_thread`, `reply_broadcast`, `reply_to_mode` from `slack:` YAML section into platform `extra` dict (upstream only bridges `require_mention`, `allow_bots`, `free_response_channels`)
 
 ## Editing Rules
 

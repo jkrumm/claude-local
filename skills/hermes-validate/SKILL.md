@@ -137,12 +137,13 @@ Then re-send the same test message and compare `api_calls` and `time` in `agent.
 | Query type | Skill used | Calls | Time | Status |
 |-|-|-|-|-|
 | LocalAI health (Ollama/VRAM) | `localai-debug` | 3 | ~50s | Working |
-| UptimeKuma status | `homelab-api` | 3 | ~40s | Working |
-| Docker homelab + VPS summary | `homelab-api` | ~9 | ~150s | Working but slow |
+| Infra status (all services + containers) | `infrastructure` | 3 | ~132s | Working — uses /summary, concise |
 | Weather forecast (weekend) | `weather` | 2 | ~66s | Working |
 | Weather UV query (sunscreen) | `weather` | 2 | ~60s | Working |
-| TickTick tasks | `homelab-api` | TBD | TBD | Not yet tested |
-| Gmail / Calendar | `homelab-api` | TBD | TBD | Not yet tested |
+| TickTick overdue/due tasks | `tasks` | 3 | ~152s | Working — uses /summary .ticktick, grouped by project |
+| Calendar + unread emails | `schedule` | 3 | ~77s | Working — parallel calendar + emails in one pass |
+| Slack unreads | `slack` | 3 | ~31s | Working — uses /slack/unreads, very fast |
+| Cross-domain (meetings + tasks + weather) | `schedule` + `tasks` + `weather` | 4 | ~121s | Working — loads 3 skills, 3 curl calls, clean combined response |
 
 Update this table after each validation run.
 
@@ -152,10 +153,14 @@ Update this table after each validation run.
 
 | File | Purpose |
 |-|-|
-| `hermes/SOUL.md` | System prompt — skill routing hints live here |
-| `hermes/skills/homelab-api/SKILL.md` | homelab API reference for Hermes |
-| `hermes/skills/localai-debug/SKILL.md` | localAI management API reference |
-| `hermes/skills/weather/SKILL.md` | Weather forecast skill (Open-Meteo via homelab API) |
+| `hermes/SOUL.md` | System prompt — skill routing table lives here |
+| `hermes/skills/homelab-api/SKILL.md` | Full endpoint reference (fallback when no domain skill matches) |
+| `hermes/skills/infrastructure/SKILL.md` | UptimeKuma + Docker behavioral guidance |
+| `hermes/skills/tasks/SKILL.md` | TickTick task management behavioral guidance |
+| `hermes/skills/schedule/SKILL.md` | Calendar + Gmail behavioral guidance |
+| `hermes/skills/weather/SKILL.md` | Weather forecast behavioral guidance |
+| `hermes/skills/slack/SKILL.md` | Slack messages, search, unreads behavioral guidance |
+| `hermes/skills/localai-debug/SKILL.md` | LocalAI management API reference |
 | `~/.hermes/logs/agent.log` | Structured run log (api_calls, time, inbound messages) |
 | `~/.hermes/sessions/*.jsonl` | Full turn-by-turn session traces |
 | `~/.hermes/logs/gateway.log` | Gateway stdout (startup, tool progress bars) |
