@@ -354,6 +354,9 @@ _setup-hooks:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/hooks/protect-branches.ts" \
 		DST="$(CLAUDE_DIR)/hooks/protect-branches.ts"
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(CLAUDE_LOCAL)/hooks/docker-makefile.ts" \
+		DST="$(CLAUDE_DIR)/hooks/docker-makefile.ts"
 
 .PHONY: _setup-scripts
 _setup-scripts:
@@ -520,6 +523,7 @@ status:
 	@echo "  Hooks"
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/hooks/notify.ts"
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/hooks/protect-branches.ts"
+	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/hooks/docker-makefile.ts"
 	@echo "  Scripts"
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/queue.ts"
 	@$(MAKE) --no-print-directory _check DST="$(CLAUDE_DIR)/statusline.sh"

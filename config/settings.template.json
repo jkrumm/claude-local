@@ -40,7 +40,10 @@
     "PreToolUse": [
       {
         "matcher": "Bash",
-        "hooks": [{ "type": "command", "command": "~/.claude/hooks/protect-branches.ts" }]
+        "hooks": [
+          { "type": "command", "command": "~/.claude/hooks/protect-branches.ts" },
+          { "type": "command", "command": "~/.claude/hooks/docker-makefile.ts" }
+        ]
       }
     ],
     "SessionStart": [

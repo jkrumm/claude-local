@@ -29,6 +29,8 @@ and the `/localai` skill for setup and management.
 | `config/Caddyfile` | `$(brew --prefix)/etc/Caddyfile` | Local HTTPS reverse proxy — edit here, then `caddy reload` |
 | `scripts/wakeup.sh` | `~/.wakeup` | sleepwatcher hook — runs `caddy reload` on wake |
 | `hooks/notify.ts` | `~/.claude/hooks/notify.ts` | All 4 hook events |
+| `hooks/protect-branches.ts` | `~/.claude/hooks/protect-branches.ts` | PreToolUse — blocks push to protected branches |
+| `hooks/docker-makefile.ts` | `~/.claude/hooks/docker-makefile.ts` | PreToolUse — blocks raw docker commands when Makefile exists |
 | `scripts/statusline.sh` | `~/.claude/statusline.sh` | 3-line statusline |
 | `scripts/fetch_usage.py` | `~/.claude/fetch_usage.py` | Claude.ai usage % fetcher (uv script) |
 | `rules/` | `~/.claude/rules/` (dir symlink) | Global rules (see `rules/*.md`, e.g., attribution, commit conventions, formatting, research-first, security, TypeScript, code style) |
@@ -75,7 +77,7 @@ Config templates, skill files, and .env.tpl are versioned here under `hermes/`. 
 | `hermes/SOUL.md` | `~/.hermes/SOUL.md` | symlink |
 | `hermes/cron/` | `~/.hermes/cron/` | symlink — add cron jobs here |
 | `hermes/hooks/` | `~/.hermes/hooks/` | symlink — add hooks here |
-| `hermes/skills/{name}/` | `~/.hermes/skills/{name}/` | symlink per skill |
+| `hermes/skills/{name}/` | `~/.hermes/skills/{name}/` | symlink per skill (homelab-api, infrastructure, tasks, schedule, weather, localai-debug) |
 | `hermes/USER.md` | `~/.hermes/memories/USER.md` | copied — Hermes writes to it |
 
 **Homelab API integration:** `hermes/skills/homelab-api/reference.md` is auto-generated from `https://api.jkrumm.com/docs/json`. Do not edit manually — run `/docs` in homelab after API route changes.
