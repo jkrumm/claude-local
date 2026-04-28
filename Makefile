@@ -724,13 +724,21 @@ _setup-localai:
 	fi
 	@$(MAKE) --no-print-directory localai-setup
 
-LOCALAI_PLISTS := com.localai.audio com.localai.helper
+# mlx-audio (port 8000) — universal, every Mac
+# localai-helper (port 8001, FastAPI) — Hermes-only, installed via `make hermes`
+LOCALAI_AUDIO_PLISTS  := com.localai.audio
+LOCALAI_HERMES_PLISTS := com.localai.helper
 
-# Render plists from templates (substitutes __HOME__) and reload changed ones.
+# Render universal plists (audio only) and reload changed ones.
 .PHONY: localai-setup
 localai-setup:
 	@mkdir -p "$(LAUNCHAGENTS)"
-	@for label in $(LOCALAI_PLISTS); do \
+	@$(MAKE) --no-print-directory _render-plists PLISTS="$(LOCALAI_AUDIO_PLISTS)"
+
+# Internal: render any plist list from $(LOCALAI_DIR) templates.
+.PHONY: _render-plists
+_render-plists:
+	@for label in $(PLISTS); do \
 		SRC="$(LOCALAI_DIR)/$$label.plist.template"; \
 		DST="$(LAUNCHAGENTS)/$$label.plist"; \
 		TMP="$$(mktemp)"; \
@@ -748,19 +756,134 @@ localai-setup:
 
 .PHONY: start
 start:
-	@for label in $(LOCALAI_PLISTS); do \
-		launchctl load "$(LAUNCHAGENTS)/$$label.plist" 2>/dev/null \
+	@for label in $(LOCALAI_AUDIO_PLISTS) $(LOCALAI_HERMES_PLISTS); do \
+		PLIST="$(LAUNCHAGENTS)/$$label.plist"; \
+		[ -f "$$PLIST" ] || continue; \
+		launchctl load "$$PLIST" 2>/dev/null \
 			&& echo "  · $$label started" \
 			|| echo "  · $$label already running"; \
 	done
 
 .PHONY: stop
 stop:
-	@for label in $(LOCALAI_PLISTS); do \
-		launchctl unload "$(LAUNCHAGENTS)/$$label.plist" 2>/dev/null \
+	@for label in $(LOCALAI_AUDIO_PLISTS) $(LOCALAI_HERMES_PLISTS); do \
+		PLIST="$(LAUNCHAGENTS)/$$label.plist"; \
+		[ -f "$$PLIST" ] || continue; \
+		launchctl unload "$$PLIST" 2>/dev/null \
 			&& echo "  · $$label stopped" \
 			|| true; \
 	done
+
+# ============================================================================
+# Hermes — Mac Mini-only setup (FastAPI helper, config symlinks, cron)
+# Universal `make setup` does NOT include this.
+# ============================================================================
+
+HERMES_REPO := $(CLAUDE_LOCAL)/hermes
+HERMES_DIR  := $(HOME)/.hermes
+HERMES_SKILLS := homelab-api infrastructure schedule slack tasks weather
+
+.PHONY: hermes
+hermes:
+	@echo ""
+	@echo "  Setting up Hermes Agent (Mac Mini-only)..."
+	@echo ""
+	@$(MAKE) --no-print-directory _hermes-precheck
+	@$(MAKE) --no-print-directory _hermes-symlinks
+	@$(MAKE) --no-print-directory _hermes-helper
+	@$(MAKE) --no-print-directory _hermes-cron
+	@echo ""
+	@echo "  Done. Follow-up:"
+	@echo "    1. Create push monitors in UptimeKuma UI (Hermes Agent - Push, Hermes Backup - Push)"
+	@echo "    2. Store push URLs:"
+	@echo "         op item create --account tkrumm --vault hermes --category login \\"
+	@echo "           --title uptime-kuma agent-push-url=<url> backup-push-url=<url>"
+	@echo "    3. Rebuild ~/.hermes/.env (see hermes/README.md \"Rebuild .env\")"
+	@echo ""
+
+.PHONY: _hermes-precheck
+_hermes-precheck:
+	@echo "  Prerequisites..."
+	@if ! command -v hermes >/dev/null 2>&1; then \
+		echo "    ✗ hermes CLI not installed — run install per hermes/README.md §2"; \
+		exit 1; \
+	fi
+	@echo "    ✓ hermes $$(hermes --version 2>/dev/null | head -1)"
+	@mkdir -p "$(HERMES_DIR)"
+	@mkdir -p "$(HERMES_DIR)/memories"
+	@mkdir -p "$(HERMES_DIR)/skills"
+
+.PHONY: _hermes-symlinks
+_hermes-symlinks:
+	@echo "  Hermes config symlinks..."
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(HERMES_REPO)/config.yaml" \
+		DST="$(HERMES_DIR)/config.yaml"
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(HERMES_REPO)/.env.tpl" \
+		DST="$(HERMES_DIR)/.env.tpl"
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(HERMES_REPO)/SOUL.md" \
+		DST="$(HERMES_DIR)/SOUL.md"
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(HERMES_REPO)/cron" \
+		DST="$(HERMES_DIR)/cron"
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(HERMES_REPO)/hooks" \
+		DST="$(HERMES_DIR)/hooks"
+	@for skill in $(HERMES_SKILLS); do \
+		$(MAKE) --no-print-directory _link \
+			SRC="$(HERMES_REPO)/skills/$$skill" \
+			DST="$(HERMES_DIR)/skills/$$skill"; \
+	done
+	@$(MAKE) --no-print-directory _copy \
+		SRC="$(HERMES_REPO)/USER.md" \
+		DST="$(HERMES_DIR)/memories/USER.md"
+
+.PHONY: _hermes-helper
+_hermes-helper:
+	@echo "  localai-helper (FastAPI orchestration on :8001)..."
+	@$(MAKE) --no-print-directory _render-plists PLISTS="$(LOCALAI_HERMES_PLISTS)"
+
+.PHONY: _hermes-cron
+_hermes-cron:
+	@echo "  Cron (liveness + backup, both ping UptimeKuma)..."
+	@chmod +x $(HERMES_REPO)/scripts/hermes-liveness.sh $(HERMES_REPO)/scripts/hermes-backup.sh
+	@LIVENESS="*/5 * * * * $(HERMES_REPO)/scripts/hermes-liveness.sh >> /tmp/hermes-liveness.log 2>&1"; \
+	BACKUP="0 3 * * * $(HERMES_REPO)/scripts/hermes-backup.sh >> /tmp/hermes-backup.log 2>&1"; \
+	CURRENT=$$(crontab -l 2>/dev/null || true); \
+	NEW=$$(echo "$$CURRENT" | grep -v "hermes-liveness.sh" | grep -v "hermes-backup.sh"); \
+	printf '%s\n%s\n%s\n' "$$NEW" "$$LIVENESS" "$$BACKUP" | sed '/^$$/d' | crontab -; \
+	echo "    ✓ crontab installed (*/5 liveness, 03:00 backup)"
+
+.PHONY: hermes-status
+hermes-status:
+	@echo ""
+	@echo "  Hermes setup status"
+	@command -v hermes >/dev/null 2>&1 \
+		&& echo "    ✓ hermes CLI" \
+		|| echo "    ✗ hermes CLI [not installed]"
+	@$(MAKE) --no-print-directory _check DST="$(HERMES_DIR)/config.yaml"
+	@$(MAKE) --no-print-directory _check DST="$(HERMES_DIR)/.env.tpl"
+	@$(MAKE) --no-print-directory _check DST="$(HERMES_DIR)/SOUL.md"
+	@$(MAKE) --no-print-directory _check DST="$(HERMES_DIR)/cron"
+	@$(MAKE) --no-print-directory _check DST="$(HERMES_DIR)/hooks"
+	@for skill in $(HERMES_SKILLS); do \
+		$(MAKE) --no-print-directory _check DST="$(HERMES_DIR)/skills/$$skill"; \
+	done
+	@[ -f "$(HERMES_DIR)/.env" ] \
+		&& echo "    ✓ .env (rebuilt from 1Password)" \
+		|| echo "    ✗ .env [missing — see hermes/README.md \"Rebuild .env\"]"
+	@[ -f "$(LAUNCHAGENTS)/com.localai.helper.plist" ] \
+		&& echo "    ✓ com.localai.helper.plist" \
+		|| echo "    ✗ com.localai.helper.plist [missing — run make hermes]"
+	@crontab -l 2>/dev/null | grep -q "hermes-liveness.sh" \
+		&& echo "    ✓ liveness cron" \
+		|| echo "    ✗ liveness cron [missing — run make hermes]"
+	@crontab -l 2>/dev/null | grep -q "hermes-backup.sh" \
+		&& echo "    ✓ backup cron" \
+		|| echo "    ✗ backup cron [missing — run make hermes]"
+	@echo ""
 
 # ============================================================================
 # Help
@@ -778,8 +901,11 @@ help:
 	@echo "  make github-config-dry  Preview without applying"
 	@echo ""
 	@echo "  make localai-setup  Render audio plist from template + reload if changed"
-	@echo "  make start          Start mlx-audio (com.localai.audio)"
-	@echo "  make stop           Stop mlx-audio"
+	@echo "  make start          Start mlx-audio (+ helper if installed)"
+	@echo "  make stop           Stop mlx-audio (+ helper if installed)"
+	@echo ""
+	@echo "  make hermes         Mac Mini-only — Hermes config symlinks, FastAPI helper, cron"
+	@echo "  make hermes-status  Verify Hermes symlinks, helper plist, crontab entries"
 	@echo ""
 	@echo "  make up         Start cqueue dashboard"
 	@echo "  make down       Stop cqueue"

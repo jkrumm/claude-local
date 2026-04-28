@@ -67,19 +67,25 @@ Two 1Password accounts are configured:
 
 ## Hermes Agent
 
-Config templates, skill files, and .env.tpl are versioned here under `hermes/`. Deploy to `~/.hermes/` on Mac Mini.
+Config templates, skill files, and .env.tpl are versioned here under `hermes/`. Deployed to `~/.hermes/` on Mac Mini **only** via `make hermes` (separate from universal `make setup` — other Macs don't run Hermes).
 
-**Symlinks into `~/.hermes/`:**
+`make setup` installs `mlx-audio` (port 8000) on every Mac for Claude Code TTS/STT. `make hermes` is Mac Mini-only and additionally installs: Hermes config symlinks, `localai-helper` FastAPI plist (port 8001), and the cron entries for liveness + backup. Run `make hermes-status` to verify.
+
+**Symlinks into `~/.hermes/` (created by `make hermes`):**
 
 | File here | Live path | Notes |
 |-|-|-|
 | `hermes/config.yaml` | `~/.hermes/config.yaml` | symlink — edit here, live immediately |
 | `hermes/.env.tpl` | `~/.hermes/.env.tpl` | symlink |
 | `hermes/SOUL.md` | `~/.hermes/SOUL.md` | symlink |
-| `hermes/cron/` | `~/.hermes/cron/` | symlink — add cron jobs here |
+| `hermes/cron/` | `~/.hermes/cron/` | symlink — Hermes-driven (LLM) cron jobs |
 | `hermes/hooks/` | `~/.hermes/hooks/` | symlink — add hooks here |
-| `hermes/skills/{name}/` | `~/.hermes/skills/{name}/` | symlink per skill (homelab-api, infrastructure, tasks, schedule, weather, slack, localai-debug) |
+| `hermes/skills/{name}/` | `~/.hermes/skills/{name}/` | symlink per skill (homelab-api, infrastructure, tasks, schedule, weather, slack) |
 | `hermes/USER.md` | `~/.hermes/memories/USER.md` | copied — Hermes writes to it |
+
+**Host-level scripts (called by macOS `crontab`, not symlinked):**
+- `hermes/scripts/hermes-liveness.sh` — every 5 min, checks gateway state + Slack connection, pings `$UPTIME_PUSH_HERMES` on success.
+- `hermes/scripts/hermes-backup.sh` — daily 03:00, rsyncs `~/.hermes/` → `homelab:/mnt/hdd/backups/hermes/`, pings `$UPTIME_PUSH_BACKUP` on success.
 
 **Homelab API integration:** `hermes/skills/homelab-api/SKILL.md` endpoint tables are regenerated from `https://api.jkrumm.com/docs/json` by the homelab `/docs` skill. Domain skills (infrastructure, tasks, schedule, weather, slack) are updated in the same pass if their endpoints changed.
 
