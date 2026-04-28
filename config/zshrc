@@ -62,6 +62,8 @@ fi
 # ── IU (work) ────────────────────────────────────────────────────────────────
 # start-iu-fe        start all IU frontend dev servers
 # sync-iu-db         sync IU dev database
+# aws-login [env]    AWS SSO login for IDSS (Dev|Non-Prod|Prod|Shared, default Non-Prod)
+#                    sets AWS_PROFILE to aws.CP.IDSS.<env>
 #
 # ── Misc ─────────────────────────────────────────────────────────────────────
 # sz                 reload ~/.zshrc

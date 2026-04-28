@@ -25,5 +25,14 @@ alias opbackup="~/SourceRoot/claude-local/scripts/backup-1password.py"
 alias start-iu-fe="~/IuRoot/prometheus-scripts/bash/start-frontends.sh"
 alias sync-iu-db="~/IuRoot/prometheus-scripts/bash/sync-dev-db.sh"
 
+# AWS SSO (IU IDSS) — aws-login [Dev|Non-Prod|Prod|Shared], default Non-Prod; exports AWS_PROFILE
+aws-login() {
+  local env="${1:-Non-Prod}"
+  local profile="aws.CP.IDSS.${env}"
+  aws sso login --profile "$profile" || return 1
+  export AWS_PROFILE="$profile"
+  echo "AWS_PROFILE=$AWS_PROFILE"
+}
+
 # Node
 alias npmplease="rm -rf node_modules/ && rm -f package-lock.json && npm install"
