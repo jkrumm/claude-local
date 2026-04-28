@@ -102,7 +102,7 @@ response ready: platform=slack chat=... time=51.7s api_calls=3 response=751 char
 
 ### Skill not found on first try (2 `skills_list` calls)
 **Symptom:** `skills_list` appears twice in trace before `skill_view`
-**Cause:** Gemma4 lists all skills to verify, rather than calling `skill_view` directly
+**Cause:** the model lists all skills to verify, rather than calling `skill_view` directly
 **Fix:** In SOUL.md name the exact skill and tool call: `call skill_view('homelab-api')`
 
 ### Wrong interpretation of API response values
@@ -112,7 +112,7 @@ response ready: platform=slack chat=... time=51.7s api_calls=3 response=751 char
 
 ### 33+ API calls, looping behavior
 **Symptom:** `api_calls` very high, session reasoning repeats the same question
-**Cause:** Usually a dead reference in SOUL.md causing Gemma4 to search and give up repeatedly
+**Cause:** Usually a dead reference in SOUL.md causing the model to search and give up repeatedly
 **Fix:** Find and remove the dead reference, point to skill name instead
 
 ---

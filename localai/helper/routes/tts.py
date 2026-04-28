@@ -18,11 +18,10 @@ Pipeline:
   2. Rewrite for speech (Haiku) — only when ≥2 markdown markers
   3. Title (Haiku) for filename
   4. Map language → Voxtral voice preset (de_male / neutral_male)
-  5. Chunk at sentence boundaries
+  5. Hierarchical chunking — paragraphs > sentences (600-char default)
   6. Synthesize each chunk via mlx-audio :8000 (Voxtral)
-  7. Numpy concat with 50ms silence between chunks → ffmpeg
-     filter chain (trim leading silence + 30ms fade-in + 3% slowdown)
-     → MP3 → base64
+  7. Numpy concat with 50ms silence between chunks → ffmpeg WAV → MP3
+     (no audio filtering — Voxtral output goes through unmodified)
 
 Why no `_delivery_note()` call: Voxtral does not accept an instruct/system
 prompt. Voice preset is the only character knob. Removed to save one Haiku
@@ -77,20 +76,9 @@ _DE_WORDS = frozenset(
     "zum zur vom bis aus bei alle schon jetzt hier gibt mein sein".split()
 )
 
-# ffmpeg filter chain applied to the concatenated WAV before MP3 encode.
-#   silenceremove           : trim leading silence > 30ms (kills hiccup at start)
-#   afade in (30ms)         : smooth attack so first audible note isn't a click
-#   areverse → afade → areverse : double-reverse trick for fade-out without
-#                                 needing to know post-trim duration in advance
-#
-# No slowdown, no denoise, no loudnorm, no EQ — every additional filter we
-# tried made Voxtral sound more processed and less natural. Trim + fades is
-# the only universally beneficial pp.
-_AUDIO_FILTER = (
-    "silenceremove=start_periods=1:start_silence=0.03:start_threshold=-50dB,"
-    "afade=t=in:st=0:d=0.03,"
-    "areverse,afade=t=in:st=0:d=0.05,areverse"
-)
+# No audio post-processing. Every filter we tested (slowdown, denoise,
+# loudnorm, EQ, fade in/out) made Voxtral sound more processed and less
+# natural. ffmpeg is used only for the WAV → MP3 encode.
 
 
 class TTSRequest(BaseModel):
@@ -312,7 +300,7 @@ async def synthesize(req: TTSRequest) -> TTSResponse:
             if i < len(chunks) - 1:
                 audio_parts.append(silence_50ms)
 
-    # 6. Concatenate → ffmpeg (filter chain + MP3 encode in one pass)
+    # 6. Concatenate → ffmpeg WAV → MP3 (no audio filtering)
     combined = np.concatenate(audio_parts)
     duration_secs = round(len(combined) / 24000.0, 2)
 
@@ -324,7 +312,6 @@ async def synthesize(req: TTSRequest) -> TTSResponse:
         proc = subprocess.run(
             [
                 "ffmpeg", "-i", wav_tmp.name,
-                "-af", _AUDIO_FILTER,
                 "-q:a", "4", "-y", "-loglevel", "error", mp3_tmp,
             ],
             capture_output=True,
@@ -341,9 +328,6 @@ async def synthesize(req: TTSRequest) -> TTSResponse:
             except OSError:
                 pass
 
-    # Note: post-processing slightly changes total duration (3% slowdown +
-    # leading silence trim). The number reported is the raw concatenated
-    # duration before filtering — close enough for caller telemetry.
     return TTSResponse(
         title=title,
         audio_b64=audio_b64,

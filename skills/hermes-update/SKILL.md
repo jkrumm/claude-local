@@ -19,49 +19,55 @@ Then check what happened:
 cd ~/.hermes/hermes-agent && git status --short
 ```
 
-If clean: jump straight to **Restart**. If conflicts or unexpected changes: see below.
+If clean: jump straight to **Restart**. If conflicts or upstream rewrote a customized file: see below.
 
 ---
 
 ## Known local modifications
 
-These files have been customized beyond upstream defaults. Re-apply if upstream overwrote them.
+Three upstream files are customized. Re-apply if upstream overwrote them.
 
-### `tools/tts_tool.py`
+### `tools/tts_tool.py` — thin client over localai-helper
 
-**What was added and why:**
+The upstream file is a 1600-line multi-provider TTS implementation (Edge / ElevenLabs / OpenAI / MiniMax / Mistral / Gemini / xAI / NeuTTS / KittenTTS). We replace it entirely with a 129-line thin client that POSTs to `localai-helper:8001/v1/tts/synthesize`. The helper handles language detection, speakable rewrite, chunking, Voxtral synthesis, and ffmpeg encode.
 
-1. **`_prepare_tts_metadata(text, default_instruct) → (title, instruct)`**
-   A function that calls the compression auxiliary model (local Gemma 4) with a single prompt to produce two things:
-   - A concise 3-10 word **title** for the audio filename (replaces the `tts_YYYYMMDD_HHMMSS` timestamp pattern)
-   - A **dynamic delivery note** (half sentence) describing emotion/pacing for *this specific message* — e.g. "calm but focused, slightly quicker pace" for alerts, "gentle and unhurried" for personal content
-   
-   Falls back to first words of text + static instruct if the LLM call fails. Short text (≤50 chars) skips the LLM entirely.
+**Re-apply:**
+```bash
+cp ~/SourceRoot/claude-local/hermes/patches/tts_tool.py \
+   ~/.hermes/hermes-agent/tools/tts_tool.py
+rm -f ~/.hermes/hermes-agent/tools/__pycache__/tts_tool*.pyc
+```
 
-2. **`_generate_openai_tts` signature extended** with `voice_instruct: str = ""` parameter.
-   When provided, it merges `voice_instruct` into `extra_body["instruct"]`, overriding the static config value. This is how the dynamic delivery note reaches Qwen3-TTS.
+The thin client only depends on `requests` and `tools.registry` — both stable upstream APIs.
 
-3. **Filename format changed** from `tts_YYYYMMDD_HHMMSS.mp3` → `{tts_title} HH:MM DD.MM.YY.mp3`
+### `gateway/platforms/slack.py` — Markdown pre-normalization
 
-4. **In `text_to_speech_tool`**: calls `_prepare_tts_metadata` before generating, passes `dynamic_instruct` to `_generate_openai_tts`.
+`format_message()` is patched to (a) replace `*` list markers with `-` (asterisk lists break the mrkdwn converter), and (b) strip backticks around emoji shortcodes (`:warning:` etc., otherwise they don't render).
 
-**How to re-apply after an upstream update:**
-Read the current `tools/tts_tool.py` and re-integrate the four points above. The logic is self-contained — no other files reference these additions. Preserve upstream changes; only add what's missing.
+**Re-apply:** read upstream `format_message()`, add the two pre-steps. The logic is small (~10 lines).
+
+### `gateway/config.py` — Slack threading bridge
+
+Bridges `reply_in_thread`, `reply_broadcast`, `reply_to_mode` from the `slack:` YAML section into the platform `extra` dict. Upstream as of 0.11.0 only bridges `require_mention`, `allow_bots`, `free_response_channels`.
+
+**Re-apply:** find where the existing fields are bridged and add the three threading fields alongside.
 
 ---
 
 ## Restart
 
 ```bash
-hermes gateway stop && hermes gateway start
+launchctl unload ~/Library/LaunchAgents/ai.hermes.gateway.plist
+sleep 2
+launchctl load ~/Library/LaunchAgents/ai.hermes.gateway.plist
 ```
 
 Verify it came up:
 
 ```bash
-tail -20 /tmp/hermes-gateway.log
+tail -20 ~/.hermes/logs/gateway.log
 ```
 
 ## Verify
 
-Send a message in `#hermes` on Slack and confirm a response. If TTS was touched, send a short message that triggers voice output and check `~/.hermes/audio_cache/` for a sensibly-named file.
+Send a message in `#hermes` on Slack and confirm a response. If TTS was touched, send a message that triggers voice output and check `~/.hermes/cache/audio/` for an MP3 with a sensible title.

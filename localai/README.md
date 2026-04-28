@@ -19,10 +19,9 @@ mlx-audio          (com.localai.audio,  127.0.0.1:8000)
 localai-helper     (com.localai.helper, 127.0.0.1:8001)
   POST /v1/tts/synthesize       → TTS orchestration: language detect → voice
                                   preset → speakable rewrite (Haiku, only when
-                                  markdown-heavy) → title (Haiku) → 400-char
-                                  chunking → Voxtral synthesis → numpy concat
-                                  → ffmpeg post-processing (trim + fade +
-                                  3% slowdown) → MP3 → base64 JSON
+                                  markdown-heavy) → title (Haiku) → paragraph-
+                                  aware chunking → Voxtral synthesis → numpy
+                                  concat → ffmpeg WAV→MP3 → base64 JSON
   POST /v1/audio/transcriptions → forwards to mlx-audio + transforms
                                   Parakeet's {text, sentences} into OpenAI's
                                   verbose_json {text, segments, language,
@@ -65,7 +64,7 @@ Always-warm: the launchd wrapper script (`bin/start-mlx-audio.sh`) fires a warm-
 
 **API surface is much simpler than Qwen3:** No `lang_code`, no `instruct`, no `extra_body`. Just `model` + `input` + `voice` + `response_format`. Expression comes from text content (implicit steering). `(lacht)`, `[seufzt]`, SSML — all no-ops.
 
-**Post-processing in the helper:** `silenceremove` + 30ms fade-in + 50ms fade-out (via double-reverse trick). No slowdown, no denoise, no loudnorm, no EQ — every other filter we tested made Voxtral sound more processed and less natural. Trim + fades is the only universally beneficial pp.
+**No audio post-processing.** Voxtral output goes through ffmpeg only for the WAV→MP3 encode. Tested slowdown, denoise, loudnorm, EQ, fade in/out — every filter made the voice sound more processed and less natural.
 
 **Warm on launchd start** — `start-mlx-audio.sh` synthesizes "Bereit." with `de_male` at boot so Voxtral is resident before the first real request.
 
@@ -95,7 +94,7 @@ make start           # launchctl load com.localai.audio
 make stop            # launchctl unload com.localai.audio
 ```
 
-First run downloads ~2 GB of Python deps (mlx-audio + Kokoro). Parakeet (1.2 GB) downloads on first STT request and is then cached at `~/.cache/huggingface/hub/`.
+First run downloads ~2 GB of Python deps (mlx-audio + transformers). Parakeet (1.2 GB) downloads on first STT request, Voxtral (2.5 GB) on first TTS request — both cached at `~/.cache/huggingface/hub/` and warmed by the launchd wrapper at next boot.
 
 ## Verify
 
@@ -108,10 +107,10 @@ curl -X POST http://127.0.0.1:8000/v1/audio/transcriptions \
   -F "model=mlx-community/parakeet-tdt-0.6b-v3" \
   -F "file=@audio.m4a"
 
-# Synthesize (Kokoro)
+# Synthesize (Voxtral)
 curl -X POST http://127.0.0.1:8000/v1/audio/speech \
   -H "Content-Type: application/json" \
-  -d '{"model":"mlx-community/Kokoro-82M-bf16","input":"Hello","voice":"af_heart"}' \
+  -d '{"model":"mlx-community/Voxtral-4B-TTS-2603-mlx-4bit","input":"Hallo zusammen.","voice":"de_male","response_format":"mp3"}' \
   --output out.mp3
 
 # Tail server log
@@ -136,13 +135,13 @@ stt:
 tts:
   provider: "openai"
   openai:
-    model: "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16"
+    model: "mlx-community/Voxtral-4B-TTS-2603-mlx-4bit"
     voice: ""
     base_url: "http://127.0.0.1:8001/v1"  # helper, not mlx-audio direct
     api_key: "not-needed"
 ```
 
-TTS calls from Hermes go through `localai-helper:8001` (`tts_tool.py` → `POST /v1/tts/synthesize`). The helper manages lang detection, Haiku rewrites, chunking, Qwen3-TTS calls to `:8000`, and ffmpeg concatenation. Voice character and `lang_code` are in `helper/routes/tts.py`.
+TTS calls from Hermes go through `localai-helper:8001` (`tts_tool.py` → `POST /v1/tts/synthesize`). The helper manages language detection, Haiku rewrites, paragraph-aware chunking, Voxtral synthesis at `:8000`, and MP3 encoding. Voice presets and language mapping are in `helper/routes/tts.py`.
 
 ## Rejected Alternatives
 

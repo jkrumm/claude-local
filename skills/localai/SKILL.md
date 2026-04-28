@@ -15,14 +15,13 @@ Per-machine `mlx-audio` (TTS + STT) bound to `127.0.0.1:8000`. Installed automat
 | Component | Service | Port |
 |-|-|-|
 | mlx-audio (TTS + STT) | `com.localai.audio` | 8000 (localhost) |
-| localai-helper (FastAPI extension layer — STT response transform, future local processing) | `com.localai.helper` | 8001 (localhost) |
+| localai-helper (FastAPI orchestration layer — TTS pipeline, STT response transform) | `com.localai.helper` | 8001 (localhost) |
 
-**Models:**
-- STT (always-warm): `mlx-community/parakeet-tdt-0.6b-v3` — 1.2 GB, 25 EU langs incl. EN/DE, fast (10–60× RT)
-- TTS quick: `mlx-community/Kokoro-82M-bf16` — 0.4 GB, 54 named voices
-- TTS quality: `mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16` — 4.2 GB, voice via `instruct` param
+**Models (both warm on launchd start):**
+- STT: `mlx-community/parakeet-tdt-0.6b-v3` — 1.2 GB, 25 EU langs incl. EN/DE, 10–60× RT
+- TTS: `mlx-community/Voxtral-4B-TTS-2603-mlx-4bit` — 2.5 GB, 20 fixed voice presets (de_male / de_female / casual_male etc.), 0.74× RTF long-form
 
-STT warms on launchd start (wrapper script fires a silent transcription). TTS lazy-loads on first request.
+Hermes calls `:8001/v1/tts/synthesize` (the helper) for all TTS. The helper handles language detection, speakable rewrite (Haiku), title (Haiku), paragraph-aware chunking, Voxtral synthesis, and MP3 encoding. Voice character is the preset; expression comes implicitly from text content (Voxtral has no instruct/SSML).
 
 **Why Parakeet, not Whisper:** mlx-audio 0.4.2 has a Whisper bug — `load_model()` doesn't attach `WhisperProcessor` (required for `get_tokenizer()`). Patching at request-time triggers an MLX Metal threading crash. Parakeet works cleanly.
 
@@ -125,22 +124,17 @@ make start   # launchctl load com.localai.audio
 - Check `/tmp/mlx-audio-warmup.log` — should see "STT warm-up complete"
 - If empty: server may not have been ready when warm-up curl fired (wrapper retries 60×1s). Increase polling timeout in `localai/bin/start-mlx-audio.sh` if needed.
 
-**Kokoro TTS errors:**
-- Missing `misaki`/`num2words`/`phonemizer`/`espeakng_loader`/`spacy` → re-run `make _setup-localai`
-- `EspeakWrapper.set_data_path` AttributeError → pin `misaki<0.9`
-- `ffmpeg not found` → check plist has `PATH` env var including `/opt/homebrew/bin`
+**TTS request returns 404 from the helper:**
+- The `tts_tool.py` thin client posts to `:8001/v1/tts/synthesize`. If the helper isn't running, you'll see connection errors; if the route isn't registered (helper started before the route file existed), 404. Restart helper: `launchctl kickstart -k gui/$(id -u)/com.localai.helper`.
+
+**Helper Haiku calls failing silently (no rewrite, generic title):**
+- The wrapper script `bin/start-localai-helper.sh` injects `ANTHROPIC_API_KEY` + `ANTHROPIC_BASE_URL` from macOS Keychain. Verify:
+  ```bash
+  security find-generic-password -s claude-sdk-api-key -w | head -c 8
+  security find-generic-password -s claude-sdk-base-url -w
+  ```
+- If empty, re-run `make setup` to rebuild the keychain cache.
 
 **Slack voice memo "incorrect format" / m4a errors:**
 - Verify m4a STT patch applied: `grep -q "ffmpeg" ~/.local/share/uv/tools/mlx-audio/lib/python3.12/site-packages/mlx_audio/server.py && echo "patched" || echo "MISSING"`
 - Re-apply: `make _setup-localai`
-
-**Migration cleanup (M2 Max only — old Tailscale-fronted setup):**
-```bash
-ssh iumac
-launchctl unload ~/Library/LaunchAgents/com.localai.{api,ollama,monitor,audio}.plist
-rm ~/Library/LaunchAgents/com.localai.{api,ollama,monitor,audio}.plist
-brew uninstall ollama  # optional
-sudo rm /opt/homebrew/etc/Caddyfile.localai.conf
-sudo brew services restart caddy
-git -C ~/SourceRoot/claude-local pull  # land cleaned-up state
-```
