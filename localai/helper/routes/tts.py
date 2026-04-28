@@ -140,19 +140,60 @@ def _strip_markdown(text: str) -> str:
     return text.strip()
 
 
-def _chunk_text(text: str, max_chars: int = 400) -> list[str]:
-    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+def _chunk_text(text: str, max_chars: int = 600) -> list[str]:
+    """Hierarchical splitter: paragraphs first, then sentences within.
+
+    Voxtral's voice identity is stable across calls, so the only reasons
+    to chunk are (a) max_tokens, (b) natural pause insertion at boundaries.
+    Paragraph boundaries are stronger than sentence boundaries — splitting
+    *between* paragraphs feels like a speaker pausing for breath, splitting
+    *within* a paragraph mid-sentence breaks the rhetorical flow.
+
+    Strategy:
+      1. Split text into paragraphs (\\n\\n).
+      2. Pack consecutive paragraphs into one chunk while they fit max_chars.
+      3. If a single paragraph exceeds max_chars, split that paragraph at
+         sentence boundaries.
+      4. Last resort (very rare): a sentence longer than max_chars is
+         emitted as-is — Voxtral handles long sentences without drift.
+    """
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text.strip()) if p.strip()]
+    if not paragraphs:
+        return [text]
+
     chunks: list[str] = []
     current = ""
-    for s in sentences:
-        if len(current) + len(s) + 1 <= max_chars:
-            current = (current + " " + s).strip()
-        else:
-            if current:
-                chunks.append(current)
-            current = s
-    if current:
-        chunks.append(current)
+
+    def flush():
+        nonlocal current
+        if current:
+            chunks.append(current)
+            current = ""
+
+    for para in paragraphs:
+        # Small paragraph fits with what we've accumulated → pack it
+        if current and len(current) + len(para) + 2 <= max_chars:
+            current = current + "\n\n" + para
+            continue
+
+        flush()
+
+        # Paragraph fits in one chunk on its own
+        if len(para) <= max_chars:
+            current = para
+            continue
+
+        # Paragraph too long → split at sentence boundaries
+        for s in re.split(r"(?<=[.!?])\s+", para):
+            if not s:
+                continue
+            if current and len(current) + len(s) + 1 <= max_chars:
+                current = current + " " + s
+            else:
+                flush()
+                current = s
+
+    flush()
     return chunks or [text]
 
 
