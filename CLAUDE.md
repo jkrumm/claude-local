@@ -5,9 +5,10 @@
 VCS source of truth for Johannes's Claude Code setup. Everything is symlinked
 outward — edit at either end, git always sees the change here.
 
-Also contains `localai/` — configuration and documentation for the dedicated M2 Max
-local AI server stack (Gemma 4 + Qwen3-TTS + WhisperKit). See `localai/README.md`
-and the `/localai` skill for setup and management.
+Also contains `localai/` — per-machine `mlx-audio` (TTS + STT only) bound to
+`127.0.0.1:8000`. Installed automatically by `make setup` on every Mac.
+LLM is no longer local — Hermes uses cloud Sonnet 4.6 via the IU unified
+endpoint. See `localai/README.md` and the `/localai` skill.
 
 **After any edit: commit here.**
 
@@ -85,9 +86,9 @@ Config templates, skill files, and .env.tpl are versioned here under `hermes/`. 
 **API secret:** `op://common/api/SECRET` (account `tkrumm`) — wired in `.env.tpl`.
 
 **Local modifications to upstream (re-apply after `hermes update`):**
-- `~/.hermes/hermes-agent/tools/tts_tool.py` — custom TTS metadata generation
-- `~/.hermes/hermes-agent/gateway/platforms/slack.py` — (1) metadata builder adds `is_real_thread` flag; `_resolve_thread_ts()` uses it so `reply_in_thread: false` works for top-level messages. (2) `format_message()` pre-steps: normalize `*` list markers to `-`, strip backticks from inline code containing emoji shortcodes
-- `~/.hermes/hermes-agent/gateway/config.py` — bridge `reply_in_thread`, `reply_broadcast`, `reply_to_mode` from `slack:` YAML section into platform `extra` dict (upstream only bridges `require_mention`, `allow_bots`, `free_response_channels`)
+- `~/.hermes/hermes-agent/tools/tts_tool.py` — custom TTS metadata generation (emotion/pace/energy adapted per message via auxiliary LLM, custom `HH:MM dd.mm.yy` filename pattern, dynamic `instruct` injected into OpenAI extra_body)
+- `~/.hermes/hermes-agent/gateway/platforms/slack.py` — `format_message()` pre-steps: normalize `*` list markers to `-`, strip backticks from inline code containing emoji shortcodes
+- `~/.hermes/hermes-agent/gateway/config.py` — bridge `reply_in_thread`, `reply_broadcast`, `reply_to_mode` from `slack:` YAML section into platform `extra` dict (upstream still only bridges `require_mention`, `allow_bots`, `free_response_channels` as of 0.11.0)
 
 ## Editing Rules
 

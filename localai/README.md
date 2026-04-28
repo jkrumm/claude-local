@@ -1,287 +1,154 @@
-# LocalAI Stack — M2 Max 32GB Dedicated Server
+# LocalAI Stack — Per-Machine mlx-audio (TTS + STT)
 
-Dedicated MacBook M2 Max (12 CPU, 30 GPU, 32GB unified memory) running as an always-on local AI server. All models accessible via OpenAI-compatible API over Tailscale.
+Each Mac runs its own `mlx-audio` server bound to `127.0.0.1:8000`. No cross-Tailscale audio routing. Installed automatically by `make setup`.
 
 ## Architecture
 
 ```
-Tailscale → Caddy (HTTPS, path routing) → backends
-  /v1/chat/*               → Ollama :11434        (LLM)
-  /v1/audio/speech*         → mlx-audio :8000      (TTS)
-  /v1/audio/transcriptions* → mlx-audio :8000      (STT)
+Hermes / scripts            →  http://127.0.0.1:8000/v1/...     (mlx-audio direct)
+MacWhisper / strict clients →  https://whisper.test/v1/...      (Caddy)
+                                  ├─ /v1/audio/transcriptions → :8001 (helper, response transform)
+                                  └─ /v1/*                     → :8000 (mlx-audio direct)
+
+mlx-audio          (com.localai.audio,  127.0.0.1:8000)
+  POST /v1/audio/speech         → TTS  (lazy-load on first request)
+  POST /v1/audio/transcriptions → STT  (warm on launchd start)
+  GET  /v1/models               → list of currently-loaded models
+  DELETE /v1/models             → unload a model
+
+localai-helper     (com.localai.helper, 127.0.0.1:8001)
+  POST /v1/audio/transcriptions → forwards to mlx-audio + transforms
+                                  Parakeet's {text, sentences} into OpenAI's
+                                  verbose_json {text, segments, language,
+                                  duration, task} for strict clients.
+  GET  /health                  → liveness probe
+
+  Extension point — drop new modules in `helper/routes/` for additional
+  local processing (model routing, format converters, batch ops, etc).
 ```
+
+LLM is no longer local — Hermes uses the IU unified endpoint (Anthropic-compatible path) for all chat completions.
 
 ## Models
 
-All audio models lazy-load on first request. Specify model per API call — no server restart needed.
+### STT: NVIDIA Parakeet TDT v3
 
-### LLM: Gemma 4 26B-A4B MoE
-
-| Model | Arena Elo | Active Params | Memory |
+| Model | Size | Languages | Speed |
 |-|-|-|-|
-| **gemma4-agent** (custom, 64K ctx) | 1472 | 3.8B/token | ~18 GB + ~2 GB KV |
+| **mlx-community/parakeet-tdt-0.6b-v3** | 1.2 GB | 25 EU langs incl. EN/DE | 10–60× RT |
 
-Beats Gemini 2.5 Flash (1430), Claude Haiku 4.5 (1427), GPT-4o-mini (1393) on LMArena. Apache 2.0, multimodal, native tool use. MoE architecture = fast inference (50-80 tok/s) with only 3.8B params active per token.
+Always-warm: the launchd wrapper script (`bin/start-mlx-audio.sh`) fires a warm-up transcription right after server boot so the model stays resident in `ModelProvider.models[]` for the process lifetime.
 
-**Ollama config:** Flash Attention disabled (Gemma 4 hybrid attention incompatible, causes ~33% throughput drop). KV cache quantized to q8_0.
+**Why Parakeet, not Whisper:** Tried Whisper Turbo but mlx-audio 0.4.2 has a bug — `load_model()` doesn't attach `WhisperProcessor`, so `get_tokenizer()` raises `Processor not found`. Patching to load the processor at request time triggers an MLX Metal threading crash (`There is no Stream(gpu, 2) in current thread`). Parakeet works cleanly.
 
-### STT: Whisper via mlx-audio
+**MacWhisper:** Point at `https://whisper.test` — Caddy proxies `/v1/audio/transcriptions` through `localai-helper` which transforms the response into OpenAI verbose_json shape (`{text, segments, language, duration, task}`). Other paths go direct to mlx-audio. Model: `mlx-community/parakeet-tdt-0.6b-v3`. API key: any non-empty string.
 
-| Use Case | Model | Memory | Speed |
+### TTS: Kokoro + Qwen3-TTS
+
+| Use Case | Model | Size | Speed |
 |-|-|-|-|
-| Live dictation | `mlx-community/whisper-large-v3-turbo-asr-fp16` | 1.6 GB | Fast |
-| Journal / quality | `mlx-community/whisper-large-v3-asr-fp16` | 3 GB | Slower, more accurate |
+| Quick / interactive | `mlx-community/Kokoro-82M-bf16` | 0.4 GB | <0.3s, 210× RT |
+| Quality / voice cloning | `mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16` | 4.2 GB | 97ms TTFB |
 
-MacWhisper configured to use the turbo model via custom OpenAI endpoint. Caddy rewrites `Content-Type` to `application/json` for client compatibility.
+TTS lazy-loads on first request; stays in memory until explicitly unloaded.
 
-### TTS: Kokoro + Qwen3-TTS via mlx-audio
+## Files
 
-| Use Case | Model | Memory | Speed |
-|-|-|-|-|
-| Quick / interactive | `mlx-community/Kokoro-82M-bf16` | 0.4 GB | <0.3s, 210x RT |
-| Podcast / voice cloning | `mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16` | 4.2 GB | 97ms TTFB |
+| File | Purpose |
+|-|-|
+| `com.localai.audio.plist.template` | mlx-audio launchd plist (templated — `__HOME__` substituted at install) |
+| `com.localai.helper.plist.template` | localai-helper launchd plist (templated) |
+| `bin/start-mlx-audio.sh` | Wrapper: starts mlx-audio + fires STT warm-up curl |
+| `bin/start-localai-helper.sh` | Wrapper: starts the FastAPI helper using mlx-audio's venv |
+| `helper/server.py` | FastAPI app — extension point for local processing |
+| `helper/routes/macwhisper.py` | OpenAI verbose_json transform for STT |
+| `patches/mlx-audio-m4a-stt.patch` | m4a/aac/mp4/ogg/opus/webm transcoding via ffmpeg (Slack voice memos) |
 
-Kokoro: 8 languages, 54 voices, MOS 4.5, Apache 2.0. Qwen3-TTS VoiceDesign: voice design via natural language `instruct` parameter (no named voices — describe the voice instead), streaming.
-
-## Memory Budget
-
-Ollama reports 25 GB GPU-addressable on this machine.
-
-| Scenario | GPU Usage | Headroom |
-|-|-|-|
-| LLM only (idle) | ~20 GB | 5 GB |
-| LLM + Whisper Turbo (dictation) | ~22 GB | 3 GB |
-| LLM + Whisper Full + Kokoro | ~23 GB | 2 GB |
-| LLM + Qwen3-TTS (quality TTS) | ~24 GB | 1 GB |
-
-Models lazy-load and can be unloaded via `DELETE /v1/models`. Ollama unloads after 30 min idle (`OLLAMA_KEEP_ALIVE`).
+Re-apply the patch after `uv tool upgrade mlx-audio`. `_setup-localai` does this idempotently.
 
 ## Setup
 
-### 1. Ollama (LLM)
+```bash
+make setup           # Full setup — runs _setup-localai automatically
+make _setup-localai  # Just the localai chunk (mlx-audio + deps + ffmpeg + patch + plist)
+make localai-setup   # Just (re)render the audio plist + reload
+make start           # launchctl load com.localai.audio
+make stop            # launchctl unload com.localai.audio
+```
+
+First run downloads ~2 GB of Python deps (mlx-audio + Kokoro). Parakeet (1.2 GB) downloads on first STT request and is then cached at `~/.cache/huggingface/hub/`.
+
+## Verify
 
 ```bash
-brew install ollama
-ollama pull gemma4:26b
-ollama create gemma4-agent -f localai/Modelfile.gemma4
+# Server reachable
+curl http://127.0.0.1:8000/v1/models
+
+# Transcribe
+curl -X POST http://127.0.0.1:8000/v1/audio/transcriptions \
+  -F "model=mlx-community/parakeet-tdt-0.6b-v3" \
+  -F "file=@audio.m4a"
+
+# Synthesize (Kokoro)
+curl -X POST http://127.0.0.1:8000/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"model":"mlx-community/Kokoro-82M-bf16","input":"Hello","voice":"af_heart"}' \
+  --output out.mp3
+
+# Tail server log
+tail -f /tmp/audio.log
+
+# Tail warm-up log
+cat /tmp/mlx-audio-warmup.log
 ```
 
-### 2. mlx-audio (TTS + STT)
+## Hermes Integration
+
+`~/.hermes/config.yaml`:
+
+```yaml
+stt:
+  provider: "openai"
+  openai:
+    model: "mlx-community/parakeet-tdt-0.6b-v3"
+    base_url: "http://127.0.0.1:8000/v1"
+    api_key: "not-needed"
+
+tts:
+  provider: "openai"
+  openai:
+    model: "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16"
+    voice: ""
+    base_url: "http://127.0.0.1:8000/v1"
+    api_key: "not-needed"
+    extra_body:
+      instruct: "<voice description>"
+```
+
+## Migration from Tailscale-fronted M2 Max
+
+The old setup ran Ollama (Gemma 4) + mlx-audio + Caddy + management API on a dedicated MacBook M2 Max, exposed via Tailscale. That stack is retired.
+
+To clean up M2 Max after migration:
 
 ```bash
-uv tool install "mlx-audio[all]"
-# Fix webrtcvad dependency (setuptools v81+ removed pkg_resources)
-uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 "setuptools<81"
-uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 python-multipart
-# Kokoro TTS deps (misaki >=0.9 breaks espeakng_loader API)
-uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 "misaki[en]<0.9" num2words phonemizer espeakng_loader spacy
-uv pip install --python ~/.local/share/uv/tools/mlx-audio/bin/python3 en-core-web-sm@https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
-brew install ffmpeg  # required for mp3/flac encoding
+ssh iumac
+launchctl unload ~/Library/LaunchAgents/com.localai.{api,ollama,monitor,audio}.plist
+rm ~/Library/LaunchAgents/com.localai.{api,ollama,monitor,audio}.plist
+brew uninstall ollama  # optional
+sudo rm /opt/homebrew/etc/Caddyfile.localai.conf  # if still present
+sudo brew services restart caddy
 ```
 
-**Apply local patch** (fixes M4A format rejection — MacWhisper sends M4A for long recordings):
-```bash
-patch -p1 \
-  -d ~/.local/share/uv/tools/mlx-audio/lib/python3.12/site-packages \
-  < ~/SourceRoot/claude-local/localai/patches/mlx-audio-m4a-stt.patch
-```
-
-**After `uv tool upgrade mlx-audio`:** re-apply the patch above. The upgrade overwrites server.py.
-
-Server binary: `~/.local/bin/mlx_audio.server`
-
-### 3. Caddy (HTTPS reverse proxy)
-
-Custom build with Cloudflare DNS plugin:
-```bash
-xcaddy build --with github.com/caddy-dns/cloudflare --output /tmp/caddy-custom
-sudo cp /tmp/caddy-custom /opt/homebrew/Cellar/caddy/$(caddy version | cut -d' ' -f1 | tr -d v)/bin/caddy
-```
-
-Note: `brew upgrade caddy` overwrites the custom binary. Rebuild if `caddy list-modules | grep cloudflare` fails.
-
-### 4. Power management
-
-```bash
-# Prevent idle + lid-close sleep (required for headless clamshell operation)
-sudo pmset -a sleep 0 displaysleep 0 disksleep 0
-sudo pmset -a disablesleep 1
-# Prevent standby/hibernation (standby can engage even with sleep=0 and drop SSH)
-sudo pmset -a standby 0 hibernatemode 0 autopoweroff 0
-
-# Battery health — cap charge at 70% since it's always on AC
-brew install batt
-sudo brew services start batt
-sudo batt limit 70
-```
-
-### 5. Launchd services
-
-Four plists in `~/Library/LaunchAgents/`:
-
-| Plist | Service | Key Config |
-|-|-|-|
-| `com.localai.api.plist` | Management API | 127.0.0.1:9001, logs → /tmp/localai-api*.log |
-| `com.localai.ollama.plist` | Ollama serve | FA=0, q8_0 KV, 0.0.0.0:11434 |
-| `com.localai.audio.plist` | mlx-audio server | 0.0.0.0:8000, PATH includes homebrew, log-dir=/tmp/mlx-audio-logs |
-| `com.localai.monitor.plist` | snapshot.sh (5 min) | → SQLite monitor.db |
-
-All four plists are version-controlled in `localai/`. `make start` (which calls `make localai-setup`) installs them idempotently — copies changed plists to `~/Library/LaunchAgents/` and reloads only the ones that changed:
-
-```bash
-make start          # install plists + start all services
-make stop           # stop all services
-make localai-setup  # sync plists from repo (no-op if already up to date)
-```
-
-`KeepAlive=true` on all plists means launchd auto-restarts any crashed service.
-
-### 6. SSH remote access
-
-Enable Remote Login in **System Settings → General → Sharing → Remote Login**, then:
-
-```bash
-# Key-only auth — disable password and PAM keyboard-interactive challenge
-sudo sh -c 'printf "PubkeyAuthentication yes\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n" > /etc/ssh/sshd_config.d/50-keyonly.conf'
-sudo launchctl kickstart -k system/com.openssh.sshd
-
-# Authorize jkrumm SSH key (ed25519 from 1Password)
-mkdir -p ~/.ssh && chmod 700 ~/.ssh
-op item get "jkrumm" --account tkrumm --fields "public key" >> ~/.ssh/authorized_keys
-chmod 600 ~/.ssh/authorized_keys
-```
-
-Add to `~/.ssh/config` on client machines:
-```
-Host localai
-    HostName <tailscale-ip>
-    User johannes.krumm
-```
-
-Tailscale IP: visible via `tailscale status --self`. The `IdentityAgent` 1Password wildcard block handles key auth on the client side.
-
-## Management API
-
-Control the stack and query monitoring data without SSH. Accessible from any Tailscale device at `https://<ts-hostname>.ts.net/api/*`. Tailscale is the sole auth layer. Full spec at `/api/openapi.json`.
-
-| Method | Path | Description |
-|-|-|-|
-| GET | `/api/health` | Liveness probe |
-| GET | `/api/status` | launchd loaded flags + port liveness for all services |
-| GET | `/api/system` | Live: memory used/total/%, battery, load avg, memory pressure |
-| GET | `/api/models` | Models currently hot in Ollama VRAM + per-model sizes |
-| GET | `/api/logs/{service}` | Tail stdout+stderr (`?lines=N`, max 1000). Services: ollama, audio, api, monitor |
-| GET | `/api/snapshots` | Raw monitoring rows from SQLite (`?limit=N`, max 500, newest-first) |
-| GET | `/api/snapshots/summary` | 24h aggregated: uptime %, avg VRAM, memory, battery |
-| GET | `/api/analytics` | Time-bucketed series for charting (`?hours=N`, max 720). Auto bucket: 10m/30m/1h/2h |
-| POST | `/api/start` | Load ollama + audio + monitor via launchctl |
-| POST | `/api/stop` | Unload ollama + audio + monitor (API itself stays up) |
-| POST | `/api/restart` | Unload AI services, wait 2s, reload |
-| GET | `/api/openapi.json` | This spec as OpenAPI 3.0 JSON |
-
-`/api/stop` does not kill the API itself — only the AI services. `make stop` brings down everything.
-
-```bash
-# Live health snapshot
-curl https://<ts-hostname>.ts.net/api/system | jq .
-
-# What's loaded in VRAM right now
-curl https://<ts-hostname>.ts.net/api/models | jq .
-
-# Tail last 50 lines of Ollama stderr
-curl "https://<ts-hostname>.ts.net/api/logs/ollama?lines=50" | jq .stderr[]
-
-# Restart without SSH
-curl -X POST https://<ts-hostname>.ts.net/api/restart | jq .
-
-# 24h charting data (30-min buckets)
-curl "https://<ts-hostname>.ts.net/api/analytics?hours=24" | jq .series[]
-
-# 7-day summary
-curl "https://<ts-hostname>.ts.net/api/analytics?hours=168" | jq '{hours: .hours, bucket_minutes, points: (.series | length)}'
-```
-
-## AI API Endpoints
-
-All endpoints OpenAI-compatible. From any Tailscale device:
-
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    base_url="https://<ts-hostname>.ts.net/v1",
-    api_key="unused"  # no auth — Tailscale is the access control
-)
-
-# LLM
-response = client.chat.completions.create(
-    model="gemma4-agent",
-    messages=[{"role": "user", "content": "Hello"}]
-)
-
-# TTS (fast)
-audio = client.audio.speech.create(
-    model="mlx-community/Kokoro-82M-bf16",
-    input="Hello, how are you?",
-    voice="af_heart"
-)
-
-# TTS (quality, voice design — describe the voice via extra_body instruct)
-audio = client.audio.speech.create(
-    model="mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16",
-    input="Hello, how are you?",
-    voice="",
-    extra_body={"instruct": "A warm, clear female voice with medium pitch and natural pace"}
-)
-
-# STT (fast)
-transcript = client.audio.transcriptions.create(
-    model="mlx-community/whisper-large-v3-turbo-asr-fp16",
-    file=open("audio.wav", "rb")
-)
-
-# STT (quality)
-transcript = client.audio.transcriptions.create(
-    model="mlx-community/whisper-large-v3-asr-fp16",
-    file=open("journal.wav", "rb")
-)
-```
-
-### MacWhisper Configuration
-
-Custom OpenAI provider in MacWhisper settings:
-- **Base URL:** `https://<ts-hostname>.ts.net`
-- **Model:** `mlx-community/whisper-large-v3-turbo-asr-fp16`
-- **API Key:** any non-empty string (e.g., `unused`)
-
-## Monitoring
-
-SQLite database at `localai/monitor.db` — snapshots every 5 min via `localai/snapshot.sh`. 90-day auto-retention.
-
-```bash
-# Recent snapshots
-sqlite3 -header -column localai/monitor.db \
-  "SELECT ts, mem_used_gb, battery_pct, ollama_vram_gb, tts_up, stt_up
-   FROM snapshots ORDER BY ts DESC LIMIT 20;"
-
-# Live
-ollama ps                          # loaded models + VRAM
-curl -s localhost:8000/v1/models   # audio server + loaded models
-memory_pressure | head -1          # system memory
-```
-
-## Auth & Secrets
-
-No API keys needed. Tailscale is the sole access control — only tailnet devices reach the Caddy endpoints. To add auth later: add `basicauth` directive to the Caddy block.
+Then `git pull` in `~/SourceRoot/claude-local` will land the cleaned-up state.
 
 ## Rejected Alternatives
 
-| Tool | Why Rejected |
+| Tool | Why |
 |-|-|
-| LocalAI (mudler) | llama.cpp not MLX (40-90% slower), limited TTS/STT models |
-| MetalRT | Requires M3+ (Metal 3.1) |
-| Docker | No Metal GPU passthrough on macOS |
-| WhisperKit | `serve` command unreliable, model downloads timed out, fragile Swift build chain |
-| Parakeet (STT) | Response format incompatible with OpenAI API clients (returns `sentences` not `segments`) |
+| Ollama (Gemma 4 local) | Cloud Sonnet 4.6 cheaper than M2 Max electricity for light use; better agent quality |
+| LocalAI (mudler) | llama.cpp not MLX (40-90% slower) |
+| WhisperKit | `serve` unreliable, fragile Swift build |
+| whisper-large-v3-turbo | Replaced by Parakeet v3 — 25% smaller, ~3× faster, similar accuracy |
 
-**Last model research:** 2026-04-09
+**Last model research:** 2026-04-28

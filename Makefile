@@ -32,6 +32,7 @@ setup:
 	@$(MAKE) --no-print-directory _setup-sdk-keys
 	@$(MAKE) --no-print-directory _setup-ssh
 	@$(MAKE) --no-print-directory _setup-rules
+	@$(MAKE) --no-print-directory _setup-localai
 	@echo ""
 	@echo "  Done. Reload your shell: source ~/.zshrc"
 	@echo ""
@@ -180,14 +181,10 @@ _setup-caddy:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(CLAUDE_LOCAL)/config/Caddyfile" \
 		DST="$(BREW_PREFIX)/etc/Caddyfile"
-	@# LocalAI block — only copy on machines that have the Tailscale certs
-	@LOCALAI_CONF="$(BREW_PREFIX)/etc/Caddyfile.localai.conf"; \
-	LOCALAI_CERTS="$(BREW_PREFIX)/etc/certs/iu-mac-book.dinosaur-sole.ts.net.crt"; \
-	if [ -f "$$LOCALAI_CERTS" ]; then \
-		cp "$(CLAUDE_LOCAL)/config/Caddyfile.localai.template" "$$LOCALAI_CONF" \
-			&& echo "    ✓ Caddyfile.localai.conf (M2 Max)"; \
-	elif [ -f "$$LOCALAI_CONF" ]; then \
-		rm "$$LOCALAI_CONF" && echo "    ✓ removed stale Caddyfile.localai.conf"; \
+	@# Clean up legacy Caddyfile.localai.conf from older Tailscale-fronted setup
+	@LEGACY="$(BREW_PREFIX)/etc/Caddyfile.localai.conf"; \
+	if [ -f "$$LEGACY" ]; then \
+		rm "$$LEGACY" && echo "    ✓ removed legacy Caddyfile.localai.conf"; \
 	fi
 	@# Clean up any root-owned Caddy data left in user Library from earlier failed runs
 	@CADDY_LIB="$(HOME)/Library/Application Support/Caddy"; \
@@ -666,39 +663,103 @@ clean:
 	@echo ""
 
 # ============================================================================
-# LocalAI — Ollama + mlx-audio + monitor + API (launchd services on M2 Max)
+# LocalAI — mlx-audio (TTS + STT) on every Mac, bound to 127.0.0.1:8000
 # ============================================================================
 
-LOCALAI_PLISTS := com.localai.api com.localai.ollama com.localai.audio com.localai.monitor
-LAUNCHAGENTS   := $(HOME)/Library/LaunchAgents
-LOCALAI_DIR    := $(CLAUDE_LOCAL)/localai
+LAUNCHAGENTS  := $(HOME)/Library/LaunchAgents
+LOCALAI_DIR   := $(CLAUDE_LOCAL)/localai
+MLX_AUDIO_BIN := $(HOME)/.local/bin/mlx_audio.server
+MLX_AUDIO_PY  := $(HOME)/.local/share/uv/tools/mlx-audio/bin/python3
 
-# Install (or update) all plists from repo → LaunchAgents and reload changed ones.
-# Safe to re-run: skips plists that are already identical.
+# Install mlx-audio + Python deps + ffmpeg + apply m4a STT patch.
+# Idempotent — skips work that's already done.
+.PHONY: _setup-localai
+_setup-localai:
+	@echo "  LocalAI (mlx-audio TTS + STT on 127.0.0.1:8000)..."
+	@if ! command -v uv >/dev/null 2>&1; then \
+		echo "    ✗ uv not installed — run _setup-tools first"; exit 1; \
+	fi
+	@if [ -x "$(MLX_AUDIO_BIN)" ]; then \
+		echo "    · mlx-audio installed (ok)"; \
+	else \
+		echo "    Installing mlx-audio[all] via uv (~2-5 min)..."; \
+		uv tool install "mlx-audio[all]" >/dev/null 2>&1 || { echo "    ✗ uv tool install failed"; exit 1; }; \
+		echo "    ✓ mlx-audio installed"; \
+	fi
+	@# Pinned dep workarounds — mlx-audio's transitive deps need these specific versions
+	@if "$(MLX_AUDIO_PY)" -c "import setuptools, sys; sys.exit(0 if setuptools.__version__ < '81' else 1)" 2>/dev/null; then \
+		echo "    · setuptools<81 (ok)"; \
+	else \
+		uv pip install --quiet --python "$(MLX_AUDIO_PY)" "setuptools<81" \
+			&& echo "    ✓ setuptools<81 pinned"; \
+	fi
+	@if "$(MLX_AUDIO_PY)" -c "import multipart" 2>/dev/null; then \
+		echo "    · python-multipart (ok)"; \
+	else \
+		uv pip install --quiet --python "$(MLX_AUDIO_PY)" python-multipart \
+			&& echo "    ✓ python-multipart installed"; \
+	fi
+	@if "$(MLX_AUDIO_PY)" -c "import misaki, num2words, phonemizer, en_core_web_sm" 2>/dev/null; then \
+		echo "    · Kokoro deps (ok)"; \
+	else \
+		echo "    Installing Kokoro TTS deps..."; \
+		uv pip install --quiet --python "$(MLX_AUDIO_PY)" "misaki[en]<0.9" num2words phonemizer espeakng_loader spacy \
+			&& uv pip install --quiet --python "$(MLX_AUDIO_PY)" "en-core-web-sm@https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" \
+			&& echo "    ✓ Kokoro deps installed"; \
+	fi
+	@brew list ffmpeg &>/dev/null && echo "    · ffmpeg (ok)" || (brew install ffmpeg >/dev/null 2>&1 && echo "    ✓ ffmpeg installed")
+	@# m4a STT patch — required for MacWhisper / Slack voice memos.
+	@# Detect by grepping for a unique post-patch marker (reverse dry-run was unreliable).
+	@PATCH="$(LOCALAI_DIR)/patches/mlx-audio-m4a-stt.patch"; \
+	PATCH_DIR="$(HOME)/.local/share/uv/tools/mlx-audio/lib/python3.12/site-packages"; \
+	SERVER_PY="$$PATCH_DIR/mlx_audio/server.py"; \
+	if [ -f "$$SERVER_PY" ] && grep -q "ffmpeg.*src_path" "$$SERVER_PY" 2>/dev/null; then \
+		echo "    · m4a STT patch (already applied)"; \
+	elif [ -d "$$PATCH_DIR" ] && [ -f "$$PATCH" ]; then \
+		if patch -p1 -d "$$PATCH_DIR" < "$$PATCH" >/dev/null 2>&1; then \
+			echo "    ✓ m4a STT patch applied"; \
+		else \
+			echo "    ✗ m4a STT patch failed — re-apply manually after upgrade"; \
+		fi; \
+	fi
+	@$(MAKE) --no-print-directory localai-setup
+
+LOCALAI_PLISTS := com.localai.audio com.localai.helper
+
+# Render plists from templates (substitutes __HOME__) and reload changed ones.
 .PHONY: localai-setup
 localai-setup:
-	@echo "  LocalAI plists..."
+	@mkdir -p "$(LAUNCHAGENTS)"
 	@for label in $(LOCALAI_PLISTS); do \
-		src="$(LOCALAI_DIR)/$$label.plist"; \
-		dst="$(LAUNCHAGENTS)/$$label.plist"; \
-		if [ ! -f "$$dst" ] || ! diff -q "$$src" "$$dst" >/dev/null 2>&1; then \
-			cp "$$src" "$$dst"; \
-			launchctl unload "$$dst" 2>/dev/null || true; \
-			launchctl load "$$dst"; \
+		SRC="$(LOCALAI_DIR)/$$label.plist.template"; \
+		DST="$(LAUNCHAGENTS)/$$label.plist"; \
+		TMP="$$(mktemp)"; \
+		sed "s|__HOME__|$(HOME)|g" "$$SRC" > "$$TMP"; \
+		if [ ! -f "$$DST" ] || ! diff -q "$$TMP" "$$DST" >/dev/null 2>&1; then \
+			mv "$$TMP" "$$DST"; \
+			launchctl unload "$$DST" 2>/dev/null || true; \
+			launchctl load "$$DST"; \
 			echo "    ✓ $$label (installed + loaded)"; \
 		else \
+			rm "$$TMP"; \
 			echo "    · $$label (up to date)"; \
 		fi; \
 	done
 
 .PHONY: start
 start:
-	@$(MAKE) --no-print-directory localai-setup
+	@for label in $(LOCALAI_PLISTS); do \
+		launchctl load "$(LAUNCHAGENTS)/$$label.plist" 2>/dev/null \
+			&& echo "  · $$label started" \
+			|| echo "  · $$label already running"; \
+	done
 
 .PHONY: stop
 stop:
-	@for label in com.localai.ollama com.localai.audio com.localai.monitor com.localai.api; do \
-		launchctl unload "$(LAUNCHAGENTS)/$$label.plist" 2>/dev/null && echo "  · $$label stopped" || true; \
+	@for label in $(LOCALAI_PLISTS); do \
+		launchctl unload "$(LAUNCHAGENTS)/$$label.plist" 2>/dev/null \
+			&& echo "  · $$label stopped" \
+			|| true; \
 	done
 
 # ============================================================================
@@ -716,9 +777,9 @@ help:
 	@echo "  make github-config      Apply branch protection + merge settings to all repos"
 	@echo "  make github-config-dry  Preview without applying"
 	@echo ""
-	@echo "  make localai-setup  Install/update plists from repo + reload changed ones"
-	@echo "  make start          Install plists + start all LocalAI services"
-	@echo "  make stop           Stop all LocalAI services"
+	@echo "  make localai-setup  Render audio plist from template + reload if changed"
+	@echo "  make start          Start mlx-audio (com.localai.audio)"
+	@echo "  make stop           Stop mlx-audio"
 	@echo ""
 	@echo "  make up         Start cqueue dashboard"
 	@echo "  make down       Stop cqueue"

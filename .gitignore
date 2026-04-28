@@ -27,3 +27,7 @@ queue.md
 
 # LocalAI runtime data
 localai/monitor.db
+
+# Python
+__pycache__/
+*.pyc
