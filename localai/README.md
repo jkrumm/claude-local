@@ -17,10 +17,12 @@ mlx-audio          (com.localai.audio,  127.0.0.1:8000)
   DELETE /v1/models             → unload a model
 
 localai-helper     (com.localai.helper, 127.0.0.1:8001)
-  POST /v1/tts/synthesize       → TTS orchestration: language detect → speakable
-                                  rewrite (Haiku) → title + delivery (Haiku) →
-                                  400-char chunking → Qwen3-TTS synthesis →
-                                  numpy concat → ffmpeg MP3 → base64 JSON
+  POST /v1/tts/synthesize       → TTS orchestration: language detect → voice
+                                  preset → speakable rewrite (Haiku, only when
+                                  markdown-heavy) → title (Haiku) → 400-char
+                                  chunking → Voxtral synthesis → numpy concat
+                                  → ffmpeg post-processing (trim + fade +
+                                  3% slowdown) → MP3 → base64 JSON
   POST /v1/audio/transcriptions → forwards to mlx-audio + transforms
                                   Parakeet's {text, sentences} into OpenAI's
                                   verbose_json {text, segments, language,
@@ -49,17 +51,25 @@ Always-warm: the launchd wrapper script (`bin/start-mlx-audio.sh`) fires a warm-
 
 **MacWhisper:** Point at `https://whisper.test` — Caddy proxies `/v1/audio/transcriptions` through `localai-helper` which transforms the response into OpenAI verbose_json shape (`{text, segments, language, duration, task}`). Other paths go direct to mlx-audio. Model: `mlx-community/parakeet-tdt-0.6b-v3`. API key: any non-empty string.
 
-### TTS: Qwen3-TTS VoiceDesign
+### TTS: Voxtral 4B (Mistral)
 
-| Model | Size | Languages | Notes |
+| Model | Size | Voices | Notes |
 |-|-|-|-|
-| **mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16** | 4.2 GB | 10 EU langs | Voice via English instruct, `lang_code` for phonemes |
+| **mlx-community/Voxtral-4B-TTS-2603-mlx-4bit** | 2.5 GB | 20 fixed presets, 10 langs | 0.74× RTF long-form on M2 Pro |
 
-**Critical:** `lang_code` must be the full lowercase English name (`"german"`, `"english"`) — not ISO codes. `"de"` or `"auto"` both fall through to English output (no language token injected). The VoiceDesign `instruct` must be in English; German instruct produces unreliable results.
+**Voice presets (language-keyed in `helper/routes/tts.py`):**
+- `de_male` — German, slight Austrian Hochdeutsch lean (Mistral demo "Patrick")
+- `de_female` — German female
+- `neutral_male` / `casual_male` / `cheerful_female` — English presets
+- 13 more for FR / ES / IT / PT / NL / AR / HI
 
-**Warm on launchd start** — `start-mlx-audio.sh` synthesizes a short German phrase at boot so Qwen3-TTS is resident before the first real request.
+**API surface is much simpler than Qwen3:** No `lang_code`, no `instruct`, no `extra_body`. Just `model` + `input` + `voice` + `response_format`. Expression comes from text content (implicit steering). `(lacht)`, `[seufzt]`, SSML — all no-ops.
 
-All TTS calls from Hermes go through `localai-helper:8001/v1/tts/synthesize` which orchestrates rewrite + chunking + synthesis + concatenation. Hermes does not call mlx-audio directly for TTS.
+**Post-processing in the helper:** `silenceremove` + 30ms fade-in + 50ms fade-out (via double-reverse trick). No slowdown, no denoise, no loudnorm, no EQ — every other filter we tested made Voxtral sound more processed and less natural. Trim + fades is the only universally beneficial pp.
+
+**Warm on launchd start** — `start-mlx-audio.sh` synthesizes "Bereit." with `de_male` at boot so Voxtral is resident before the first real request.
+
+All TTS calls from Hermes go through `localai-helper:8001/v1/tts/synthesize` which orchestrates rewrite + chunking + synthesis + post-processing. Hermes does not call mlx-audio directly for TTS.
 
 ## Files
 
@@ -142,8 +152,9 @@ TTS calls from Hermes go through `localai-helper:8001` (`tts_tool.py` → `POST 
 | LocalAI (mudler) | llama.cpp not MLX (40-90% slower) |
 | WhisperKit | `serve` unreliable, fragile Swift build |
 | whisper-large-v3-turbo | Replaced by Parakeet v3 — 25% smaller, ~3× faster, similar accuracy |
-| Qwen3-TTS Base + voice clone | Better German quality but requires server-accessible WAV reference file; VoiceDesign + correct lang_code is sufficient |
-| F5-TTS | Good German clone quality but no instruct-based expression control |
-| Piper TTS (thorsten-de) | Native German phonetics but robotic; no expression control |
+| Qwen3-TTS VoiceDesign | English-accented German output ("Hasselhoff effect") — VoiceDesign instruct path is Chinese/English-only by design |
+| Qwen3-TTS Base + voice clone | Better German quality but requires server-accessible WAV reference; Voxtral preset is simpler |
+| F5-TTS-German | Documented umlaut bug requiring Ä→ae preprocessing; fragile for production |
+| Piper TTS (thorsten-de) | Native German phonetics but robotic; replaced by Voxtral |
 
 **Last model research:** 2026-04-28

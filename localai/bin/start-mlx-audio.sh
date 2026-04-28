@@ -42,12 +42,12 @@ fi
       >> /tmp/mlx-audio-warmup.log
   fi
 
-  # TTS warm-up — lazy-loads Qwen3-TTS on first request; fire a short synth
-  # so the 4.2 GB model is already resident when the first real memo arrives.
-  TTS_MODEL="${LOCALAI_TTS_MODEL:-mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16}"
+  # TTS warm-up — lazy-loads Voxtral on first request; fire a short synth
+  # so the 2.5 GB 4-bit model is already resident before the first real memo.
+  TTS_MODEL="${LOCALAI_TTS_MODEL:-mlx-community/Voxtral-4B-TTS-2603-mlx-4bit}"
   curl -fsS -X POST "http://${HOST}:${PORT}/v1/audio/speech" \
     -H "Content-Type: application/json" \
-    -d "{\"model\":\"${TTS_MODEL}\",\"input\":\"Bereit.\",\"voice\":\"alloy\",\"response_format\":\"wav\",\"instruct\":\"warm-up\",\"lang_code\":\"german\"}" \
+    -d "{\"model\":\"${TTS_MODEL}\",\"input\":\"Bereit.\",\"voice\":\"de_male\",\"response_format\":\"wav\"}" \
     -o /dev/null 2>&1 || true
   echo "[$(date +%H:%M:%S)] TTS warm-up complete: ${TTS_MODEL}" \
     >> /tmp/mlx-audio-warmup.log
