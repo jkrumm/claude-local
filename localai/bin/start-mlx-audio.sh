@@ -22,7 +22,7 @@ if [[ ! -f "$WARMUP_AUDIO" ]]; then
     >/dev/null 2>&1 || true
 fi
 
-# Background warm-up: poll until server is listening, then load STT model.
+# Background warm-up: poll until server is listening, then load STT + TTS models.
 # Runs in subshell so it doesn't block server startup.
 (
   for _ in $(seq 1 60); do
@@ -31,6 +31,8 @@ fi
     fi
     sleep 1
   done
+
+  # STT warm-up — keeps Parakeet resident in ModelProvider.models[]
   if [[ -f "$WARMUP_AUDIO" ]]; then
     curl -fsS -X POST "http://${HOST}:${PORT}/v1/audio/transcriptions" \
       -F "model=${STT_MODEL}" \
@@ -39,6 +41,16 @@ fi
     echo "[$(date +%H:%M:%S)] STT warm-up complete: ${STT_MODEL}" \
       >> /tmp/mlx-audio-warmup.log
   fi
+
+  # TTS warm-up — lazy-loads Qwen3-TTS on first request; fire a short synth
+  # so the 4.2 GB model is already resident when the first real memo arrives.
+  TTS_MODEL="${LOCALAI_TTS_MODEL:-mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16}"
+  curl -fsS -X POST "http://${HOST}:${PORT}/v1/audio/speech" \
+    -H "Content-Type: application/json" \
+    -d "{\"model\":\"${TTS_MODEL}\",\"input\":\"Bereit.\",\"voice\":\"alloy\",\"response_format\":\"wav\",\"instruct\":\"warm-up\",\"lang_code\":\"german\"}" \
+    -o /dev/null 2>&1 || true
+  echo "[$(date +%H:%M:%S)] TTS warm-up complete: ${TTS_MODEL}" \
+    >> /tmp/mlx-audio-warmup.log
 ) &
 
 # Server in foreground — launchd needs PID 1 alive to manage lifecycle.

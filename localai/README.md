@@ -5,18 +5,22 @@ Each Mac runs its own `mlx-audio` server bound to `127.0.0.1:8000`. No cross-Tai
 ## Architecture
 
 ```
-Hermes / scripts            →  http://127.0.0.1:8000/v1/...     (mlx-audio direct)
-MacWhisper / strict clients →  https://whisper.test/v1/...      (Caddy)
+Hermes (tts_tool.py)        →  http://127.0.0.1:8001/v1/tts/synthesize  (helper)
+MacWhisper / strict clients →  https://whisper.test/v1/...               (Caddy)
                                   ├─ /v1/audio/transcriptions → :8001 (helper, response transform)
                                   └─ /v1/*                     → :8000 (mlx-audio direct)
 
 mlx-audio          (com.localai.audio,  127.0.0.1:8000)
-  POST /v1/audio/speech         → TTS  (lazy-load on first request)
+  POST /v1/audio/speech         → TTS  (warm on launchd start)
   POST /v1/audio/transcriptions → STT  (warm on launchd start)
   GET  /v1/models               → list of currently-loaded models
   DELETE /v1/models             → unload a model
 
 localai-helper     (com.localai.helper, 127.0.0.1:8001)
+  POST /v1/tts/synthesize       → TTS orchestration: language detect → speakable
+                                  rewrite (Haiku) → title + delivery (Haiku) →
+                                  400-char chunking → Qwen3-TTS synthesis →
+                                  numpy concat → ffmpeg MP3 → base64 JSON
   POST /v1/audio/transcriptions → forwards to mlx-audio + transforms
                                   Parakeet's {text, sentences} into OpenAI's
                                   verbose_json {text, segments, language,
@@ -24,7 +28,9 @@ localai-helper     (com.localai.helper, 127.0.0.1:8001)
   GET  /health                  → liveness probe
 
   Extension point — drop new modules in `helper/routes/` for additional
-  local processing (model routing, format converters, batch ops, etc).
+  local processing. Helper runs in mlx-audio's uv venv (fastapi + httpx +
+  soundfile + numpy available). Anthropic API credentials injected from
+  Keychain at launchd start for Haiku calls.
 ```
 
 LLM is no longer local — Hermes uses the IU unified endpoint (Anthropic-compatible path) for all chat completions.
@@ -43,14 +49,17 @@ Always-warm: the launchd wrapper script (`bin/start-mlx-audio.sh`) fires a warm-
 
 **MacWhisper:** Point at `https://whisper.test` — Caddy proxies `/v1/audio/transcriptions` through `localai-helper` which transforms the response into OpenAI verbose_json shape (`{text, segments, language, duration, task}`). Other paths go direct to mlx-audio. Model: `mlx-community/parakeet-tdt-0.6b-v3`. API key: any non-empty string.
 
-### TTS: Kokoro + Qwen3-TTS
+### TTS: Qwen3-TTS VoiceDesign
 
-| Use Case | Model | Size | Speed |
+| Model | Size | Languages | Notes |
 |-|-|-|-|
-| Quick / interactive | `mlx-community/Kokoro-82M-bf16` | 0.4 GB | <0.3s, 210× RT |
-| Quality / voice cloning | `mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16` | 4.2 GB | 97ms TTFB |
+| **mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16** | 4.2 GB | 10 EU langs | Voice via English instruct, `lang_code` for phonemes |
 
-TTS lazy-loads on first request; stays in memory until explicitly unloaded.
+**Critical:** `lang_code` must be the full lowercase English name (`"german"`, `"english"`) — not ISO codes. `"de"` or `"auto"` both fall through to English output (no language token injected). The VoiceDesign `instruct` must be in English; German instruct produces unreliable results.
+
+**Warm on launchd start** — `start-mlx-audio.sh` synthesizes a short German phrase at boot so Qwen3-TTS is resident before the first real request.
+
+All TTS calls from Hermes go through `localai-helper:8001/v1/tts/synthesize` which orchestrates rewrite + chunking + synthesis + concatenation. Hermes does not call mlx-audio directly for TTS.
 
 ## Files
 
@@ -119,28 +128,11 @@ tts:
   openai:
     model: "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16"
     voice: ""
-    base_url: "http://127.0.0.1:8000/v1"
+    base_url: "http://127.0.0.1:8001/v1"  # helper, not mlx-audio direct
     api_key: "not-needed"
-    extra_body:
-      instruct: "<voice description>"
 ```
 
-## Migration from Tailscale-fronted M2 Max
-
-The old setup ran Ollama (Gemma 4) + mlx-audio + Caddy + management API on a dedicated MacBook M2 Max, exposed via Tailscale. That stack is retired.
-
-To clean up M2 Max after migration:
-
-```bash
-ssh iumac
-launchctl unload ~/Library/LaunchAgents/com.localai.{api,ollama,monitor,audio}.plist
-rm ~/Library/LaunchAgents/com.localai.{api,ollama,monitor,audio}.plist
-brew uninstall ollama  # optional
-sudo rm /opt/homebrew/etc/Caddyfile.localai.conf  # if still present
-sudo brew services restart caddy
-```
-
-Then `git pull` in `~/SourceRoot/claude-local` will land the cleaned-up state.
+TTS calls from Hermes go through `localai-helper:8001` (`tts_tool.py` → `POST /v1/tts/synthesize`). The helper manages lang detection, Haiku rewrites, chunking, Qwen3-TTS calls to `:8000`, and ffmpeg concatenation. Voice character and `lang_code` are in `helper/routes/tts.py`.
 
 ## Rejected Alternatives
 
@@ -150,5 +142,8 @@ Then `git pull` in `~/SourceRoot/claude-local` will land the cleaned-up state.
 | LocalAI (mudler) | llama.cpp not MLX (40-90% slower) |
 | WhisperKit | `serve` unreliable, fragile Swift build |
 | whisper-large-v3-turbo | Replaced by Parakeet v3 — 25% smaller, ~3× faster, similar accuracy |
+| Qwen3-TTS Base + voice clone | Better German quality but requires server-accessible WAV reference file; VoiceDesign + correct lang_code is sufficient |
+| F5-TTS | Good German clone quality but no instruct-based expression control |
+| Piper TTS (thorsten-de) | Native German phonetics but robotic; no expression control |
 
 **Last model research:** 2026-04-28

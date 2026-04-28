@@ -23,15 +23,16 @@ import argparse
 
 from fastapi import FastAPI
 
-from routes import macwhisper
+from routes import macwhisper, tts
 
-app = FastAPI(title="LocalAI Helper", version="0.1.0")
+app = FastAPI(title="LocalAI Helper", version="0.2.0")
 app.include_router(macwhisper.router)
+app.include_router(tts.router)
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "upstream": macwhisper.UPSTREAM}
+    return {"status": "ok", "upstream": macwhisper.UPSTREAM, "tts": "enabled"}
 
 
 def main():

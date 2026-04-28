@@ -86,7 +86,7 @@ Config templates, skill files, and .env.tpl are versioned here under `hermes/`. 
 **API secret:** `op://common/api/SECRET` (account `tkrumm`) — wired in `.env.tpl`.
 
 **Local modifications to upstream (re-apply after `hermes update`):**
-- `~/.hermes/hermes-agent/tools/tts_tool.py` — custom TTS metadata generation (emotion/pace/energy adapted per message via auxiliary LLM, custom `HH:MM dd.mm.yy` filename pattern, dynamic `instruct` injected into OpenAI extra_body)
+- `~/.hermes/hermes-agent/tools/tts_tool.py` — thin client over `localai-helper:8001/v1/tts/synthesize`; replaces 1600-line multi-provider original. Source: `hermes/patches/tts_tool.py`. Re-apply: `cp ~/SourceRoot/claude-local/hermes/patches/tts_tool.py ~/.hermes/hermes-agent/tools/tts_tool.py`
 - `~/.hermes/hermes-agent/gateway/platforms/slack.py` — `format_message()` pre-steps: normalize `*` list markers to `-`, strip backticks from inline code containing emoji shortcodes
 - `~/.hermes/hermes-agent/gateway/config.py` — bridge `reply_in_thread`, `reply_broadcast`, `reply_to_mode` from `slack:` YAML section into platform `extra` dict (upstream still only bridges `require_mention`, `allow_bots`, `free_response_channels` as of 0.11.0)
 
