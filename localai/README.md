@@ -29,9 +29,13 @@ fish-s2-pro        (com.localai.fish,   127.0.0.1:8002)
 localai-helper     (com.localai.helper, 127.0.0.1:8001)
   POST /v1/tts/synthesize       → TTS orchestration: language detect → speakable
                                   rewrite (Haiku, only when markdown-heavy) →
-                                  title (Haiku) → paragraph-aware chunking →
-                                  Fish synthesis at :8002 → numpy concat →
-                                  ffmpeg WAV→MP3 → base64 JSON
+                                  title (Haiku) → pysbd-segmented paragraph-aware
+                                  chunking (800-char default — Metal cap on M2 Pro) → Fish synthesis at
+                                  :8002 with dynamic max_new_tokens per chunk and
+                                  post_process=False → 5 ms edge fades + break-aware
+                                  silence (300 ms sentence / 600 ms paragraph) →
+                                  numpy concat → single ffmpeg pass: smile EQ (DE)
+                                  + loudnorm to -16 LUFS → MP3 → base64 JSON
   POST /v1/audio/transcriptions → forwards to mlx-audio + transforms
                                   Parakeet's {text, sentences} into OpenAI's
                                   verbose_json {text, segments, language,
@@ -67,8 +71,8 @@ Always-warm: the launchd wrapper script (`bin/start-mlx-audio.sh`) fires a warm-
 | **appautomaton/fishaudio-s2-pro-8bit-mlx** | 6.7 GB | clone-only, 2 production refs (de/en) | ~2–10× RTF on M2 Pro depending on chunk length |
 
 **Production reference clips** (in `fish-s2-pro/voices/`):
-- `pip_cut_smile_de` — Pip Klöckner snippet, manually cut in Audacity, smile EQ baked into the reference itself. Output also gets the same smile EQ chain (highpass+scoop+presence+air+loudnorm via ffmpeg).
-- `ethan_en` — fish.audio's own demo voice "Ethan" (warm/expressive American male). No output post-processing — fish.audio's reference quality holds up.
+- `pip_cut_smile_de` — Pip Klöckner snippet, manually cut in Audacity, smile EQ baked into the reference itself. The helper applies the same smile EQ chain (highpass+scoop+presence+air via ffmpeg) plus `loudnorm` once to the concatenated audio. The Fish server can also apply the EQ inline (one-shot direct calls) but `loudnorm` runs only at the helper to keep loudness stable across chunks.
+- `ethan_en` — fish.audio's own demo voice "Ethan" (warm/expressive American male). The helper still runs `loudnorm` on EN output for consistent listening level; no smile EQ.
 
 **Fish S2 Pro is clone-only** — no stock voice presets. Each synthesis call needs a paired `reference_audio` + `reference_text`. Both refs are loaded once at server startup.
 

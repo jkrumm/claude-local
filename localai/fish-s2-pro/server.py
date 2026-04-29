@@ -32,6 +32,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import mlx.core as mx
 import mlx_speech
 import numpy as np
 import soundfile as sf
@@ -48,16 +49,18 @@ _VOICES: dict[str, dict] = {
     "en": {"id": "ethan_en"},
 }
 
-# Smile EQ chain — applied to German output. Same recipe used to build
-# the reference clip and validated across 7 production scripts. Keep this
-# string as the single source of truth; bin/start-fish.sh calls into ffmpeg
-# directly so this module is the canonical definition.
+# Smile EQ chain — applied to German output. Static-coefficient filters only
+# (highpass + scoop + presence + air). Loudness normalization is intentionally
+# *not* part of this chain: per-chunk loudnorm produces audible loudness drift
+# across concatenated chunks. The localai-helper applies a single loudnorm
+# pass after concat. For one-shot direct calls (curl/debugging), the helper-
+# side loudnorm is missing — acceptable, since direct calls are not the
+# production path.
 SMILE_EQ_CHAIN = (
     "highpass=f=70,"
     "equalizer=f=600:t=q:w=2.5:g=-3,"
     "equalizer=f=5500:t=q:w=2.5:g=3,"
-    "equalizer=f=12000:t=q:w=2:g=1.5,"
-    "loudnorm=I=-18:TP=-2:LRA=7"
+    "equalizer=f=12000:t=q:w=2:g=1.5"
 )
 
 # Languages where the smile EQ is applied. English stays raw — Ethan was
@@ -71,6 +74,11 @@ class SpeechRequest(BaseModel):
     voice: str = "en"  # language code: "de" or "en"
     response_format: str = "wav"
     max_new_tokens: int = 1536
+    # When False, skip the per-language post-processing (smile EQ for DE).
+    # The helper sends post_process=False for chunked long-form so it can
+    # run a single ffmpeg pass over the concatenated audio (avoids per-chunk
+    # loudness drift and reduces ffmpeg fork overhead).
+    post_process: bool = True
 
 
 _MODEL = {"tts": None}
@@ -122,6 +130,14 @@ def _synthesize_blocking(text: str, voice: dict, max_new_tokens: int) -> tuple[n
     waveform = np.asarray(result.waveform, dtype=np.float32)
     if waveform.ndim > 1:
         waveform = waveform.squeeze()
+    # mlx-speech keeps the KV cache and intermediate buffers alive on the
+    # MLX allocator pool between generate() calls. After 2-3 long-form chunks
+    # the resident memory grows past 20 GB and the next allocation hits the
+    # M2 Pro Metal single-buffer cap (libc++abi: [metal::malloc] >20 GB).
+    # Releasing the pool here keeps each chunk in a fresh allocation regime;
+    # the model weights stay loaded (those live in mx.array attributes on
+    # the model object, which clear_cache leaves alone).
+    mx.clear_cache()
     return waveform, int(result.sample_rate)
 
 
@@ -223,7 +239,7 @@ async def speech(req: SpeechRequest):
         except Exception as e:
             raise HTTPException(500, f"synthesis failed: {type(e).__name__}: {e}")
 
-    if lang in _POST_EQ:
+    if req.post_process and lang in _POST_EQ:
         waveform, sr = await asyncio.to_thread(_apply_smile_eq, waveform, sr)
 
     audio_bytes, mime = _encode(waveform, sr, req.response_format)

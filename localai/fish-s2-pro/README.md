@@ -8,10 +8,17 @@ at boot. Called by `localai-helper:8001` for orchestrated TTS.
 
 | Lang | Reference | Output post-process |
 |-|-|-|
-| **de** | `voices/pip_cut_smile_de.wav` — Pip Klöckner snippet, Audacity-cut, smile EQ baked into the reference | Smile EQ chain (highpass + scoop + presence + air + loudnorm) applied via ffmpeg in `server.py` |
-| **en** | `voices/ethan_en.wav` — fish.audio S2 demo voice "Ethan" (warm/expressive American male) | None — fish.audio's reference quality holds up raw |
+| **de** | `voices/pip_cut_smile_de.wav` — Pip Klöckner snippet, Audacity-cut, smile EQ baked into the reference | Smile EQ (highpass + scoop + presence + air) applied via ffmpeg, then `loudnorm` to -16 LUFS |
+| **en** | `voices/ethan_en.wav` — fish.audio S2 demo voice "Ethan" (warm/expressive American male) | `loudnorm` only — fish.audio's reference quality holds up raw |
 
-The smile EQ chain is the single source of truth in `server.py:SMILE_EQ_CHAIN`.
+The smile EQ chain lives in `server.py:SMILE_EQ_CHAIN` (static EQ filters only).
+Loudness normalization runs in `localai-helper` after concatenating chunks —
+per-chunk `loudnorm` would produce audible loudness drift across chunk seams.
+
+The helper sends `post_process=False` to this server for chunked long-form
+synthesis and applies a single ffmpeg pass over the concatenated audio. One-shot
+direct calls (`curl /v1/audio/speech`) get the EQ inline for convenience but
+no `loudnorm` — that's by design.
 
 ## Endpoints
 

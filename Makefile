@@ -708,6 +708,14 @@ _setup-localai:
 			&& uv pip install --quiet --python "$(MLX_AUDIO_PY)" "en-core-web-sm@https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" \
 			&& echo "    ✓ Kokoro deps installed"; \
 	fi
+	@# pysbd — German-aware sentence splitter for the TTS chunker.
+	@# Native regex falls over on "29. April", "9.30 Uhr", "z.B.", "Dr.", "bzw."
+	@if "$(MLX_AUDIO_PY)" -c "import pysbd" 2>/dev/null; then \
+		echo "    · pysbd (ok)"; \
+	else \
+		uv pip install --quiet --python "$(MLX_AUDIO_PY)" pysbd \
+			&& echo "    ✓ pysbd installed"; \
+	fi
 	@brew list ffmpeg &>/dev/null && echo "    · ffmpeg (ok)" || (brew install ffmpeg >/dev/null 2>&1 && echo "    ✓ ffmpeg installed")
 	@# m4a STT patch — required for MacWhisper / Slack voice memos.
 	@# Detect by grepping for a unique post-patch marker (reverse dry-run was unreliable).

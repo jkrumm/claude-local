@@ -118,14 +118,23 @@ from mlx_speech.generation.fish_s2_pro import generate_fish_s2_pro
 
 ## Token cost
 
-- Plain text: **~1.0 tokens per character**
-- With emotion tags: **~1.8–2.0 tokens per character**
+`max_new_tokens` is in **audio codec tokens** (21.5 Hz frames), not text tokens.
+Spoken German is ~14 chars/sec → audio tokens ≈ `chars × 1.54`. With prosody
+tags closer to `chars × 2.2`. Use `chars × 2.5 + 512` headroom for safety.
 
-For a 240-character paragraph with moderate tagging, budget `max_new_tokens=512`. For
-a podcast paragraph with heavy tagging, budget 1024–1536.
+| Chunk size | Recommended `max_new_tokens` |
+|-|-|
+| 240 chars (one paragraph) | ~1024 |
+| 800 chars | ~2500 |
+| 1800 chars (default helper chunk) | ~5000 |
+| 2500 chars | ~6800 |
 
-If you cap too low, audio truncates mid-sentence. Better to over-budget — unused
-tokens cost nothing at sample time.
+If you cap too low, audio truncates mid-sentence — **the runtime returns the
+truncated audio without raising**. Over-budgeting is free (the loop breaks
+on the EOS token, unused budget is never spent).
+
+The `localai-helper` computes `max_new_tokens` per chunk from chunk length;
+direct curl calls should pass it explicitly when generating > 240 chars.
 
 ## Emotion / Prosody Tags
 
@@ -217,9 +226,16 @@ overhead of paragraph-aware chunking.
 
 ## Known limitations
 
-- **Long generations drift** — past ~2048 tokens the timbre can wander. For long-form,
-  chunk at paragraph boundaries (≤ 600 chars) and concatenate. The existing localai-helper
-  chunking strategy (paragraphs → sentences) ports cleanly.
+- **Metal allocator cap on M2 Pro 32 GB** is ~20 GB per buffer. Fish's
+  attention scratch passes that around the 1300-character mark and the
+  Python worker terminates with `[metal::malloc] Attempting to allocate
+  >20 GB`. Practical safe ceiling on M2 Pro is **800 characters per chunk**
+  (~50 s audio, ~1700 audio tokens). M2/M3 Max with more unified memory
+  can push higher.
+- **Long generations drift** — past ~2048 *audio* codec tokens (≈ 95 s) the
+  timbre can wander. The 800-char ceiling above is comfortably below this
+  drift threshold, so chunking is bounded by Metal capacity, not drift,
+  on the production hardware.
 - **No instruct prompt** — you cannot pass a system message describing the desired
   tone. Tone control is entirely via the reference clip + inline emotion tags.
 - **Reference clip leakage** — if the reference clip has background music or ambient noise,
