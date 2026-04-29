@@ -117,6 +117,11 @@ class TTSRequest(BaseModel):
     # the cap on every Mac we run on. Bigger Apple Silicon (M2/M3 Max with
     # more unified memory) can override this per-request.
     max_chunk_chars: int = 800
+    # Per-request override of the silence inserted between paragraph-boundary
+    # chunks. Default (None) keeps the standard ~0.6s breath. Use this for
+    # multi-section briefings where a noticeably longer beat between sections
+    # improves comprehension (~1.5–2.5s feels natural without sounding stalled).
+    paragraph_pause_secs: float | None = None
 
 
 class TTSResponse(BaseModel):
@@ -193,7 +198,13 @@ def _split_sentences(text: str, lang: str) -> list[str]:
     return sentences or [text]
 
 
-def _chunk_text(text: str, lang: str, max_chars: int) -> list[tuple[str, str]]:
+def _chunk_text(
+    text: str,
+    lang: str,
+    max_chars: int,
+    *,
+    preserve_paragraphs: bool = False,
+) -> list[tuple[str, str]]:
     """Hierarchical splitter: paragraphs first, then sentences within.
 
     Returns ``[(chunk_text, trailing_break_type), …]`` where the break type is
@@ -203,6 +214,11 @@ def _chunk_text(text: str, lang: str, max_chars: int) -> list[tuple[str, str]]:
     Rationale: paragraph boundaries deserve a longer pause (breath) than
     mid-paragraph sentence boundaries (beat). Tracking the type per chunk lets
     the assembler insert appropriately scaled silence.
+
+    ``preserve_paragraphs=True`` skips the phase-2 greedy merge of short
+    paragraphs into the previous chunk. Use this when the caller has placed
+    paragraph breaks deliberately (e.g. a multi-section briefing) and wants
+    each paragraph to be synthesized — and paused after — as its own beat.
     """
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text.strip()) if p.strip()]
     if not paragraphs:
@@ -247,8 +263,10 @@ def _chunk_text(text: str, lang: str, max_chars: int) -> list[tuple[str, str]]:
     while i < len(para_chunks):
         sub = para_chunks[i]
         # Merge with previous if previous was a single sub-chunk and so is sub
+        # — unless the caller asked us to preserve paragraph identity.
         if (
-            chunks
+            not preserve_paragraphs
+            and chunks
             and len(sub) == 1
             and chunks[-1][1] == "paragraph"
             and len(chunks[-1][0]) + 2 + len(sub[0]) <= max_chars
@@ -534,18 +552,29 @@ async def synthesize(req: TTSRequest) -> TTSResponse:
     else:
         title = re.sub(r'[<>:"/\\|?*]', "", spoken[:40]).strip() or "Voice memo"
 
-    # 4. Chunk at paragraph + sentence boundaries
-    chunks = _chunk_text(spoken, lang, req.max_chunk_chars)
+    # 4. Chunk at paragraph + sentence boundaries.
+    # When the caller passes paragraph_pause_secs, they're declaring the
+    # paragraphs are deliberate section beats — preserve them and don't
+    # let the phase-2 merge collapse short sections back into one chunk.
+    chunks = _chunk_text(
+        spoken,
+        lang,
+        req.max_chunk_chars,
+        preserve_paragraphs=req.paragraph_pause_secs is not None,
+    )
 
     # 5. Synthesize sequentially. Fish has an internal synth lock; concurrent
     # requests would just queue inside the server, so serializing here saves
     # the round-trip overhead.
     audio_parts: list[np.ndarray] = []
+    pause_overrides = dict(_PAUSE_AFTER)
+    if req.paragraph_pause_secs is not None and req.paragraph_pause_secs >= 0:
+        pause_overrides["paragraph"] = float(req.paragraph_pause_secs)
     async with httpx.AsyncClient() as http:
         for chunk_text, brk in chunks:
             part = await _synth_chunk(chunk_text, lang, http)
             audio_parts.append(part)
-            pause = _PAUSE_AFTER.get(brk, 0.0)
+            pause = pause_overrides.get(brk, 0.0)
             if pause > 0:
                 audio_parts.append(_silence(pause))
 
