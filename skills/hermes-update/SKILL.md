@@ -29,7 +29,7 @@ Three upstream files are customized. Re-apply if upstream overwrote them.
 
 ### `tools/tts_tool.py` — thin client over localai-helper
 
-The upstream file is a 1600-line multi-provider TTS implementation (Edge / ElevenLabs / OpenAI / MiniMax / Mistral / Gemini / xAI / NeuTTS / KittenTTS). We replace it entirely with a 129-line thin client that POSTs to `localai-helper:8001/v1/tts/synthesize`. The helper handles language detection, speakable rewrite, chunking, Voxtral synthesis, and ffmpeg encode.
+The upstream file is a 1600-line multi-provider TTS implementation (Edge / ElevenLabs / OpenAI / MiniMax / Mistral / Gemini / xAI / NeuTTS / KittenTTS). We replace it entirely with a 129-line thin client that POSTs to `localai-helper:8001/v1/tts/synthesize`. The helper handles language detection, speakable rewrite, chunking, Fish S2 Pro synthesis (smile EQ for German), and ffmpeg encode.
 
 **Re-apply:**
 ```bash

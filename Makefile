@@ -670,6 +670,7 @@ LAUNCHAGENTS  := $(HOME)/Library/LaunchAgents
 LOCALAI_DIR   := $(CLAUDE_LOCAL)/localai
 MLX_AUDIO_BIN := $(HOME)/.local/bin/mlx_audio.server
 MLX_AUDIO_PY  := $(HOME)/.local/share/uv/tools/mlx-audio/bin/python3
+MLX_SPEECH_BIN := $(HOME)/.local/bin/mlx-speech
 
 # Install mlx-audio + Python deps + ffmpeg + apply m4a STT patch.
 # Idempotent — skips work that's already done.
@@ -722,11 +723,22 @@ _setup-localai:
 			echo "    ✗ m4a STT patch failed — re-apply manually after upgrade"; \
 		fi; \
 	fi
+	@# Fish S2 Pro TTS — separate uv tool venv (mlx-speech needs Python 3.13+)
+	@if [ -x "$(MLX_SPEECH_BIN)" ]; then \
+		echo "    · mlx-speech installed (ok)"; \
+	else \
+		echo "    Installing mlx-speech via uv (~30s, plus 6.7 GB model on first synthesis)..."; \
+		uv tool install mlx-speech --python 3.13 >/dev/null 2>&1 || { echo "    ✗ uv tool install mlx-speech failed"; exit 1; }; \
+		echo "    ✓ mlx-speech installed"; \
+	fi
 	@$(MAKE) --no-print-directory localai-setup
 
-# mlx-audio (port 8000) — universal, every Mac
-# localai-helper (port 8001, FastAPI) — Hermes-only, installed via `make hermes`
-LOCALAI_AUDIO_PLISTS  := com.localai.audio
+# Universal services (every Mac):
+#   com.localai.audio — mlx-audio :8000 (STT only, Parakeet)
+#   com.localai.fish  — Fish S2 Pro :8002 (TTS, both DE and EN)
+# Hermes-only (Mac Mini, installed via `make hermes`):
+#   com.localai.helper — :8001 FastAPI orchestration
+LOCALAI_AUDIO_PLISTS  := com.localai.audio com.localai.fish
 LOCALAI_HERMES_PLISTS := com.localai.helper
 
 # Render universal plists (audio only) and reload changed ones.

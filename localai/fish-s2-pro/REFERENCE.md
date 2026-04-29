@@ -183,10 +183,13 @@ are the most reliable; arbitrary phrases like `[in a thoughtful tone]` or
 
 **Tier 2 means less training data, not "speaks with English accent."** For German you
 get coherent native pronunciation but flatter prosody and a more generic rhythm than
-a Tier-1 model would produce. With a German reference clip the timbre is German;
-the cadence may still feel slightly off to a native ear. Compare against
-[Voxtral 4B TTS](https://huggingface.co/mlx-community/Voxtral-4B-TTS-2603-mlx-4bit)
-for a German-native baseline before committing.
+a Tier-1 model would produce. We compensate by:
+1. Using a high-quality real German reference clip (Pip Klöckner)
+2. Pre-processing the reference: Audacity-cut + smile EQ baked in
+3. Post-processing the output with the same smile EQ chain via ffmpeg
+
+This stack measurably outperformed Voxtral 4B TTS (which was Tier-1 native German
+but emotionally flat) in side-by-side listening tests.
 
 ## Performance on Apple Silicon
 
@@ -217,8 +220,8 @@ overhead of paragraph-aware chunking.
 - **Long generations drift** — past ~2048 tokens the timbre can wander. For long-form,
   chunk at paragraph boundaries (≤ 600 chars) and concatenate. The existing localai-helper
   chunking strategy (paragraphs → sentences) ports cleanly.
-- **No instruct prompt** — unlike Voxtral, you cannot pass a system message describing
-  the desired tone. Tone control is entirely via the reference clip + inline tags.
+- **No instruct prompt** — you cannot pass a system message describing the desired
+  tone. Tone control is entirely via the reference clip + inline emotion tags.
 - **Reference clip leakage** — if the reference clip has background music or ambient noise,
   it will bleed into the output. Use clean isolated speech.
 - **Tag explosions** — sequences of 3+ adjacent tags can produce unstable output. Keep tags
@@ -229,17 +232,19 @@ overhead of paragraph-aware chunking.
 Fish Audio Research License. Free for research and non-commercial. Commercial use
 requires a separate license: business@fish.audio.
 
-## Integration with existing localai-helper
+## Production wiring (already done)
 
-If/when this becomes the production English voice in Hermes:
+Fish S2 Pro is the production TTS engine. The wiring:
 
-1. Add a new launchd service for an `mlx-speech` HTTP wrapper on port `:8003` (it doesn't
-   ship a server — write a thin FastAPI shim, mirroring the playground server)
-2. In `localai/helper/routes/tts.py`, extend the `_VOICE_MAP` dispatch:
-   - `de` → existing Voxtral on `:8000` (German Tier-1 native)
-   - `en` → new Fish S2 Pro on `:8003` with a fixed reference clip
-3. Carry the reference WAV and transcript as static config — no need to pass them per call
-4. Add emotion-tag injection to the existing Haiku rewrite stage when engine is S2 Pro
+1. `com.localai.fish` launchd service runs `bin/start-fish.sh` → `fish-s2-pro/server.py`
+   on `127.0.0.1:8002`. Model warm-loaded at boot.
+2. `localai/helper/routes/tts.py` calls `:8002/v1/audio/speech` with `voice: "de"|"en"`
+   based on language detection. Helper-side stays dumb about which clip backs each language.
+3. Production references and the smile EQ chain live in `fish-s2-pro/`. The EQ chain
+   string is the single source of truth in `server.py:SMILE_EQ_CHAIN`.
+
+To swap a reference clip: replace `voices/<id>.{wav,txt,json}` and restart the service
+(`launchctl kickstart -k gui/$(id -u)/com.localai.fish`).
 
 ## See also
 

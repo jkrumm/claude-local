@@ -1,9 +1,0 @@
-{
-  "label": "Alert (DE)",
-  "lang": "de",
-  "category": "alert",
-  "text": "Achtung. Der Build auf dem Master-Branch ist gerade fehlgeschlagen — der TypeScript-Check meldet drei Fehler im Auth-Modul. Letzte erfolgreiche Pipeline war vor fünfundvierzig Minuten. Hermes pausiert die nächsten automatischen Deploys, bis der Branch wieder grün ist.",
-  "voice_filter": [
-    "pip_cut_smile_de"
-  ]
-}

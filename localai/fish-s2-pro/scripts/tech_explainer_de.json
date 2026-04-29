@@ -1,9 +1,0 @@
-{
-  "label": "Tech Explainer (DE)",
-  "lang": "de",
-  "category": "professional",
-  "text": "Wenn ein Request am Gateway ankommt, passieren drei Dinge gleichzeitig: die Authentifizierung wird geprüft, der Request mit einer Trace-ID protokolliert, und das Routing entscheidet, welcher Downstream-Service antworten soll. Schlägt einer dieser drei Schritte fehl, antwortet das Gateway sofort — der Downstream-Service sieht den Request gar nicht erst.",
-  "voice_filter": [
-    "pip_cut_smile_de"
-  ]
-}

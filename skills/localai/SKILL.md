@@ -14,14 +14,15 @@ Per-machine `mlx-audio` (TTS + STT) bound to `127.0.0.1:8000`. Installed automat
 
 | Component | Service | Port |
 |-|-|-|
-| mlx-audio (TTS + STT) | `com.localai.audio` | 8000 (localhost) |
+| mlx-audio (STT only — Parakeet) | `com.localai.audio` | 8000 (localhost) |
+| fish-s2-pro (TTS — Fish Audio S2 Pro) | `com.localai.fish` | 8002 (localhost) |
 | localai-helper (FastAPI orchestration layer — TTS pipeline, STT response transform) | `com.localai.helper` | 8001 (localhost) |
 
 **Models (both warm on launchd start):**
 - STT: `mlx-community/parakeet-tdt-0.6b-v3` — 1.2 GB, 25 EU langs incl. EN/DE, 10–60× RT
-- TTS: `mlx-community/Voxtral-4B-TTS-2603-mlx-4bit` — 2.5 GB, 20 fixed voice presets (de_male / de_female / casual_male etc.), 0.74× RTF long-form
+- TTS: `appautomaton/fishaudio-s2-pro-8bit-mlx` — 6.7 GB, clone-only with two production references (Pip Klöckner for `de` with smile EQ, Ethan from fish.audio demos for `en`)
 
-Hermes calls `:8001/v1/tts/synthesize` (the helper) for all TTS. The helper handles language detection, speakable rewrite (Haiku), title (Haiku), paragraph-aware chunking, Voxtral synthesis, and MP3 encoding. Voice character is the preset; expression comes implicitly from text content (Voxtral has no instruct/SSML).
+Hermes calls `:8001/v1/tts/synthesize` (the helper) for all TTS. The helper handles language detection, speakable rewrite (Haiku), title (Haiku), paragraph-aware chunking, Fish synthesis at `:8002`, and MP3 encoding. DE output gets a smile EQ applied server-side by Fish. Inline emotion tags (`[chuckle]`, `[whisper]`, `[pause]`, `[excited]`, …) are first-class — see `localai/fish-s2-pro/REFERENCE.md`.
 
 **Why Parakeet, not Whisper:** mlx-audio 0.4.2 has a Whisper bug — `load_model()` doesn't attach `WhisperProcessor` (required for `get_tokenizer()`). Patching at request-time triggers an MLX Metal threading crash. Parakeet works cleanly.
 

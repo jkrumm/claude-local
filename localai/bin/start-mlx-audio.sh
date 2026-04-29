@@ -1,6 +1,7 @@
 #!/bin/bash
-# mlx-audio server wrapper — binds localhost (no Tailscale exposure) and
-# warms the STT model so the first transcription request hits a hot cache.
+# mlx-audio server wrapper — STT only (Parakeet). TTS is served by the
+# separate Fish S2 Pro service on :8002 (com.localai.fish). This server's
+# only job is to keep Parakeet warm for transcription.
 #
 # Started by ~/Library/LaunchAgents/com.localai.audio.plist via launchd.
 # launchd restarts on crash (KeepAlive=true), so this script must stay in
@@ -22,8 +23,7 @@ if [[ ! -f "$WARMUP_AUDIO" ]]; then
     >/dev/null 2>&1 || true
 fi
 
-# Background warm-up: poll until server is listening, then load STT + TTS models.
-# Runs in subshell so it doesn't block server startup.
+# Background STT warm-up: poll until server is listening, then preload Parakeet.
 (
   for _ in $(seq 1 60); do
     if curl -fsS "http://${HOST}:${PORT}/v1/models" >/dev/null 2>&1; then
@@ -41,16 +41,6 @@ fi
     echo "[$(date +%H:%M:%S)] STT warm-up complete: ${STT_MODEL}" \
       >> /tmp/mlx-audio-warmup.log
   fi
-
-  # TTS warm-up — lazy-loads Voxtral on first request; fire a short synth
-  # so the 2.5 GB 4-bit model is already resident before the first real memo.
-  TTS_MODEL="${LOCALAI_TTS_MODEL:-mlx-community/Voxtral-4B-TTS-2603-mlx-4bit}"
-  curl -fsS -X POST "http://${HOST}:${PORT}/v1/audio/speech" \
-    -H "Content-Type: application/json" \
-    -d "{\"model\":\"${TTS_MODEL}\",\"input\":\"Bereit.\",\"voice\":\"de_male\",\"response_format\":\"wav\"}" \
-    -o /dev/null 2>&1 || true
-  echo "[$(date +%H:%M:%S)] TTS warm-up complete: ${TTS_MODEL}" \
-    >> /tmp/mlx-audio-warmup.log
 ) &
 
 # Server in foreground — launchd needs PID 1 alive to manage lifecycle.
