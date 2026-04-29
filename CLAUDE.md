@@ -79,6 +79,7 @@ Config templates, skill files, and .env.tpl are versioned here under `hermes/`. 
 | `hermes/.env.tpl` | `~/.hermes/.env.tpl` | symlink |
 | `hermes/SOUL.md` | `~/.hermes/SOUL.md` | symlink |
 | `hermes/cron/` | `~/.hermes/cron/` | symlink — Hermes-driven (LLM) cron jobs |
+| `hermes/scripts/` | `~/.hermes/scripts/` | symlink — Hermes cron pre-run scripts (security check requires they live under `HERMES_HOME/scripts/`). Also holds host-level shell scripts. |
 | `hermes/hooks/` | `~/.hermes/hooks/` | symlink — add hooks here |
 | `hermes/skills/{name}/` | `~/.hermes/skills/{name}/` | symlink per skill (homelab-api, infrastructure, tasks, schedule, weather, slack) |
 | `hermes/USER.md` | `~/.hermes/memories/USER.md` | copied — Hermes writes to it |
@@ -86,6 +87,10 @@ Config templates, skill files, and .env.tpl are versioned here under `hermes/`. 
 **Host-level scripts (called by macOS `crontab`, not symlinked):**
 - `hermes/scripts/hermes-liveness.sh` — every 5 min, checks gateway state + Slack connection, pings `$UPTIME_PUSH_HERMES` on success.
 - `hermes/scripts/hermes-backup.sh` — daily 03:00, rsyncs `~/.hermes/` → `homelab:/mnt/hdd/backups/hermes/`, pings `$UPTIME_PUSH_BACKUP` on success.
+
+**Hermes cron pre-run scripts (executed by `hermes-agent` before each cron run, *not* by macOS crontab):**
+- `hermes/scripts/briefing-context.py` — reads `briefing-state.json` and emits `BRIEFING_CITY` + `BRIEFING_SUPPRESSED` for the morning briefing prompt. Output is appended as `## Script Output` block.
+- `hermes/scripts/briefing-state.json` — *gitignored* runtime config (city + vacation flag). Edit locally; never commits. Seeded from `briefing-state.example.json` on first `make hermes`.
 
 **Homelab API integration:** `hermes/skills/homelab-api/SKILL.md` endpoint tables are regenerated from `https://api.jkrumm.com/docs/json` by the homelab `/docs` skill. Domain skills (infrastructure, tasks, schedule, weather, slack) are updated in the same pass if their endpoints changed.
 

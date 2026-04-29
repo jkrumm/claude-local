@@ -29,7 +29,9 @@ Three upstream files are customized. Re-apply if upstream overwrote them.
 
 ### `tools/tts_tool.py` — thin client over localai-helper
 
-The upstream file is a 1600-line multi-provider TTS implementation (Edge / ElevenLabs / OpenAI / MiniMax / Mistral / Gemini / xAI / NeuTTS / KittenTTS). We replace it entirely with a 129-line thin client that POSTs to `localai-helper:8001/v1/tts/synthesize`. The helper handles language detection, speakable rewrite, chunking, Fish S2 Pro synthesis (smile EQ for German), and ffmpeg encode.
+The upstream file is a 1600-line multi-provider TTS implementation (Edge / ElevenLabs / OpenAI / MiniMax / Mistral / Gemini / xAI / NeuTTS / KittenTTS). We replace it entirely with a ~160-line thin client that POSTs to `localai-helper:8001/v1/tts/synthesize`. The helper handles language detection, speakable rewrite, chunking, Fish S2 Pro synthesis (smile EQ for German), and ffmpeg encode.
+
+The thin client also exposes `paragraph_pause_secs` as a tool argument, so agents (e.g. the morning briefing) can declare deliberate section beats by inserting blank lines and asking the helper for a longer inter-paragraph pause.
 
 **Re-apply:**
 ```bash
