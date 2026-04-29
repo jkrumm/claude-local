@@ -849,6 +849,9 @@ _hermes-symlinks:
 		SRC="$(HERMES_REPO)/cron" \
 		DST="$(HERMES_DIR)/cron"
 	@$(MAKE) --no-print-directory _link \
+		SRC="$(HERMES_REPO)/scripts" \
+		DST="$(HERMES_DIR)/scripts"
+	@$(MAKE) --no-print-directory _link \
 		SRC="$(HERMES_REPO)/hooks" \
 		DST="$(HERMES_DIR)/hooks"
 	@for skill in $(HERMES_SKILLS); do \
@@ -859,6 +862,11 @@ _hermes-symlinks:
 	@$(MAKE) --no-print-directory _copy \
 		SRC="$(HERMES_REPO)/USER.md" \
 		DST="$(HERMES_DIR)/memories/USER.md"
+	@if [[ ! -f "$(HERMES_REPO)/scripts/briefing-state.json" ]]; then \
+		echo "  Seeding briefing-state.json from .example..."; \
+		cp "$(HERMES_REPO)/scripts/briefing-state.example.json" \
+			"$(HERMES_REPO)/scripts/briefing-state.json"; \
+	fi
 
 .PHONY: _hermes-helper
 _hermes-helper:
