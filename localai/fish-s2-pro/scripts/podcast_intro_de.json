@@ -1,0 +1,9 @@
+{
+  "label": "Podcast Intro (DE)",
+  "lang": "de",
+  "category": "casual",
+  "text": "Willkommen zurück bei Lateral, der Wochenshow für alle, die Systeme hinter Systemen lieben. Heute reden wir über etwas, das mich diese Woche wirklich beschäftigt hat: Warum bauen die besten Engineering-Teams immer noch das falsche Produkt? Und was würde es brauchen, das zu ändern? Holt euch einen Kaffee — wird gut.",
+  "voice_filter": [
+    "pip_cut_smile_de"
+  ]
+}

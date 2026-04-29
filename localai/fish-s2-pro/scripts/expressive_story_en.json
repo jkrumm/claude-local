@@ -1,0 +1,6 @@
+{
+  "label": "Expressive Story (EN, with emotion tags)",
+  "lang": "en",
+  "category": "expressive",
+  "text": "[chuckle] You won't believe what happened. I was halfway through the deploy [pause] when the build started writing logs in a language I didn't recognize. [whisper] At first I thought I was hallucinating. [excited] Then it hit me — the linker had picked up an old dependency from a branch I deleted six months ago. [sigh] Six months."
+}

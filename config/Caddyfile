@@ -95,3 +95,9 @@ whisper.test {
 		reverse_proxy localhost:8000
 	}
 }
+
+# Fish S2 Pro playground (mlx-speech, port 8002 — see localai/fish-s2-pro/)
+fish-playground.test {
+	import local
+	reverse_proxy localhost:8002
+}

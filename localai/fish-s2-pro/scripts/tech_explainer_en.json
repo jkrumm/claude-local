@@ -1,0 +1,6 @@
+{
+  "label": "Tech Explainer (EN)",
+  "lang": "en",
+  "category": "professional",
+  "text": "When a request hits the gateway, three things happen in parallel: authentication is verified, the request is logged with a trace ID, and the routing layer figures out which downstream service should answer. If any of those fail, the gateway returns early — the downstream service never even sees the request."
+}

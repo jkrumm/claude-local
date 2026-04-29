@@ -1,0 +1,9 @@
+{
+  "label": "Morgenbriefing (DE)",
+  "lang": "de",
+  "category": "briefing",
+  "text": "Guten Morgen Johannes. Heute ist Mittwoch, der neunundzwanzigste April. Drei Termine im Kalender, der erste um neun Uhr fünfzehn — Sync mit dem Backend-Team. Das Wetter in München: zwölf Grad, leichter Regen am Vormittag, bis zum Nachmittag klart es auf. Im Frontend-PR von gestern hat CodeRabbit zwei Anmerkungen hinterlassen — beide eher Style. Hermes-Backup von heute Nacht: erfolgreich. Schönen Start in den Tag.",
+  "voice_filter": [
+    "pip_cut_smile_de"
+  ]
+}
