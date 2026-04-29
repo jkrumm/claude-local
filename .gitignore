@@ -28,6 +28,13 @@ queue.md
 # LocalAI runtime data
 localai/monitor.db
 
+# Hermes runtime state (cron jobs registry + per-run output)
+hermes/cron/jobs.json
+hermes/cron/output/
+
+# Claude Code runtime state
+.claude/
+
 # Python
 __pycache__/
 *.pyc
