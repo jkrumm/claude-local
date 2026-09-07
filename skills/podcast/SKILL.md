@@ -81,7 +81,7 @@ lead, humor, minutes — once the editorial pass has run), downloads
 
 | Var | Default | Meaning |
 |-|-|-|
-| `PODCAST_RESEARCH_MODEL` / `PODCAST_EDITORIAL_MODEL` | `gpt-5.6-luna` / `claude-opus-5` | tool-calling researcher (brain, past episodes, research gateway) / decides format, roles, tone, humor, length per episode |
+| `PODCAST_RESEARCH_MODEL` / `PODCAST_EDITORIAL_MODEL` | `gpt-5.6-terra` / `claude-opus-5` | tool-calling researcher (brain, past episodes, research gateway) / decides format, roles, tone, humor, length per episode |
 | `PODCAST_OUTLINE_MODEL` / `PODCAST_WRITE_MODEL` | `claude-opus-5` / `claude-opus-4-6` | story pass / the voice owner (segments + every revision) |
 | `PODCAST_REVIEW_MODELS` / `PODCAST_METADATA_MODEL` | `gemini-3.8-flash,gpt-5.6-luna` / `gpt-5.6-luna` | three review lenses × each model, notes only / title, show notes, cover prompt, chapter titles, topics |
 | `PODCAST_SHOW_BIBLE` | `./docs/show-bible.md` | binding house style injected into every writer and reviewer prompt |
