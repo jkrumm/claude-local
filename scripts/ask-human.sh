@@ -65,7 +65,7 @@ fire_notify_hook() {
   if [[ -x "$hook" ]]; then
     ( "$hook" "$id" "$text" >/dev/null 2>&1 & ) || true
   else
-    note "no notify hook at $hook — request $id enqueued with no push (see docs/remote-dev.md)"
+    note "no notify hook at $hook — request $id enqueued with no push (see docs/remote-dev.md → Human queue notifications)"
   fi
 }
 
@@ -93,10 +93,15 @@ poll_for_result() {
   return 3
 }
 
+# --wait defaults to 0 (return at once). The median time to a resolution is
+# about seven days — the human drains this queue when a MacBook session happens
+# to be open, not on any schedule — so a polling default only ever produced a
+# timeout after a wasted quarter hour. A caller that genuinely wants to block
+# passes an explicit budget: `--wait 600`.
 cmd_ask() {
-  [[ $# -ge 1 ]] || die "ask requires <text> [--cmd <command>] [--wait [seconds]]"
+  [[ $# -ge 1 ]] || die "ask requires <text> [--cmd <command>] [--wait <seconds>]"
   local text="$1"; shift
-  local cmd="" wait_requested=0 wait_seconds=900
+  local cmd="" wait_seconds=0
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -106,9 +111,9 @@ cmd_ask() {
         shift 2
         ;;
       --wait)
-        wait_requested=1
         # An optional numeric seconds arg follows; anything starting with
         # `--` is the next flag, not a value, so leave it for the next loop.
+        # A bare --wait keeps the 0 default and is a no-op, deliberately.
         if [[ $# -ge 2 && "$2" != --* ]]; then
           wait_seconds="$2"
           shift 2
@@ -155,7 +160,7 @@ cmd_ask() {
 
   printf '%s\n' "$id"
 
-  if [[ $wait_requested -eq 1 ]]; then
+  if (( wait_seconds > 0 )); then
     poll_for_result "$id" "$wait_seconds"
     return $?
   fi
@@ -206,12 +211,14 @@ usage() {
 ask-human.sh — enqueue present-human work from the mini (or any machine)
 
 Usage:
-  ask-human.sh ask <text> [--cmd <command>] [--wait [seconds]]
+  ask-human.sh ask <text> [--cmd <command>] [--wait <seconds>]
                               Enqueue a request. Prints the request id.
                               --cmd proposes a shell command for the human to
                               review and run on the MacBook (never auto-run).
-                              --wait polls for a result (default 900s) and
-                              exits 0/1/2/3 for done/denied/failed/timeout.
+                              --wait <seconds> polls for a result and exits
+                              0/1/2/3 for done/denied/failed/timeout. Default
+                              0 = return at once: the median resolution is
+                              ~7 days, so polling by default only timed out.
   ask-human.sh list           List pending requests (no result yet).
   ask-human.sh status <id>    Print a request, and its result if one exists.
   ask-human.sh help           This message.
