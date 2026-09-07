@@ -154,11 +154,11 @@ Four facts to hold:
 
 **human-queue** — ssh gives the mini reach, not a fingerprint. Work needing a
 *present human* (biometric `op`, the ACL push, a person-only call) is enqueued on
-the mini with `ask-human.sh ask "…" [--cmd …]`; `make human-queue`
-**walks** each one on the MacBook (r/already-done/deny/skip; `-run`, `-resolve`,
-`-deny ID=` single-shot; no TTY → a list). `resolve` closes one satisfied out of
-band. The mini only *proposes* a string; `run` needs a typed `yes` on a real TTY,
-per request. No poller — that means unattended Touch ID forever.
+the mini with `ask-human.sh ask "…" [--cmd …]`; `make human-queue` **walks** each
+one (r/already-done/deny/skip; `-run`, `-resolve`, `-deny ID=` one-shot; no TTY →
+a list). `resolve` closes one satisfied out of band. The mini only *proposes* a
+string; `run` needs a typed `yes` on a real TTY, per request. No poller — that
+means unattended Touch ID forever.
 
 **`/remote-dev`** for anything touching this stack; model in `docs/remote-dev.md`.
 
@@ -541,15 +541,16 @@ biometric approval, and every way around that parks a credential able to export
 every vault. The goal is a prompt at a sane moment.
 
 - **A new ref is a stale cache even at a fresh mtime.** The guard fetches
-  dotfiles-private, fast-forwards, and reseeds when a `headless*.refs` commit is
-  newer than the mini's seal — an agent there commits and **pushes** a ref and it
-  is live within the hour, no `ask-human` round trip. Age alone meant a 5-day
-  wait, and sealing an unpulled checkout delivered a cache missing the ref that
-  triggered it. Fails open, loudly, when it cannot fast-forward.
+  dotfiles-private and reseeds when the `headless*.refs` **blob hashes** differ
+  from the last seal — the mini pushes a ref, it is live within the hour, no
+  `ask-human`. Age alone meant a 5-day wait, and sealing an unpulled checkout
+  delivered a cache missing the ref that triggered it. A checkout that
+  can't fast-forward **refuses to seal**: sealing resets the mtime and buys one
+  warning, then silence.
 - **Hourly via `StartCalendarInterval`**, never `RunAtLoad`/`StartInterval` — only
   those coalesce a sleep-missed fire into one wake-up run.
 - **A skip line in `~/Library/Logs/opbackup.log` is a claim, not a diagnosis** —
-  every guard exits **0**, and three Secrets gotchas above each present as one.
+  every guard exits **0**; three Secrets gotchas above each present as one.
 
 Full rationale: `docs/opbackup.md`.
 

@@ -10,6 +10,7 @@ set -euo pipefail
 
 STATE_DIR="${OPBACKUP_SEED_STATE_DIR:-${OPBACKUP_STATE_DIR:-$HOME/.local/state/opbackup}}"
 ATTEMPT_STAMP="$STATE_DIR/seed-last-attempt"
+REFS_STAMP="$STATE_DIR/seed-last-refs"
 MAX_AGE_DAYS="${OPBACKUP_SEED_MAX_AGE_DAYS:-5}"
 RETRY_HOURS="${OPBACKUP_SEED_RETRY_HOURS:-6}"
 REMOTE_HOST="${OPBACKUP_SEED_REMOTE_HOST:-mini}"
@@ -147,56 +148,90 @@ fi
 cache_age=$(( ${OPBACKUP_SEED_NOW:-$("$DATE_CMD" +%s)} - remote_mtime ))
 
 # AGE IS NOT THE ONLY REASON A CACHE IS STALE, and treating it as one is what
-# turned this job into a daily manual chore. An agent on the mini that needs a
-# new secret commits the ref to dotfiles-private and pushes; the cache on the
-# mini is still fresh by mtime, so the age gate below skipped for up to
-# MAX_AGE_DAYS and the mini sat there enqueuing a present-human request asking
-# for `make secrets-seed` by hand. The refs list changing IS the cache going
-# stale — it just isn't visible in a timestamp.
+# turned this job into a daily chore. An agent on the mini that needs a new
+# secret commits the ref to dotfiles-private and pushes; the cache on the mini is
+# still fresh by mtime, so the age gate skipped for up to MAX_AGE_DAYS and the
+# mini sat there enqueuing a present-human request asking for a manual
+# `make secrets-seed`. The refs list changing IS the cache going stale — it just
+# isn't visible in a timestamp.
 #
 # And the second half of the same bug: this machine seeds from its OWN checkout
 # of dotfiles-private. If it never pulls, a ref the mini pushed is simply absent
-# from the list being sealed, so even a reseal that runs delivers a cache
-# missing exactly the secret that triggered it. That failed silently on
-# 2026-09-07 — the reseal reported 161 secrets sealed and the requested ref was
-# still unresolvable on the mini.
+# from the list being sealed, so even a reseal that runs delivers a cache missing
+# exactly the secret that triggered it. That failed silently on 2026-09-07 — the
+# reseal reported 161 secrets sealed and the requested ref was still unresolvable
+# on the mini.
 #
-# The comparison is the newest UPSTREAM commit touching either refs file against
-# the remote cache's mtime: refs newer than the seal ⇒ due, no new state to keep
-# and no way for it to drift. A fetch failure (offline) degrades to the age gate
-# alone rather than blocking.
+# The signal is the upstream refs files' BLOB HASHES against the ones recorded at
+# the last successful seal. The first version of this compared the newest refs
+# COMMIT DATE to the cache mtime, which looked stateless and elegant and has a
+# real hole: commit time is not push time. Commit a ref at 10:00, let the age
+# gate seal at 10:30, push at 10:35 — 10:00 < 10:30 forever, and the new ref
+# waits out the full five days. Content hashes have no such ordering assumption.
+# A missing stamp (first run after this change) means "unknown", which degrades
+# to the age gate rather than forcing a seal on a guess.
+#
+# ORDERED AFTER THE BACKOFF CHECK ON PURPOSE: everything here is a network fetch
+# and a working-tree mutation, and doing it above the backoff meant an hourly
+# fetch — plus, on an un-fast-forwardable checkout, an hourly macOS notification
+# — for a run that was about to skip anyway. Same noise the screen-lock reorder
+# above was introduced to remove.
+tried_ago=$(age_seconds "$ATTEMPT_STAMP")
+backoff_active=0
+if [ "$tried_ago" -lt $(( RETRY_HOURS * 3600 )) ]; then
+  backoff_active=1
+fi
+
 refs_due=0
-if [ -d "$PRIVATE_DIR/.git" ]; then
-  if "$GIT_CMD" -C "$PRIVATE_DIR" fetch -q --no-tags origin 2>/dev/null; then
+refs_id=""
+if [ "$backoff_active" -eq 0 ] && [ -d "$PRIVATE_DIR/.git" ]; then
+  # Bounded like every other external call here. `origin` is git@github.com and
+  # SSH_AUTH_SOCK was just pointed at the 1Password agent, which is per-use
+  # biometric — an unanswered approval on an unbounded fetch wedges the job and
+  # holds the launchd slot across every later tick. GIT_TERMINAL_PROMPT=0 kills
+  # the other way this blocks forever.
+  if GIT_TERMINAL_PROMPT=0 "$TIMEOUT_CMD" 30 "$GIT_CMD" -C "$PRIVATE_DIR" fetch -q --no-tags origin 2>/dev/null; then
     upstream=$("$GIT_CMD" -C "$PRIVATE_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || echo "")
     if [ -n "$upstream" ]; then
-      refs_ct=$("$GIT_CMD" -C "$PRIVATE_DIR" log -1 --format=%ct "$upstream" -- headless.refs headless.iu.refs 2>/dev/null || echo 0)
-      case "$refs_ct" in ''|*[!0-9]*) refs_ct=0 ;; esac
-      if [ "$refs_ct" -gt "$remote_mtime" ]; then
+      refs_id=$("$GIT_CMD" -C "$PRIVATE_DIR" rev-parse "$upstream:headless.refs" "$upstream:headless.iu.refs" 2>/dev/null | tr '\n' ' ')
+      sealed_id=$(cat "$REFS_STAMP" 2>/dev/null || echo "")
+      if [ -n "$refs_id" ] && [ -n "$sealed_id" ] && [ "$refs_id" != "$sealed_id" ]; then
         refs_due=1
-        # Fail OPEN, loudly. A dirty or diverged checkout must not become a
-        # permanent silent skip (this repo has been bitten by exactly that shape
-        # more than once) — the seed still runs, so the age-driven reseal keeps
-        # working, and refs_due stays set so the next tick tries again.
-        if "$GIT_CMD" -C "$PRIVATE_DIR" merge --ff-only "$upstream" >/dev/null 2>&1; then
-          log "refs changed upstream since the last seal — fast-forwarded $PRIVATE_DIR"
-        else
-          log "WARNING: refs changed upstream but $PRIVATE_DIR cannot fast-forward (dirty or diverged) — sealing the LOCAL list, the new refs will be MISSING"
-          notify "1Password secrets cache" "dotfiles-private cannot fast-forward — new refs will be missing."
+        # FAILING TO FAST-FORWARD MUST NOT SEAL. The first version warned and
+        # sealed anyway, calling that "fail open" — it isn't, it is the original
+        # silent-wrong-cache bug moved one tick later. Sealing rewrites the
+        # mini's cache mtime, so the next tick sees a 0d-old cache, and with the
+        # refs stamp left untouched the run after that skips too: one warning,
+        # then permanent silence, with a cache missing the very ref that
+        # triggered it.
+        #
+        # Refusing to seal keeps the cache honest instead: the refs stamp stays
+        # stale so this stays due, the attempt stamp throttles the retry to
+        # RETRY_HOURS, and if a human never fixes the checkout the cache ages
+        # past the secrets-freshness monitor and goes RED. Visibly wrong beats
+        # invisibly wrong.
+        if ! "$GIT_CMD" -C "$PRIVATE_DIR" merge --ff-only "$upstream" >/dev/null 2>&1; then
+          mkdir -p "$STATE_DIR"
+          : >"$ATTEMPT_STAMP"
+          notify "1Password secrets cache" "dotfiles-private cannot fast-forward — reseed refused; fix the checkout."
+          skip "refs changed upstream but $PRIVATE_DIR cannot fast-forward (dirty or diverged) — REFUSING to seal a knowingly-incomplete list; fix the checkout, retry in ${RETRY_HOURS}h"
         fi
+        log "refs changed upstream since the last seal — fast-forwarded $PRIVATE_DIR"
       fi
     fi
   else
-    log "could not fetch $PRIVATE_DIR (offline?) — falling back to the age gate alone"
+    log "could not fetch $PRIVATE_DIR (offline? timed out?) — falling back to the age gate alone"
   fi
 fi
 
 if [ "$refs_due" -eq 0 ] && [ "$cache_age" -lt $(( MAX_AGE_DAYS * 86400 )) ]; then
+  if [ "$backoff_active" -eq 1 ]; then
+    skip "remote cache $(( cache_age / 86400 ))d old (< ${MAX_AGE_DAYS}d); refs not checked (backoff ${RETRY_HOURS}h)"
+  fi
   skip "remote cache $(( cache_age / 86400 ))d old (< ${MAX_AGE_DAYS}d) and refs unchanged"
 fi
 
-tried_ago=$(age_seconds "$ATTEMPT_STAMP")
-if [ "$tried_ago" -lt $(( RETRY_HOURS * 3600 )) ]; then
+if [ "$backoff_active" -eq 1 ]; then
   skip "seed attempted $(( tried_ago / 60 ))m ago (backoff ${RETRY_HOURS}h)"
 fi
 
@@ -252,6 +287,14 @@ fi
 notify "1Password secrets cache" "Starting — approve the Touch ID prompts."
 
 if "$SEED_SCRIPT"; then
+  # Only after a SUCCESSFUL seal, and only when the fetch actually produced an
+  # identity: an empty refs_id (offline, or no upstream) must leave the previous
+  # stamp alone rather than record "nothing" as the sealed state.
+  # An `if`, not `[ -n … ] && printf`: under `set -e` that shorthand FAILS the
+  # whole script the moment refs_id is empty, which is the ordinary offline case.
+  if [ -n "$refs_id" ]; then
+    printf '%s\n' "$refs_id" >"$REFS_STAMP"
+  fi
   if "$SSH_CMD" -o BatchMode=yes -o ConnectTimeout=8 "$REMOTE_HOST" \
     "cd \"$REMOTE_DOTFILES_DIR\" && make secrets-freshness-check" >/dev/null 2>&1; then
     log "done — secrets cache reseeded and freshness heartbeat refreshed"

@@ -153,9 +153,13 @@ fetch_req() {
 # first (see its comment in lib/human-queue-json.sh for why: an unstripped
 # ESC byte could otherwise render an ANSI/OSC sequence that makes the shown
 # command differ from what cmd_run actually executes). `created` is excluded
-# on purpose — it's a `date -u` timestamp ask-human.sh generates itself, not
-# attacker-supplied text. The value that EXECUTES (cmd_run's own `cmd_value`
-# read) must never come from here — this function only ever prints.
+# `created` included: it is nominally a `date -u` stamp ask-human.sh writes
+# itself, but nothing on THIS side of the hop verifies that, and the .req is
+# authored on the mini — the adversary this whole function exists for. It
+# renders two lines above the proposed command and four above the typed-`yes`
+# prompt, so an ESC smuggled into it can redraw both. "We generate that field"
+# is a statement about the honest case only. The value that EXECUTES (cmd_run's
+# own `cmd_value` read) must never come from here — this function only prints.
 print_req() {
   local req_json="$1"
   local id text host cwd created cmd_value
@@ -166,17 +170,18 @@ print_req() {
   created="$(json_field "$req_json" created)"
   cmd_value="$(json_field "$req_json" cmd)"
 
-  local id_disp text_disp host_disp cwd_disp cmd_disp
+  local id_disp text_disp host_disp cwd_disp created_disp cmd_disp
   id_disp="$(printable "$id")"
   text_disp="$(printable "$text")"
   host_disp="$(printable "$host")"
   cwd_disp="$(printable "$cwd")"
+  created_disp="$(printable "$created")"
   cmd_disp="$(printable "$cmd_value")"
 
   echo ""
   echo "  request $id_disp"
   echo "  from:    $host_disp  ($cwd_disp)"
-  echo "  created: $created"
+  echo "  created: $created_disp"
   echo "  text:    $text_disp"
   if [[ -n "$cmd_value" ]]; then
     echo ""
@@ -262,10 +267,15 @@ run_one() {
   echo "  WARNING: if you confirm, this runs on THIS machine (the MacBook) with your"
   echo "  full privileges — your unlocked 1Password session, your keychain, everything"
   echo "  you can reach. It was authored by an agent on the mini, not by you."
+  echo "  The last 2000 bytes of its output are written back to $HOST, so a command"
+  echo "  that prints a secret hands that secret to the machine that proposed it."
   echo ""
 
   local reply=""
-  read -r -p "  type 'yes' to proceed, anything else aborts: " reply </dev/tty
+  # `|| reply=""` — `read` returns 1 on EOF (Ctrl-D), and under `set -e` an
+  # unguarded one kills the script mid-walk with a bare exit 1 instead of the
+  # intended abort message. EOF means "no", which is what an empty reply is.
+  read -r -p "  type 'yes' to proceed, anything else aborts: " reply </dev/tty || reply=""
   if [[ "$reply" != "yes" ]]; then
     echo "  aborted — no side effects, no result written."
     return 1
@@ -345,19 +355,19 @@ cmd_drain() {
     print_req "$req_json"
 
     local action=""
-    read -r -p "  [r]un / [a]lready done / [d]eny / [s]kip / [q]uit: " action </dev/tty
+    read -r -p "  [r]un / [a]lready done / [d]eny / [s]kip / [q]uit: " action </dev/tty || action="q"
     case "$action" in
       r|run)
         run_one "$id" "$req_json" || true
         ;;
       a|already|done)
         local note=""
-        read -r -p "  note (optional): " note </dev/tty
+        read -r -p "  note (optional): " note </dev/tty || note=""
         cmd_resolve "$id" "$note"
         ;;
       d|deny)
         local reason=""
-        read -r -p "  reason (optional): " reason </dev/tty
+        read -r -p "  reason (optional): " reason </dev/tty || reason=""
         cmd_deny "$id" "$reason"
         ;;
       q|quit)

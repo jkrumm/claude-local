@@ -75,6 +75,15 @@ json_field() {
 # human-queue.sh's cmd_run) must stay the untouched original — callers
 # compare the printable() output against the raw value and warn when they
 # differ, rather than silently running something other than what was shown.
+# The class is spelled out as explicit C0 bytes rather than `-dc '[:print:]'`
+# because `tr` is BYTE-wise and `[:print:]` is locale-dependent: under the C
+# locale a LaunchAgent inherits, every byte of a UTF-8 multibyte character is
+# "non-printable", so `Prüfung` becomes `Prfung` and print_req fires its "what
+# you see is NOT what would execute" banner on a perfectly benign request with
+# an umlaut in it. A banner that cries wolf on ordinary German text is a banner
+# a human learns to click past — which costs exactly the protection it exists
+# to give. Deleting C0 (minus tab/newline) plus DEL keeps every UTF-8 byte
+# (0x80-0xFF) untouched and is identical in every locale.
 printable() {
-  printf '%s' "$1" | tr -dc '[:print:]\n\t'
+  printf '%s' "$1" | LC_ALL=C tr -d '\000-\010\013\014\016-\037\177'
 }

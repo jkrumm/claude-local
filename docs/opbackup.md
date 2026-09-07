@@ -56,24 +56,38 @@ unresolvable on the mini, because the MacBook's checkout was one commit behind.
 
 The fix treats **the refs list changing as the cache going stale**, which it is:
 
-1. `git fetch` dotfiles-private (a failure degrades to the age gate alone — no
-   network must never mean no reseed).
-2. Take the newest **upstream** commit touching `headless.refs` or
-   `headless.iu.refs` and compare its timestamp to the mini cache's mtime.
-3. Newer than the seal ⇒ due, bypassing the age gate. Fast-forward first, then
-   seal.
+1. `git fetch` dotfiles-private, bounded by `timeout` and `GIT_TERMINAL_PROMPT=0`
+   — `origin` is `git@github.com` over the per-use biometric 1Password agent, and
+   an unanswered approval on an unbounded fetch wedges the hourly job.
+2. Compare the **blob hashes** of `headless.refs` and `headless.iu.refs` at
+   upstream against the pair recorded at the last successful seal
+   (`$STATE_DIR/seed-last-refs`).
+3. Different ⇒ due, bypassing the age gate. Fast-forward first, then seal, then
+   record the sealed pair.
 
-No new state file, so nothing can drift out of sync with reality — the two
-timestamps being compared are both facts about the world.
+The first version compared the newest refs **commit date** to the cache mtime.
+That looked stateless and elegant, and has a real hole: commit time is not push
+time. Commit a ref at 10:00, let the age gate seal at 10:30, push at 10:35 — the
+comparison reads 10:00 < 10:30 forever and the new ref waits out the full five
+days. Content hashes carry no ordering assumption. A missing stamp means
+"unknown" and degrades to the age gate rather than forcing a seal on a guess.
 
-**It fails open, loudly.** A dirty or diverged checkout cannot fast-forward; the
-seed still runs (so the age-driven reseal keeps working) and the log says the new
-refs will be missing. A silent skip there would be permanent and invisible —
-this repo has been bitten by that shape more than once.
+The whole block sits **after** the backoff check: everything in it is a network
+fetch and a working-tree mutation, and running it above the backoff meant an
+hourly fetch — plus, on a broken checkout, an hourly macOS notification — for a
+run that was about to skip anyway.
 
-**What it means for an agent on the mini:** commit the ref and **push** it. It is
-live within the hour, with one Touch ID prompt on the MacBook at a natural
-moment. No `ask-human` round trip.
+**A checkout that cannot fast-forward refuses to seal.** The first version warned
+and sealed the stale list anyway and called that failing open. It isn't: sealing
+rewrites the mini's cache mtime, so the next tick sees a 0-day-old cache, and
+with the refs stamp untouched the run after that skips too. One warning, then
+permanent silence, with a cache missing exactly the ref that triggered it — the
+original bug moved one tick later.
+
+Refusing keeps the cache honest instead. The refs stamp stays stale so the run
+stays due, the attempt stamp throttles the retry to `RETRY_HOURS`, and if nobody
+fixes the checkout the cache ages past the secrets-freshness monitor and goes
+red. Visibly wrong beats invisibly wrong.
 
 `make opbackup-seed-test` is the hermetic regression suite — stubbed ssh/op/
 pgrep/ioreg and a local bare repo as `origin`, so it runs on either machine and

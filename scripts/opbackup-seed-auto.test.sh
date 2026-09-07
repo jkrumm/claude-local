@@ -146,6 +146,7 @@ OPBACKUP_SEED_SSH="$fake_ssh" \
 OPBACKUP_SEED_PGREP="$fake_pgrep" \
 OPBACKUP_SEED_IOREG="$fake_ioreg" \
 OPBACKUP_SEED_BACKEND_FILE="$backend_file" \
+  OPBACKUP_SEED_PRIVATE_DIR="${SEED_PRIVATE_DIR:-$nogit_dir}" \
 OPBACKUP_SEED_STATE_DIR="$TMP/state" \
 OPBACKUP_SEED_SCRIPT="$fake_seed" \
 OPBACKUP_SEED_OP_AGENT="$fake_agent" \
@@ -177,6 +178,7 @@ out=$(SEED_MARKER="$TMP/noagent.marker" \
   OPBACKUP_SEED_PGREP="$fake_pgrep" \
   OPBACKUP_SEED_IOREG="$fake_ioreg" \
   OPBACKUP_SEED_BACKEND_FILE="$backend_file" \
+  OPBACKUP_SEED_PRIVATE_DIR="${SEED_PRIVATE_DIR:-$nogit_dir}" \
   OPBACKUP_SEED_STATE_DIR="$TMP/state" \
   OPBACKUP_SEED_SCRIPT="$fake_seed" \
   OPBACKUP_SEED_OP="$fake_op" \
@@ -211,6 +213,7 @@ OPBACKUP_SEED_SSH="$argv_ssh" \
 OPBACKUP_SEED_PGREP="$fake_pgrep" \
 OPBACKUP_SEED_IOREG="$fake_ioreg" \
 OPBACKUP_SEED_BACKEND_FILE="$backend_file" \
+  OPBACKUP_SEED_PRIVATE_DIR="${SEED_PRIVATE_DIR:-$nogit_dir}" \
 OPBACKUP_SEED_STATE_DIR="$TMP/state" \
 OPBACKUP_SEED_SCRIPT="$fake_seed" \
 OPBACKUP_SEED_OP_AGENT="$fake_agent" \
@@ -239,6 +242,7 @@ out=$(SEED_MARKER="$TMP/missing.marker" \
   OPBACKUP_SEED_PGREP="$fake_pgrep" \
   OPBACKUP_SEED_IOREG="$fake_ioreg" \
   OPBACKUP_SEED_BACKEND_FILE="$backend_file" \
+  OPBACKUP_SEED_PRIVATE_DIR="${SEED_PRIVATE_DIR:-$nogit_dir}" \
   OPBACKUP_SEED_STATE_DIR="$TMP/state" \
   OPBACKUP_SEED_SCRIPT="$fake_seed" \
   OPBACKUP_SEED_OP="$fake_op" \
@@ -296,9 +300,7 @@ test ! -e "$TMP/state/seed-last-attempt"
 # machine's stale checkout, so the new ref was missing from a cache that
 # reported success.
 #
-# Fully local: a bare repo as `origin`, no network. Commit dates are pinned to
-# the same fake epoch the rest of the suite uses, or a real commit timestamp
-# would tower over FAKE_CACHE_MTIME and make every case look "refs newer".
+# Fully local: a bare repo as `origin`, no network.
 priv_origin="$TMP/priv-origin.git"
 priv="$TMP/priv"
 git init -q --bare -b main "$priv_origin"
@@ -309,45 +311,69 @@ git -C "$priv" config commit.gpgsign false
 printf 'op://vault/old/ref\n' >"$priv/headless.refs"
 printf '\n' >"$priv/headless.iu.refs"
 git -C "$priv" add -A
-GIT_AUTHOR_DATE='@600000 +0000' GIT_COMMITTER_DATE='@600000 +0000' \
-  git -C "$priv" commit -q -m 'refs: initial'
+git -C "$priv" commit -q -m 'refs: initial'
 git -C "$priv" remote add origin "$priv_origin"
 git -C "$priv" push -q -u origin main
 
-# Cache newer than the newest refs commit (600000 < 690000) and only ~3h old:
-# unchanged behaviour, still a no-op.
+# The identity the guard compares: the two refs blobs at a given rev.
+refs_id_at() {
+  git -C "$priv" rev-parse "$1:headless.refs" "$1:headless.iu.refs" | tr '\n' ' '
+}
+
+# A stamp matching upstream means nothing changed — a fresh cache stays a no-op.
+mkdir -p "$TMP/state-refs-a"
+refs_id_at origin/main >"$TMP/state-refs-a/seed-last-refs"
 SEED_PRIVATE_DIR="$priv" SEED_STATE_DIR="$TMP/state-refs-a" \
   run_seed 700000 690000 "$TMP/refs-old.marker"
 test ! -e "$TMP/refs-old.marker"
 
-# Now push a refs commit NEWER than the seal, and rewind the local checkout so
-# it is genuinely behind — exactly the shape that failed in production.
+# Record the pre-change identity, then push a NEW refs commit and rewind the
+# local checkout so it is genuinely behind — the shape that failed in production.
+old_refs_id="$(refs_id_at origin/main)"
 printf 'op://vault/new/ref\n' >>"$priv/headless.refs"
 git -C "$priv" add -A
-GIT_AUTHOR_DATE='@695000 +0000' GIT_COMMITTER_DATE='@695000 +0000' \
-  git -C "$priv" commit -q -m 'refs: add the new one'
+git -C "$priv" commit -q -m 'refs: add the new one'
 git -C "$priv" push -q origin main
 git -C "$priv" reset -q --hard HEAD~1
-grep -q 'new/ref' "$priv/headless.refs" && { echo "setup wrong: local still has the new ref" >&2; exit 1; }
+if grep -q 'new/ref' "$priv/headless.refs"; then echo "setup wrong: local still has the new ref" >&2; exit 1; fi
 
 # A FRESH cache must now seed anyway, because the refs list moved...
+mkdir -p "$TMP/state-refs-b"
+printf '%s\n' "$old_refs_id" >"$TMP/state-refs-b/seed-last-refs"
 SEED_PRIVATE_DIR="$priv" SEED_STATE_DIR="$TMP/state-refs-b" \
   run_seed 700000 690000 "$TMP/refs-new.marker"
 test -f "$TMP/refs-new.marker"
 
-# ...and the checkout must have been fast-forwarded BEFORE sealing, or the seal
-# would deliver a cache missing the very ref that triggered it.
+# ...the checkout must have been fast-forwarded BEFORE sealing, or the seal
+# delivers a cache missing the very ref that triggered it...
 grep -q 'new/ref' "$priv/headless.refs"
 
-# A checkout that cannot fast-forward must FAIL OPEN and loudly: the seed still
-# runs (so the age-driven reseal keeps working) and the log names the problem.
-# A silent skip here would be the worse failure — it is invisible and permanent.
-printf 'op://vault/local/uncommitted\n' >>"$priv/headless.refs"
-git -C "$priv" reset -q --hard HEAD~1     # behind again, and now dirty
-printf 'dirty\n' >>"$priv/headless.refs"
+# ...and the sealed identity must be recorded, or the next tick re-seeds forever.
+grep -q "$(refs_id_at origin/main | awk '{print $1}')" "$TMP/state-refs-b/seed-last-refs"
+
+# A checkout that CANNOT fast-forward must REFUSE to seal.
+#
+# The first version of this guard warned and sealed the stale list anyway,
+# calling it "fail open". It wasn't: sealing rewrites the mini's cache mtime, so
+# the next tick sees a 0d-old cache, and with the refs stamp untouched the run
+# after that skips too — one warning, then permanent silence, with a cache
+# missing exactly the ref that triggered it. That is the original bug moved one
+# tick later. These three assertions are what pin the corrected behaviour.
+git -C "$priv" reset -q --hard HEAD~1     # behind again...
+printf 'dirty\n' >>"$priv/headless.refs"  # ...and now un-fast-forwardable
+mkdir -p "$TMP/state-refs-c"
+printf '%s\n' "$old_refs_id" >"$TMP/state-refs-c/seed-last-refs"
 out=$(SEED_PRIVATE_DIR="$priv" SEED_STATE_DIR="$TMP/state-refs-c" \
   run_seed 700000 690000 "$TMP/refs-dirty.marker" 2>&1)
-test -f "$TMP/refs-dirty.marker"
-case "$out" in *"cannot fast-forward"*) ;; *) echo "expected a fast-forward warning, got: $out" >&2; exit 1 ;; esac
+test ! -e "$TMP/refs-dirty.marker"
+case "$out" in *"REFUSING"*) ;; *) echo "expected a refusal, got: $out" >&2; exit 1 ;; esac
+
+# The refs stamp must be UNCHANGED — it is the only thing keeping the run due,
+# and updating it here is precisely how the silent-forever variant returns.
+test "$(cat "$TMP/state-refs-c/seed-last-refs")" = "$old_refs_id"
+
+# The attempt stamp MUST be written, or an un-fast-forwardable checkout means an
+# hourly macOS notification about work that is never going to run.
+test -f "$TMP/state-refs-c/seed-last-attempt"
 
 printf '%s\n' 'opbackup-seed-auto: all tests passed'
