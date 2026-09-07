@@ -32,3 +32,8 @@ queue.md
 # Python
 __pycache__/
 *.pyc
+
+# archify QA output — the HTML artifact is the deliverable and exports its own images
+docs/diagrams/*.visual-check.json
+docs/diagrams/*.visual-check.html
+docs/diagrams/*.visual-check.2048x*.png
