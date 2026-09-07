@@ -177,28 +177,9 @@ tailnet door — a new app needs nothing else.
 `make caddy-dns-build` rebuilds Caddy with the Cloudflare DNS module — one-time
 and **after any `brew upgrade caddy`**, which silently reverts it.
 
-- `~/.config/caddy-tailnet.ports` is **opt-out only** (`exclude <name>`), never a
-  second app list — it used to be one and the two drifted silently (17 apps vs 4).
-- The registry is read with `caddy adapt` + a route-JSON walk
-  (`scripts/lib/caddy-registry.py`), **never regexed**; a block that can't reduce
-  to one name+port is **skipped, never guessed at**, and an empty registry is
-  refused.
-- **Upstreams dial `localhost:PORT`, never `127.0.0.1:PORT`** — Vite binds `::1`
-  alone when its port is held elsewhere and still prints `ready`.
-- **One site block for every app, never one per app** (Caddy 2.10+ issues one
-  wildcard cert per block; N blocks race Let's Encrypt's ~50/week).
-- **502 vs 403**: 502 = dev server not running; 403 = running and rejecting the
-  Host header → add `.mini.jkrumm.com` to `server.allowedHosts` (Vite/Astro) or
-  `*.mini.jkrumm.com` to `allowedDevOrigins` (Next — no leading-dot support).
-- **`servers { protocols h1 h2 }`** disables HTTP/3 globally — quic-go's
-  1280-byte initial packet exceeds the tailnet MTU (caddyserver/caddy#7885).
-- **DNS negative-caches at two layers**: the LAN router (~30 min) and macOS
-  `mDNSResponder`, which `dscacheutil -flushcache` does **not** clear — only
-  `sudo killall -HUP mDNSResponder`.
-- **`https://apps.mini.jkrumm.com` lists every app** with port and live status,
-  and answers at any *unmatched* `*.mini.jkrumm.com` name, so a typo shows what
-  exists. The apex `https://mini.jkrumm.com` (own cert + A record) lands on the
-  same page.
+Gotchas (opt-out ports file, `caddy adapt` registry reads, `localhost` vs
+`127.0.0.1` upstreams, one site block per app, 502-vs-403, HTTP/3 off, DNS
+negative-caching at two layers): `docs/remote-dev.md` §Dev-server doors.
 
 ## Colima and the boot path
 
@@ -209,36 +190,10 @@ plist and bootstraps *that*, so a repaired file never reaches launchd.
 **2/4/30**; ceilings; disk grows only via recreate), converges the plist, then
 bootout + bootstrap (the only reload that re-reads the file).
 
-- **The plist's `KeepAlive` repair is load-bearing.** Brew
-  generates `{ SuccessfulExit => true }` (restart only on a *zero* exit) while
-  `colima start -f` runs the VM in the foreground — inverted, so a dirty Lima
-  image leaves Docker down until a human logs in. `{ Crashed => true }` is not the
-  fix (death by *signal*). `_setup-colima` converges onto bare `KeepAlive => true`
-  plus `colima/colima-start.sh`, a bounded-retry wrapper (5 attempts, 600 s
-  cool-off, never latching off).
-- **Brew regenerates that plist on every `brew services start/restart` and
-  `brew upgrade colima`, silently** (same trap as herdr's wrapper and Caddy's
-  DNS module). `colima-status` / `herdr-status`, `brew-upgrade` and the
-  heartbeat's `check_boot_path` assert the file **and** that the loaded job's
-  `program` is the wrapper — a converged file behind a stale job is a ✗.
-- The wrapper **adopts** a detached VM (stop, restart in the foreground, once)
-  instead of hot-looping on `already running` rc=0.
-- **Homebrew 6 renames the plist** to `sh.brew.<name>` on the next
-  `brew services start|restart`. Never spell a label: **`scripts/lib/brew-service.sh`**
-  resolves plist/label/target by service name (`make brew-service-test`); a
-  hardcoded path once made converge exit 0 over the stock plist it repairs.
-- **`launchctl kickstart -k` does not re-read the plist** — only `bootout` +
-  `bootstrap` does. Expect `Bootstrap failed: 5` until the label disappears.
-- **`brew services list` showing `caddy none` / `dnsmasq none` is a reporting
-  artifact** — without sudo it enumerates only `gui/501` and both live in the
-  `system` domain. Starting either with `brew services start` creates a duplicate
-  user-domain job fighting the root one for `:443`.
-- **`com.colima.docker-socket`** (root LaunchDaemon) maintains
-  `/var/run/docker.sock` at boot — the only path the Raycast Docker extension can
-  use, since it sanitizes `DOCKER_HOST`/context out of its env. Colima ships no
-  GUI: that extension plus `lazydocker`. Drive containers via Makefile targets.
-
-Rationale: `docs/remote-dev.md` → *launchd on the dev host*.
+Gotchas (the inverted `KeepAlive` repair, brew silently regenerating the plist on
+every `brew services start/restart`/`brew upgrade colima`, the `sh.brew.*` rename,
+`kickstart -k` not re-reading the plist, `com.colima.docker-socket` for the
+Raycast Docker extension): `docs/remote-dev.md` → *launchd on the dev host*.
 
 ## Homebrew
 
@@ -262,22 +217,15 @@ the whole install), plus `NO_INSECURE_REDIRECT` / `NO_ANALYTICS`. Auto-*update*
 
 **Auto-upgrade stays off because of silent config revert, not npm-style supply
 chain** — a homebrew/core formula is a reviewed PR built by Homebrew's CI.
-`make brew-upgrade` asserts rather than assumes:
-
-| Invariant | What an upgrade breaks | Visible after |
-|-|-|-|
-| caddy DNS module | replaces the xcaddy-built binary; `dns.providers.cloudflare` vanishes | ~60 days, when the wildcard cert fails to *renew* |
-| colima plist | regenerates it, restoring the inverted `KeepAlive` | only after a *dirty* shutdown — the exact event this setup exists to survive |
-| herdr setsid wrapper | strips `herdr-server-start.py` from the brew plist | next `desk`, which starts asking to restart the remote server |
-
-**`caddy` is the only pin** (`brew pin` is the enforcement, not a hold list some
-script knows about, so it holds for a bare command typed by hand). **A pin needs
-its dependencies pinned too, or it rots** — a pinned binary still breaks when a
-dylib it links is upgraded underneath it; mosh is why that rule is written down,
-and why it was deleted rather than re-pinned. `colima` is deliberately unpinned
-(pinning the Docker runtime means an unpatched hypervisor) and asserted +
-health-checked instead. Casks and third-party taps are reported, never
-auto-upgraded — route them through `/upgrade-deps`. `docs/homebrew.md`.
+`make brew-upgrade` asserts rather than assumes: caddy's DNS module, colima's
+plist and herdr's setsid wrapper each silently revert on an unrelated brew
+upgrade, invisible until the failure mode it caused (cert renewal, a dirty
+shutdown, the next `desk`). **`caddy` is the only pin, and a pin needs its
+dependencies pinned too or it rots** (mosh is why that rule is written down —
+deleted, not re-pinned). `colima` is deliberately unpinned (pinning the Docker
+runtime means an unpatched hypervisor) and asserted + health-checked instead.
+Casks and third-party taps are reported, never auto-upgraded — route them
+through `/upgrade-deps`. Full invariants table and rationale: `docs/homebrew.md`.
 
 ## Heartbeat, drift, doctor (mini only)
 
@@ -291,35 +239,10 @@ auto-upgraded — route them through `/upgrade-deps`. `docs/homebrew.md`.
 `MacMini Dev Host - Push` is the composite over **16 components**: tailscale,
 sshd, herdr, git push credential, dev vhosts, memory, launchd restarts, boot path,
 services (9), claude auth, obsidian, disk, runaways, sideclaw jobs, overview
-pane, quota (in every msg; WARN never pages).
-
-- **Push, not probe** — the ACL grants `tag:homelab → tag:vps` but not `→ tag:mac`,
-  and an inbound grant purely for monitoring is new attack surface.
-- **The line is absence, not independence** — a component that can legitimately be
-  *missing* on a good machine gets its own monitor (collie, secrets freshness);
-  merely independent ones stay composite, named in the push `msg`.
-- **Bash 3.2, and must stay one** — launchd sets no PATH, so `/usr/bin/env bash`
-  is Apple's 3.2 (no `mapfile`, no `${var,,}`, no `"${arr[@]}"` on a possibly-empty
-  array under `set -u`). Same for `drift-check.sh` and `doctor.sh`.
-- **Transient tolerance**: `DEVHOST_BOOT_GRACE_SECONDS` (300 — every failing
-  component reports `starting`), `DEVHOST_TRANSIENT_FAILS` (3 — FAIL only on the
-  third consecutive bad run; edge-triggered `check_launchd_restarts` is excluded),
-  `DEVHOST_REBOOT_NOTE_SECONDS` (600). None of it softens "the machine is gone" —
-  a dead host emits no push at all. `maxretries` must be **0** on every push
-  monitor; the default 3 turns a 10-minute time-to-DOWN into 40.
-- **Drift reports and never upgrades, deliberately** — the hazard is silent config
-  revert, and an unattended upgrader at 3am is how you introduce it. `make
-  collie-upgrade` and `make mini-macos-update` are the paired human-invoked
-  appliers: **notice unattended, apply attended.** It uses age grace
-  (`DRIFT_GRACE_DAYS` 14) rather than bare "is it behind", and degrades a network
-  failure to `skipped`, never DOWN.
-- **`make mini-macos-update`** (MacBook-only, TTY or `YES=1`) exists because the
-  obvious spelling is wrong: `softwareupdate -i -a -R` returns in seconds printing
-  `Restarting...` and does **not** restart — that is a *request* — and forcing
-  `shutdown -r now` aborts the prepare and boots the old OS with everything still
-  looking armed. `sw_vers -productVersion` is the only honest check.
-
-Rationale: `docs/devhost-health.md`.
+pane, quota (in every msg; WARN never pages). Push, not probe (no ACL grant runs
+`tag:homelab → tag:mac`) — full rationale, transient-tolerance knobs, and the
+paired `make mini-macos-update` applier: `docs/devhost-health.md`,
+[[mac-host-monitoring]].
 
 ## Collie — the phone control surface
 
@@ -330,22 +253,11 @@ Rationale: `docs/devhost-health.md`.
 | `make collie-status` | Read-only: LaunchAgent, bridge health, rebind guard, serve state |
 | `make collie-teardown` | Boot out both labels, uninstall the plugin (never `collie-ctl.sh uninstall` — it mutates declared serve state) |
 
-- **It is remote shell access by design, not "just a web UI"** — one bridge call
-  types arbitrary keystrokes into a live pane; treat the URL like a root login.
-- **The gate is the ACL, not `COLLIE_TRUSTED_USER`** — every tailnet node is
-  tagged, not logged in, so the trusted-user check cannot discriminate devices.
-  The grant is scoped to `tag:phone`; **`tag:client` (TVs + tablet) never**.
-- **Whatever starts the bridge must source the hand-written `.env`, or every
-  hardening setting goes silently unset while the UI works perfectly** — the
-  bridge reads `process.env` only. Hence the health check is *behavioural*: a
-  spoofed `Host` must 403 on `/api/snapshot` specifically (`/` answers 200 to any
-  Host). Front door is the declared serve row on **:8788**, never funneled;
-  `COLLIE_SKIP_SERVE=1` is mandatory or `make tailscale-serve` wipes it.
-- Third-party and **commit-pinned** (`COLLIE_REF` in the Makefile — a commit, not
-  a tag, since `plugin install` re-clones). Monitoring is opt-in on its own Kuma
-  monitor: a machine without collie must not fail the heartbeat.
-
-Rationale: `docs/collie.md`.
+**It is remote shell access by design, not "just a web UI"** — one bridge call
+types arbitrary keystrokes into a live pane; treat the URL like a root login.
+The gate is the tailnet ACL (`tag:phone → tag:mac`), not `COLLIE_TRUSTED_USER`;
+third-party and commit-pinned (`COLLIE_REF`). Full rationale (the behavioural
+health check, `COLLIE_SKIP_SERVE=1`, monitoring opt-in): `docs/collie.md`.
 
 ## Secrets
 
@@ -509,73 +421,18 @@ by design.
 
 Three settings survive a power cut with no human: FileVault **off**, automatic
 login **on**, `pmset -a autorestart 1` (**its absence is silent** — the machine
-never powers back on). Auto-login is also what makes Max auth work headlessly: a
-real password login brings the keychain up unlocked.
+never powers back on). Auto-login is also what makes Max auth work headlessly.
+`make lock-at-boot-setup` closes the resulting screen-lock-≠-keychain-lock
+window (`make lock-at-boot-check` reports both plus live state). Full posture,
+the physical-possession trade and `docs/remote-dev.md` own the rationale.
 
-`make lock-at-boot-setup` closes the resulting window — **screen lock ≠ keychain
-lock**, so the session keeps running behind the password prompt, which is the
-point. Two halves: `sysadminctl -screenLock immediate -password '<pw>'` (one-time,
-by hand — prefer the GUI, it has no interactive form) plus a `RunAtLoad` agent
-firing `pmset displaysleepnow` (`CGSession -suspend` is gone on macOS 26 and
-`osascript` ⌃⌘Q needs TCC no launchd job can get). Setup **refuses to install the
-second without the first**; `make lock-at-boot-check` reports both plus live state.
+## MacBook-only subsystems
 
-Physical possession still yields root (`/etc/kcpassword`, reversible XOR), reaching
-every cached ref; Thunderbolt Sharing Mode is a FileVault question and stays open.
-Trade: `docs/remote-dev.md`.
-
-## opbackup + secrets auto-reseed (MacBook only)
-
-`opbackup` (`scripts/backup-1password.py`) exports every vault, age-encrypts it in
-memory, rsyncs the ciphertext to homelab. The same hourly agent also reseeds the
-mini's secrets cache.
-
-| Command | Does |
-|-|-|
-| `make opbackup-setup` | Stamp from the newest remote backup, install + load the agent |
-| `make opbackup-check` | Run the guard once; prints what stopped it. `FORCE=1` backs up now |
-| `make opbackup-seed-test` | Hermetic reseed-guard regression suite |
-| `make opbackup-teardown` | Unload + remove (stamps kept) |
-
-**Never unattended, and must never be made to** — the first `op` call raises a
-biometric approval, and every way around that parks a credential able to export
-every vault. The goal is a prompt at a sane moment.
-
-- **A new ref is a stale cache even at a fresh mtime.** The guard fetches
-  dotfiles-private and reseeds when the `headless*.refs` **blob hashes** differ
-  from the last seal — the mini pushes a ref, it is live within the hour, no
-  `ask-human`. Age alone meant a 5-day wait, and sealing an unpulled checkout
-  delivered a cache missing the ref that triggered it. A checkout that
-  can't fast-forward **refuses to seal**: sealing resets the mtime and buys one
-  warning, then silence.
-- **Hourly via `StartCalendarInterval`**, never `RunAtLoad`/`StartInterval` — only
-  those coalesce a sleep-missed fire into one wake-up run.
-- **A skip line in `~/Library/Logs/opbackup.log` is a claim, not a diagnosis** —
-  every guard exits **0**; three Secrets gotchas above each present as one.
-
-Full rationale: `docs/opbackup.md`.
-
-## Battery charge limiter (MacBook only)
-
-[`batt`](https://github.com/charlie0129/batt) holds the charge at a cap (default
-**80%**) via a root LaunchDaemon. The binary ships in the Brewfile; the daemon and
-cap are opt-in, and every target self-gates on an internal battery (no-op on the
-mini).
-
-| Command | Purpose |
-|-|-|
-| `make batt-setup` | One-time: daemon + cap + daily-reset agent + Raycast symlink (`LIMIT=N`) |
-| `make batt-limit LIMIT=100` | Change the cap now |
-| `make batt-limit LIMIT=100 DAYS=7` | Same, plus pause the daily 80% reset for 7 days |
-| `make batt-status` | Charging state + limits, and the resume date if paused |
-
-A 09:00 LaunchAgent resets the cap daily — that is what makes a 100% boost
-*temporary*; `~/.config/batt/pause-until` (epoch stamp, from Raycast's "Pause days"
-field or `DAYS=N`) suspends it for travel, and a cap set with no `DAYS` clears the
-file, so that doubles as cancel. Changing the resting default means editing both
-`battery/batt-reset.sh` and `LIMIT ?= 80`. Raycast control is self-authored Script
-Commands in `raycast/` — point Raycast at `~/.raycast-scripts` once, under
-**Settings → Script Commands** (a top-level tab, not under Extensions).
+opbackup + secrets auto-reseed (hourly guard, `make opbackup-{setup,check,teardown}`),
+the battery charge limiter (`make batt-{setup,limit,status}`), the database
+tunnel (`make db-tunnel-setup`) and the reverse `ssh iumac` reach on :2222 all
+run only on the MacBook and cost every mini agent context for no benefit — full
+command tables and gotchas: `docs/macbook.md`.
 
 ## Odds and ends
 
@@ -587,12 +444,6 @@ nothing reports it. `make log-rotate-setup` bounds them: hourly, **copytruncate*
 generation, safe because launchd's fds are `O_APPEND`. The list in
 `scripts/log-rotate.sh` is **declared, never globbed** (`~/Library/Logs` also
 holds Apple and vendor logs). `com.jkrumm.photoflow` still logs to `/tmp` — known.
-
-**Database access** (`make db-tunnel-setup`, MacBook): a `KeepAlive` agent holding
-one `ssh -N` with every `-L` in `dbtunnel/tunnels.conf`; **local ports are the real
-port + 30000** (33306, 36379). Four launchd traps, all in `docs/remote-dev.md`:
-launchd's `SSH_AUTH_SOCK` has zero identities, `IdentityAgent` needs literal
-quotes, `ControlMaster=no`+`ControlPath=none`, and ssh must stay in the foreground.
 
 **File shuttle** — `smb://mini/jkrumm` on the MacBook, `~/Shuttle` the drop
 folder, for ad-hoc **human** file movement only (code → `rd`/git; vault pages →
