@@ -85,10 +85,15 @@ Both are compiled from the `.json` beside them with the vendored `archify`
 skill, which validates geometry and composition before it will deliver: an
 arrow through a box or a label over a node fails the build. Regenerate with
 `node skills/archify/bin/archify.mjs deliver <type> <spec.json> <out.html>
---quality <standard|showcase>`. The estate diagram sits on `standard` on
-purpose — at `showcase` the profile forbids every unrelated crossing, and a
-twenty-node graph with two feedback loops cannot honour that without lying
-about the loops.
+--quality showcase`. Both specs carry `quality_profile: showcase` and both
+route every relationship — including the two feedback arrows, `sideclaw →
+hermes` and `kuma → slack` — through their own corridor with zero unrelated
+crossings. The estate diagram's one open item is
+`composition/desktop-readability`: twenty nodes across five bands need more
+canvas width (viewBox 3000) than the checker's 1440px-desktop legibility
+budget allows for the longest sublabel, so `deliver` still declines and
+`estate.html` is regenerated with `render` instead — same validated geometry,
+without that one text-scale guarantee.
 
 ## Repos
 

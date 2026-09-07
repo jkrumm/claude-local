@@ -423,20 +423,24 @@
       "from": "herdr",
       "to": "sideclaw",
       "label": "pane and agent state",
-      "fromSide": "right",
+      "fromSide": "bottom",
       "toSide": "top",
       "via": [
         [
-          1250,
-          492
+          1115,
+          540
         ],
         [
-          1250,
-          810
+          580,
+          540
+        ],
+        [
+          580,
+          1100
         ],
         [
           1650,
-          810
+          1100
         ],
         [
           1650,
