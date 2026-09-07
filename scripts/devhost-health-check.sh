@@ -310,7 +310,12 @@ hms_to_seconds() {
   # shellcheck disable=SC2086
   for part in $t; do s=$(( s * 60 + 10#$part )); done
   IFS="$old_ifs"
-  echo $(( s + days * 86400 ))
+  # 10#$days for the same reason as $part above, and it is NOT redundant: `ps`
+  # zero-pads the day field, so a process up 8 or 9 days yields "08"/"09", which
+  # bash reads as octal and rejects — "value too great for base". Days 1-7 and
+  # 10+ parse fine, which is why this survived: it is only wrong for two days
+  # out of every ten, and it takes out the runaway check on exactly those days.
+  echo $(( s + 10#$days * 86400 ))
 }
 
 http_code() {
@@ -716,7 +721,22 @@ check_launchd_restarts() {
   # StartInterval agents (this one included, at runs = 1333) are deliberately
   # absent from the list — `runs` counts scheduled invocations there and would
   # increment every single cycle.
-  local uid state_file seen="" restarted="" history=""
+  #
+  # A `Terminated: 15` RESTART IS NOT A FAULT, and treating it as one was this
+  # check's dominant false positive: 40 of the 67 dev-host DOWN alerts between
+  # 2026-06-14 and 2026-09-07 were somebody running `make hermes-restart` or
+  # `make sideclaw-restart`, or `launchctl bootout`+`bootstrap` after an edit.
+  # SIGTERM is launchd asking politely, which only ever happens because a human
+  # or a Makefile target asked it to. The events this check exists to catch look
+  # different and all still page: `Killed: 9` (jetsam/OOM — the herdr case it was
+  # written for), `Abort trap: 6`, `Segmentation fault: 11`, `Bus error: 10`, and
+  # a crash-loop that exits non-zero with NO signal at all (empty `sig`).
+  #
+  # A deliberate restart is still REPORTED — named in this component's own text
+  # and, since a restarted job has runs != 1, again in the `history:` tail. The
+  # fact that hermes bounced is worth seeing in the heartbeat; it just is not
+  # worth marking the machine DOWN and pinging a channel over.
+  local uid state_file seen="" restarted="" deliberate="" history=""
   local entry label plist out runs sig prev
   uid=$(/usr/bin/id -u)
   state_file="$STATE_DIR/launchd-runs"
@@ -746,7 +766,11 @@ check_launchd_restarts() {
     # on the first run after install.
     [[ -n "$prev" ]] || continue
     if (( runs > prev )); then
-      restarted="${restarted:+$restarted, }${label} restarted (${prev}→${runs}${sig:+, ${sig}})"
+      if [[ "$sig" == "Terminated: 15" ]]; then
+        deliberate="${deliberate:+$deliberate, }${label} restarted (${prev}→${runs}, SIGTERM — deliberate)"
+      else
+        restarted="${restarted:+$restarted, }${label} restarted (${prev}→${runs}${sig:+, ${sig}})"
+      fi
     fi
   done <<<"$LAUNCHD_KEEPALIVE"
 
@@ -757,8 +781,8 @@ check_launchd_restarts() {
       && /bin/mv -f "$state_file.tmp" "$state_file" 2>/dev/null || true
   fi
 
-  [[ -z "$restarted" ]] || { echo "$restarted"; return 1; }
-  echo "no restarts${history:+ (history: $history)}"
+  [[ -z "$restarted" ]] || { echo "${restarted}${deliberate:+; also ${deliberate}}"; return 1; }
+  echo "no crash restarts${deliberate:+ (${deliberate})}${history:+ (history: $history)}"
 }
 
 # name|gate path whose absence means "not installed here"|probe function

@@ -18,7 +18,7 @@ components:
 | git push credential | `op://mini/github/token` resolves (no network call) |
 | dev vhosts | Cloudflare DNS module, wildcard cert days-left, DNS A-record drift, token/include permissions |
 | memory | pressure level + swap as a share of RAM |
-| launchd restarts | delta on `runs` for every KeepAlive job |
+| launchd restarts | delta on `runs` for every KeepAlive job, **excluding `Terminated: 15`** (a deliberate restart) |
 | boot path | plist on disk + `launchctl print` path match for every KeepAlive job (brew services resolved under either name — `homebrew.mxcl.<x>` / `sh.brew.<x>`, see `scripts/lib/brew-service.sh`) |
 | services | sideclaw, hermes gateway, colima, caddy, dnsmasq |
 | claude auth | keychain credential, then the token fallback |
@@ -95,7 +95,15 @@ and Kuma's own missed-heartbeat is untouched, which is the property
   `runs` is cumulative since load, so failing on `runs > 1` pages forever over a
   `Killed: 9` from weeks ago. The alertable fact is "restarted since the last
   check" — for herdr, that every pane's processes are gone right now.
-  `StartInterval` agents are excluded (there `runs` counts scheduled runs).
+  `StartInterval` agents are excluded (there `runs` counts scheduled runs), and
+  so is **`Terminated: 15`**: SIGTERM only reaches a KeepAlive job because a
+  human or a Makefile target asked launchd to bounce it, so a `make
+  hermes-restart` is not an incident. That one exclusion was 40 of the 67
+  dev-host DOWN alerts between 2026-06-14 and 2026-09-07 — the component's
+  dominant output was false. `Killed: 9` (jetsam, the case it was written for),
+  `Abort trap: 6`, `Segmentation fault: 11`, `Bus error: 10` and a signal-less
+  crash-loop all still page; a deliberate restart is reported in the component's
+  own text and in the `history:` tail instead.
 - **The runaway reaper gates on accumulated CPU time crossed with lifetime
   average CPU**, never instantaneous `%CPU` (a compile pegs a core) and never
   accumulated time alone (a healthy long-lived service crosses any fixed

@@ -124,6 +124,51 @@ beat_sent=""
 
 fail() { warn "$*"; beat down "$*"; beat_sent="yes"; exit 1; }
 
+# --- transient tolerance ------------------------------------------------------
+#
+# A failure that a later tick fixes on its own must not page. Two classes of
+# failure land here and only one is worth a human:
+#
+#   TRANSIENT  network down, GitHub 503, a torn fetch that leaves the remote
+#              ref half-written ("Kann Rebase nicht auf mehrere Branches
+#              ausfuehren"). Every one of these clears itself on the next 5-min
+#              tick. Between 2026-09-06 14:07 and 2026-09-07 07:01 exactly one
+#              such condition produced TWELVE Slack DOWN alerts, because a push
+#              monitor at maxretries=0 turns every alternating fail/succeed tick
+#              into a fresh DOWN edge.
+#   HANDS      a rebase or autostash CONFLICT. Nothing clears that but a human,
+#              so it keeps `fail` and pages on the first occurrence.
+#
+# Same shape as scripts/devhost-health-check.sh's DEVHOST_TRANSIENT_FAILS: a
+# streak counter, not a timer, so it costs one small file and no clock skew.
+# The script still EXITS non-zero on the first failure — this only withholds the
+# Kuma DOWN beat. If the condition is real the streak reaches the threshold two
+# ticks later (~10 min), and if it never does, Kuma's own missed-heartbeat still
+# covers "the sync stopped running at all".
+STREAK_FILE="${BRAIN_SYNC_STREAK_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/brain-sync/fail-streak}"
+TRANSIENT_FAILS="${BRAIN_SYNC_TRANSIENT_FAILS:-3}"
+
+reset_streak() { rm -f "$STREAK_FILE" 2>/dev/null || true; }
+
+fail_transient() {
+  local n
+  mkdir -p "$(dirname "$STREAK_FILE")" 2>/dev/null || true
+  n="$(cat "$STREAK_FILE" 2>/dev/null || echo 0)"
+  case "$n" in ''|*[!0-9]*) n=0 ;; esac
+  n=$((n + 1))
+  printf '%s' "$n" >"$STREAK_FILE" 2>/dev/null || true
+  warn "$* (consecutive failure $n/$TRANSIENT_FAILS)"
+  if [ "$n" -ge "$TRANSIENT_FAILS" ]; then
+    beat down "$* (persisted $n runs)"
+  else
+    # No beat at all rather than a fake `up`: a green beat here would reset
+    # Kuma's clock and hide a sync that is failing every single tick.
+    log "withholding the DOWN beat until $TRANSIENT_FAILS consecutive failures"
+  fi
+  beat_sent="yes"
+  exit 1
+}
+
 # --- single instance ---------------------------------------------------------
 #
 # launchd coalesces StartInterval firings for a running job, but a manual run,
@@ -269,7 +314,7 @@ if [ "$pull_rc" -ne 0 ]; then
   # No rebase in progress: offline, auth, or the autostash failed to re-apply
   # after an otherwise clean rebase — in that last case the work is safe but
   # parked, hence the pointer at the stash list.
-  fail "git pull failed (offline? auth? check 'git stash list' for a parked autostash): $pull_tail"
+  fail_transient "git pull failed (offline? auth? check 'git stash list' for a parked autostash): $pull_tail"
 fi
 
 # --- commit (mirror only) ----------------------------------------------------
@@ -353,7 +398,7 @@ fi
 
 ahead="$(git rev-list --count '@{u}..HEAD')"
 if [ "$ahead" -gt 0 ]; then
-  "${NET[@]}" git push -q || fail "push failed with $ahead commit(s) waiting — origin unreachable or the branch diverged"
+  "${NET[@]}" git push -q || fail_transient "push failed with $ahead commit(s) waiting — origin unreachable or the branch diverged"
   log "pushed $ahead commit(s)"
   summary="$summary, pushed $ahead"
 else
@@ -361,5 +406,6 @@ else
 fi
 
 log "$ROLE: $summary"
+reset_streak
 beat up "$ROLE: $summary"
 beat_sent="yes"
