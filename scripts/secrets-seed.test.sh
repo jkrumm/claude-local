@@ -143,7 +143,7 @@ case "${1:-}" in
         *) shift ;;
       esac
     done
-    if [[ "$ref" == "op://Private/mac-mini age key/public key" ]]; then
+    if [[ "$ref" == "op://Private/mini age key/public key" ]]; then
       cat "$HERE/recipient.txt"
       exit 0
     fi

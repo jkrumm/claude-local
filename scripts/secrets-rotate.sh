@@ -30,7 +30,7 @@ SOPS_YAML="$PRIVATE_REPO/.sops.yaml"
 CACHE_FILE="$PRIVATE_REPO/cache/secrets.enc.json"
 BACKEND_MARKER="$HOME/.config/secrets/backend"
 OP_ACCOUNT="${OP_ACCOUNT:-tkrumm}"
-ITEM_TITLE="mac-mini age key"
+ITEM_TITLE="mini age key"
 stamp=""
 
 # Homebrew-first PATH so a headless invocation still finds age-keygen/sops/jq/op

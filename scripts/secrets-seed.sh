@@ -29,7 +29,7 @@ DEFAULT_OP_ACCOUNT="$OP_ACCOUNT"
 # mini-writable dotfiles-private repo). Verifies .sops.yaml has not been swapped
 # to an attacker's recipient — a compromised mini could otherwise push a poisoned
 # recipient and make the next seed encrypt every secret to the attacker's key.
-TRUSTED_RECIPIENT_REF="op://Private/mac-mini age key/public key"
+TRUSTED_RECIPIENT_REF="op://Private/mini age key/public key"
 
 die() {
   echo "✗ $*" >&2
