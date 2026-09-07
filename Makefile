@@ -1048,6 +1048,24 @@ _setup-zshenv:
 		} >> "$$ZSHENV"; \
 		echo "    ✓ ~/.zshenv claude-auth block appended"; \
 	fi
+	@ZSHENV="$(HOME)/.zshenv"; \
+	MARKER="# >>> dotfiles: 1password ssh agent >>>"; \
+	if [ -f "$$ZSHENV" ] && grep -qF "$$MARKER" "$$ZSHENV"; then \
+		echo "    · ~/.zshenv ssh-agent block (ok)"; \
+	else \
+		{ \
+			echo ""; \
+			echo "$$MARKER"; \
+			echo "# Managed by dotfiles (make setup). Carries the 1Password SSH agent"; \
+			echo "# into \`ssh iumac -- <cmd>\`, which reads ONLY this file — without it"; \
+			echo "# git on the MacBook has no identity at all. Self-gates on the 'op'"; \
+			echo "# secrets backend, so the headless mini picks up nothing (exporting"; \
+			echo "# that socket there hangs on a biometric prompt)."; \
+			echo "[ -r \"\$$HOME/.zsh/conf.d/ssh-agent.zsh\" ] && . \"\$$HOME/.zsh/conf.d/ssh-agent.zsh\""; \
+			echo "# <<< dotfiles: 1password ssh agent <<<"; \
+		} >> "$$ZSHENV"; \
+		echo "    ✓ ~/.zshenv ssh-agent block appended"; \
+	fi
 
 .PHONY: _setup-skills
 _setup-skills:

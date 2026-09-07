@@ -22,7 +22,7 @@ monitors what. Anything running on a machine appears there or gets deleted:
 |-|-|-|
 | `config/global.CLAUDE.md` | `~/.claude/CLAUDE.md` | Global Claude instructions (single source — no per-workspace layer) |
 | `config/zshrc` | `~/.zshrc` | Thin loader — sources all modules in conf.d |
-| `config/zsh/*.zsh` | `~/.zsh/conf.d/` (dir symlink) | ai, aliases, brew, claude, claude-auth, git, keybindings, path, prompt, remote-dev, secrets, secrets-cache, tools |
+| `config/zsh/*.zsh` | `~/.zsh/conf.d/` (dir symlink) | ai, aliases, brew, claude, claude-auth, git, keybindings, path, prompt, remote-dev, secrets, secrets-cache, ssh-agent, tools |
 | `config/gitconfig{,-personal,-work}` | `~/.gitconfig*` | `includeIf` per workspace; 1Password commit signing |
 | `config/bunfig.toml` | `~/.bunfig.toml` | Supply-chain `minimumReleaseAge` cooldown (Bun is every SourceRoot repo's package manager) |
 | `config/gitignore_global` | `~/.gitignore_global` | sc-note.md, CLAUDE.local.md |
@@ -132,10 +132,17 @@ repo → local `claude -p` on the IU Keychain creds (`claude-sonnet-5[1m]`).
 `dispatch-scratch`. It **refuses to nest inside an interactive Claude Code
 session** (`CLAUDECODE` set → prints the brief, exit 1) — use a subagent instead.
 
-Three facts to hold:
+Four facts to hold:
 
 - **A herdr crash restores the layout and loses every process in it** (new
   `terminal_id`) → durable work belongs in a `claude --bg` daemon, not a pane.
+- **`ssh iumac '<cmd>'` reaches the MacBook but carries no SSH identity by
+  default** — `.zshrc` is not read by a remote command shell, so `SSH_AUTH_SOCK`
+  is unset and every `git@github.com:` remote there fails `Permission denied
+  (publickey)`. That reads like a broken tunnel and is not one. `ssh-agent.zsh`
+  (loaded from `~/.zshenv`, gated on the `op` backend) fixes it; the gate is the
+  backend and **not** the socket's existence, because the same socket path
+  exists on the mini, where exporting it hangs.
 - **Never `ssh mini 'claude …'`.** The Max credential lives in the login keychain,
   unreachable from an ssh session: the daemon comes up `Not logged in`, silently
   falls back to API billing, and still looks healthy in `claude agents`. `rd bg`
