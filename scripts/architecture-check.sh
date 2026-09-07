@@ -9,10 +9,12 @@
 #   1. Every label in `launchctl list` (this user's gui domain) that is NOT an
 #      Apple label, a running-app label (`application.*`, `application.com.*`),
 #      or a known third-party allowlist entry must appear in the map.
-#   2. Every plist in ~/Library/LaunchAgents named com.jkrumm.* / com.iu.* /
-#      ai.hermes.* / herdr.* / homebrew.mxcl.* / sh.brew.* must appear in the
-#      map — a plist on disk that launchd has not loaded is exactly the silent
-#      state the map exists to prevent.
+#   2. Every plist in ~/Library/LaunchAgents, /Library/LaunchAgents and
+#      /Library/LaunchDaemons named com.jkrumm.* / com.iu.* / ai.hermes.* /
+#      herdr.* / homebrew.mxcl.* / sh.brew.* must appear in the map — a plist
+#      on disk that launchd has not loaded is exactly the silent state the map
+#      exists to prevent. /Library/LaunchAgents is where a dead vendor stub
+#      crash-loops at exit 78 for every login with nothing reporting it.
 #
 # Exit 1 lists the unmapped labels. Adding a legit new agent = add a row to the
 # map in the same change; that friction IS the point.
@@ -80,7 +82,7 @@ while IFS= read -r label; do
 done < <($LAUNCHCTL list 2>/dev/null | /usr/bin/awk 'NR>1 {print $3}')
 
 # 2. plists on disk, un-loaded or not
-for dir in "$HOME/Library/LaunchAgents" "/Library/LaunchDaemons"; do
+for dir in "$HOME/Library/LaunchAgents" "/Library/LaunchAgents" "/Library/LaunchDaemons"; do
   [[ -d "$dir" ]] || continue
   for plist in "$dir"/*.plist; do
     [[ -e "$plist" ]] || continue

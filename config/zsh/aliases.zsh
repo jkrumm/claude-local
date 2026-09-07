@@ -15,7 +15,10 @@ alias vps="ssh vps"
 alias caddy-reload="caddy reload --config $(brew --prefix)/etc/Caddyfile"
 
 # Apps
-alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
+# Tailscale: the App Store build (MacBook) keeps its CLI inside the app bundle; the
+# mini runs the brew tailscaled whose CLI is already on PATH. Same resolution as
+# scripts/lib/tailscale-cli.sh, so a machine without the bundle gets no alias.
+[[ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ]] && alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 zed() { /opt/homebrew/bin/zed "${1:-.}" }                 # open dir (or cwd) in Zed
 
 # 1Password backup

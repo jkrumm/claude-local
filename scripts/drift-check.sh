@@ -195,57 +195,38 @@ check_macos() {
 # it sat two minor versions behind through five SSH CVEs.
 #
 # On 2026-08-06 that host moved to the brew tailscaled daemon precisely so its
-# updates ride `brew upgrade` like everything else. Both variants are still
-# handled here, because the MacBook remains on the App Store build and a check
-# that only understood one shape would silently skip on the other.
+# updates ride `brew upgrade` like everything else; the macsys app bundle is
+# gone from the mini. The MacBook remains on the App Store build, which updates
+# on Apple's schedule and cannot be advanced locally — so only the brew variant
+# is policed against a channel; any app bundle is reported and left alone.
 #
 # THE INSTALLED VERSION COMES FROM THE RUNNING CLI, never from a bundle plist.
-# Reading Info.plist was correct only while the app WAS the daemon; on the mini
-# that bundle is now dormant-but-present (kept for rollback) and would report
-# 1.98.9 forever on a host actually running 1.102.2. Ask the thing that serves
-# traffic, not the thing that happens to be on disk.
+# Ask the thing that serves traffic, not the thing that happens to be on disk.
 #
 # It REPORTS and never applies, and the 14-day grace is what makes that
-# tolerable. For the Sparkle variant a release can legitimately be days out
-# before this host's rollout cohort is reached; forcing past that on the one
-# machine whose only access path IS Tailscale cost an outage and changed no
-# version (2026-08-05). Silent while a rollout is in progress, alerting once it
-# is genuinely stuck.
+# tolerable: forcing an update on the one machine whose only access path IS
+# Tailscale cost an outage and changed no version (2026-08-05).
 check_tailscale() {
-  local installed latest key
+  local installed latest
   [[ -n "$TAILSCALE_BIN" ]] || { skip_add "tailscale (no CLI found)"; return; }
 
   installed=$(ts_run version 2>/dev/null | /usr/bin/head -1 | /usr/bin/tr -d ' ')
   [[ -n "$installed" ]] || { skip_add "tailscale (running version unreadable)"; return; }
 
-  # The App Store build updates on Apple's schedule and cannot be advanced
-  # locally, so comparing it against any channel here would report drift no
-  # action can resolve. Report the version, do not police it.
-  if [[ -d /Applications/Tailscale.app/Contents/_MASReceipt \
-        && "$TAILSCALE_BIN" != "/opt/homebrew/bin/tailscale" ]]; then
-    info_add "tailscale $installed (App Store build — updates via the App Store)"
+  if [[ "$TAILSCALE_BIN" != "/opt/homebrew/bin/tailscale" ]]; then
+    info_add "tailscale $installed ($TAILSCALE_VARIANT — updates via the App Store)"
     return
   fi
 
-  # MacZipsVersion is the standalone (macsys) channel; `Version` is the
-  # cross-platform headline that the brew formula tracks. Picking the wrong key
-  # reports drift on a host already current for its own channel.
-  if [[ "$TAILSCALE_BIN" == "/opt/homebrew/bin/tailscale" ]]; then
-    key="Version"
-  else
-    key="MacZipsVersion"
-  fi
-
+  # `Version` is the cross-platform headline the brew formula tracks.
   latest=$(/usr/bin/curl -fsS --max-time 8 "https://pkgs.tailscale.com/stable/?mode=json" 2>/dev/null \
-    | "$PYTHON_BIN" -c "import json,sys; d=json.load(sys.stdin); print(d.get('$key') or d.get('Version') or '')" 2>/dev/null) || latest=""
+    | "$PYTHON_BIN" -c "import json,sys; d=json.load(sys.stdin); print(d.get('Version') or '')" 2>/dev/null) || latest=""
   [[ -n "$latest" ]] || { skip_add "tailscale (pkgs.tailscale.com unreachable)"; return; }
 
   if [[ "$installed" == "$latest" ]]; then
     info_add "tailscale current ($installed, $TAILSCALE_VARIANT)"
-  elif [[ "$TAILSCALE_BIN" == "/opt/homebrew/bin/tailscale" ]]; then
-    drift_add "tailscale" "tailscale $installed → $latest (fix: make brew-upgrade)"
   else
-    drift_add "tailscale" "tailscale $installed → $latest (Sparkle auto-update has not applied it; if this persists the rollout cohort is stuck — apply via scripts/detached-run.sh, NEVER a bare ssh command)"
+    drift_add "tailscale" "tailscale $installed → $latest (fix: make brew-upgrade)"
   fi
 }
 
