@@ -124,7 +124,8 @@ else
 fi
 
 # ── Subscription usage (Claude.ai API, non-blocking cached) ────────────────────
-# fetch_usage.py extracts Chrome cookies + calls claude.ai/api/…/usage.
+# fetch_usage.py reads the Claude Code OAuth token from the Keychain and calls
+# api.anthropic.com/api/oauth/usage (no browser cookies involved).
 # Cache TTL: 5 min. Background refresh on miss; stale value shown immediately.
 _USAGE_CACHE="/tmp/claude_sl/usage_api.json"
 _FETCH_SCRIPT="$HOME/.claude/fetch_usage.py"

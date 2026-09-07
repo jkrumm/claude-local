@@ -130,10 +130,14 @@ cs() {
 # Context window: over any non-api.anthropic.com ANTHROPIC_BASE_URL, Claude Code
 # can't verify 1M support and budgets Sonnet 5 at 200k, even though it natively
 # has 1M (docs: code.claude.com/docs/en/model-config#sonnet-5-context-window).
-# CLAUDE_CODE_MAX_CONTEXT_TOKENS is not a real Claude Code env var — don't
-# reintroduce it. The documented fix is the `[1m]` suffix (stripped before the
-# model ID reaches the provider): --model claude-sonnet-5[1m], plus the same
-# suffix on every ANTHROPIC_DEFAULT_*_MODEL tier that resolves to Sonnet 5.
+# For claude-* ids the fix is the `[1m]` suffix (stripped before the model ID
+# reaches the provider): --model claude-sonnet-5[1m], plus the same suffix on
+# every ANTHROPIC_DEFAULT_*_MODEL tier that resolves to Sonnet 5. The gateway
+# tier below instead sets CLAUDE_CODE_MAX_CONTEXT_TOKENS + AUTO_COMPACT_WINDOW
+# from _CA_CTX — a CLIENT-SIDE budget (when to compact), not a capability claim:
+# set it above the model's real window and a clean auto-compact becomes a hard
+# mid-session rejection. Never the `[1m]` suffix there — a claude-* name would
+# make usage-tracker misbill a gateway model as Max quota.
 #
 # claude v2.x rejects ANTHROPIC_API_KEY in this flow ("Not logged in") — must
 # be ANTHROPIC_AUTH_TOKEN. Env auth takes precedence over the cached claude.ai
@@ -298,7 +302,7 @@ ca() {
 
 # ── Off-Max `claude -p` transport ─────────────────────────────────────────────
 #
-# So subprocess skills (otel, analyze, read-drawing, ralph cleanup) don't
+# So subprocess skills (analyze; otel and read-drawing moved to sideclaw) don't
 # copy-paste the IU credential plumbing. Runs `claude -p` off the Max
 # subscription — billing is IU per-token, not Max quota. Pass any `claude -p`
 # flags + a prompt (positional or via stdin), e.g.

@@ -4,7 +4,10 @@
  * Claude Code Notification System
  *
  * Rich macOS notifications for Claude Code CLI events with enhanced context
- * and workspace-specific sound identification.
+ * and workspace-specific sound identification. Delivered with osascript
+ * (`display notification`); the desktop half is gated on the `op` secrets
+ * backend — the mini is headless, and ~90 notifications a day to no display
+ * is pure noise — while the JSONL debug log is written on both machines.
  *
  * ============================================================================
  * FEATURES
@@ -27,8 +30,8 @@
  *
  *    Use case: Multiple tabs open, hear sound to know which workspace needs attention
  *
- * 3. Click-to-Focus
- *    Uses terminal-notifier to bring Warp terminal to foreground on click
+ * 3. Headless gate
+ *    On the `cache` backend (the mini) no desktop notification is sent.
  *
  * 4. State Persistence
  *    Tracks session timing, project, branch, workspace across hook invocations
@@ -85,8 +88,8 @@
  *
  * Notifications not showing:
  * - Check macOS Notification Settings → Script Editor → Allow Notifications
- * - Ensure terminal-notifier is installed: brew install terminal-notifier
- * - Test manually: terminal-notifier -title "Test" -message "Hello"
+ * - On the mini (cache backend) they are gated off by design — see above
+ * - Test manually: osascript -e 'display notification "Hello" with title "Test"'
  *
  * Wrong sounds:
  * - Sound names are case-sensitive ("Hero" not "hero")
@@ -109,7 +112,7 @@
  * USAGE WITH MULTIPLE TABS
  * ============================================================================
  *
- * Scenario: 3 Warp tabs open
+ * Scenario: 3 Ghostty tabs / herdr panes open
  * 1. SourceRoot/free-planning-poker/fpp-analytics on feat/JK-123
  * 2. IuRoot/epos.student-enrolment on feat/EP-456
  * 3. SourceRoot/basalt-ui/examples on main
@@ -498,7 +501,21 @@ function handleSessionEndEvent(
 // Notification Delivery
 // ============================================================================
 
+// The per-machine secrets backend marker doubles as the "is a human at this
+// display" signal: `op` = a present-human MacBook, `cache` = the headless mini.
+// Same file hooks/machine-role.ts reads; missing or unreadable → notify (fail
+// toward the MacBook behaviour, never toward silence on a machine with a user).
+function desktopNotificationsEnabled(): boolean {
+  const marker = join(homedir(), ".config", "secrets", "backend");
+  try {
+    return readFileSync(marker, "utf8").trim() !== "cache";
+  } catch {
+    return true;
+  }
+}
+
 async function sendNotification(config: NotificationConfig): Promise<void> {
+  if (!desktopNotificationsEnabled()) return;
   const { title, subtitle, body, sound } = config;
 
   // Native osascript (terminal-notifier hangs in multiplexer environments)
