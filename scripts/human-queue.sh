@@ -345,10 +345,15 @@ cmd_drain() {
     print_req "$req_json"
 
     local action=""
-    read -r -p "  [r]un / [d]eny / [s]kip / [q]uit: " action </dev/tty
+    read -r -p "  [r]un / [a]lready done / [d]eny / [s]kip / [q]uit: " action </dev/tty
     case "$action" in
       r|run)
         run_one "$id" "$req_json" || true
+        ;;
+      a|already|done)
+        local note=""
+        read -r -p "  note (optional): " note </dev/tty
+        cmd_resolve "$id" "$note"
         ;;
       d|deny)
         local reason=""
@@ -367,6 +372,27 @@ cmd_drain() {
 
   echo ""
   echo "  ✓ walked $n request(s)."
+}
+
+# Mark a request done WITHOUT running its proposed command — the case the queue
+# was missing: the human satisfied the request out of band (here: `make
+# secrets-seed` run directly), so the mini needs a `done`, not a `denied`, and
+# re-running the command would only cost a second biometric pass. It needs no
+# TTY and no typed 'yes' precisely because it never executes the mini's string;
+# the gate exists to stop a proposed command from running, not to stop a human
+# from reporting that the work already happened.
+cmd_resolve() {
+  local id="${1:-}"
+  [[ -n "$id" ]] || die "resolve requires <id> [note]"
+  shift
+  local note="$*"
+  [[ -n "$note" ]] || note="satisfied out of band by the human"
+  validate_id "$id"
+
+  local ran_at
+  ran_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  write_result "$id" "done" 0 "$ran_at" "$note"
+  echo "  ✓ $id marked done: $note"
 }
 
 cmd_deny() {
@@ -394,6 +420,7 @@ Usage:
   human-queue.sh list           List pending requests (table-ish, newest last)
   human-queue.sh show <id>      Print one request in full, including any proposed cmd
   human-queue.sh run <id>       Review + confirm ('yes') + execute a request's cmd
+  human-queue.sh resolve <id> [note]  Mark done without running the cmd (already handled)
   human-queue.sh deny <id> [reason]   Deny a request; writes a denied result back
   human-queue.sh help           This message.
 
@@ -412,6 +439,7 @@ main() {
     list) cmd_list ;;
     show) shift; cmd_show "$@" ;;
     run) shift; cmd_run "$@" ;;
+    resolve) shift; cmd_resolve "$@" ;;
     deny) shift; cmd_deny "$@" ;;
     help|-h|--help) usage ;;
     *) die "unknown subcommand: $sub (see: human-queue.sh help)" ;;

@@ -2623,7 +2623,7 @@ devhost-health-check:
 # that matters (a TTY, a typed 'yes', the unmodified proposed string) lives in
 # human-queue.sh's run_one and is identical either way. Without a TTY it
 # degrades to a list, which is what human-queue-count's hook path relies on.
-.PHONY: human-queue human-queue-count human-queue-list human-queue-show human-queue-run human-queue-deny
+.PHONY: human-queue human-queue-count human-queue-list human-queue-show human-queue-run human-queue-resolve human-queue-deny
 human-queue:
 	@bash $(DOTFILES_DIR)/scripts/human-queue.sh drain
 human-queue-list:
@@ -2636,6 +2636,9 @@ human-queue-show:
 human-queue-run:
 	@test -n "$(ID)" || { echo "usage: make human-queue-run ID=<request-id>"; exit 1; }
 	@bash $(DOTFILES_DIR)/scripts/human-queue.sh run "$(ID)"
+human-queue-resolve:
+	@test -n "$(ID)" || { echo "usage: make human-queue-resolve ID=<request-id> [NOTE=...]"; exit 1; }
+	@bash $(DOTFILES_DIR)/scripts/human-queue.sh resolve "$(ID)" $(NOTE)
 human-queue-deny:
 	@test -n "$(ID)" || { echo "usage: make human-queue-deny ID=<request-id> [REASON=...]"; exit 1; }
 	@bash $(DOTFILES_DIR)/scripts/human-queue.sh deny "$(ID)" $(REASON)
@@ -2852,6 +2855,7 @@ help:
 	@echo "  make human-queue                MacBook: walk the mini's pending present-human requests (run/deny each)"
 	@echo "  make human-queue-list           MacBook: just list them, act on nothing"
 	@echo "  make human-queue-run ID=<id>    MacBook: review + confirm + execute one request"
+	@echo "  make human-queue-resolve ID=<id> [NOTE=...]  MacBook: mark done without running the cmd"
 	@echo "  make human-queue-deny ID=<id> [REASON=...]  MacBook: deny one request"
 	@echo "  make human-queue-count          MacBook: print just the pending count (fast; used by the SessionStart hook)"
 	@echo "  make log-rotate-setup           Load the hourly copytruncate rotation for this repo's LaunchAgent logs"
