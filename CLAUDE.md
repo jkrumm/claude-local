@@ -155,10 +155,11 @@ Four facts to hold:
 **human-queue** — ssh gives the mini reach, not a fingerprint. Work needing a
 *present human* (biometric `op`, the ACL push, any person-only decision) is
 enqueued on the mini with `ask-human.sh ask "…" [--cmd …] [--wait]` and drained on
-the MacBook with `make human-queue` (`human-queue.sh show/run/deny <id>`). The
-mini only ever *proposes* a command string; `run` needs a typed `yes` on a real
-TTY. Nothing drains it automatically — a poller would mean an unattended Touch ID
-prompt on a schedule forever.
+the MacBook with `make human-queue`, which **walks** each one and runs/denies it
+in place (`-list`, `-run ID=`, `-deny ID=` single-shot; no TTY → a list). The mini
+only *proposes* a command string; `run` needs a typed `yes` on a real TTY, per
+request. Nothing drains it automatically — a poller means unattended Touch ID
+forever.
 
 **`/remote-dev`** for anything touching this stack; model in `docs/remote-dev.md`.
 

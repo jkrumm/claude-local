@@ -427,7 +427,7 @@ decision — an agent on the mini enqueues instead of writing prose nobody reads
 |-|-|-|
 | Enqueue | `ask-human.sh ask "<text>" [--cmd <command>] [--wait [seconds]]` | mini |
 | Inspect own request | `ask-human.sh list` / `status <id>` | mini |
-| Drain | `make human-queue-count` · `make human-queue` · `human-queue.sh show/run/deny <id>` | MacBook |
+| Drain | `make human-queue` (walks each pending request) · `-list` · `-count` · `-show/-run/-deny ID=<id>` | MacBook |
 
 State is `<id>.req` + `<id>.res` under
 `${XDG_STATE_HOME:-$HOME/.local/state}/human-queue/` on the mini (dir 700, files
@@ -440,6 +440,12 @@ done/denied/failed/timeout.
   verbatim, names its origin, and requires a typed `yes` on a real TTY — no TTY,
   no path to `run`. A misbehaving mini can put a string in front of a human,
   never open a shell.
+- **The default drain walks the queue instead of printing it**, prompting
+  `[r]un / [d]eny / [s]kip / [q]uit` per request. That is ergonomics only: it
+  reuses the same `run_one` gate, so the TTY requirement, the typed `yes` and the
+  control-byte stripping are unchanged, and the ids it walks come *from the mini*
+  and are re-validated against the id pattern before reaching any command string.
+  Declining one request returns rather than exits, so it no longer ends the walk.
 - **No LaunchAgent drains it, deliberately** — the hop sits behind the per-use
   biometric 1Password agent, so a poller means an unattended Touch ID prompt on a
   schedule forever. `hooks/machine-role.ts` folds a count into SessionStart on

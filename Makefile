@@ -2617,11 +2617,28 @@ devhost-health-check:
 # why: the ssh hop rides the per-use biometric 1Password SSH agent, and a
 # LaunchAgent draining it would fire Touch ID on its own schedule). No setup/
 # teardown pair here on purpose — there is nothing to install.
-.PHONY: human-queue human-queue-count
+#
+# `human-queue` WALKS the queue rather than just printing it — listing and then
+# making the human retype an id was friction with no security value: the gate
+# that matters (a TTY, a typed 'yes', the unmodified proposed string) lives in
+# human-queue.sh's run_one and is identical either way. Without a TTY it
+# degrades to a list, which is what human-queue-count's hook path relies on.
+.PHONY: human-queue human-queue-count human-queue-list human-queue-show human-queue-run human-queue-deny
 human-queue:
+	@bash $(DOTFILES_DIR)/scripts/human-queue.sh drain
+human-queue-list:
 	@bash $(DOTFILES_DIR)/scripts/human-queue.sh list
 human-queue-count:
 	@bash $(DOTFILES_DIR)/scripts/human-queue.sh count
+human-queue-show:
+	@test -n "$(ID)" || { echo "usage: make human-queue-show ID=<request-id>"; exit 1; }
+	@bash $(DOTFILES_DIR)/scripts/human-queue.sh show "$(ID)"
+human-queue-run:
+	@test -n "$(ID)" || { echo "usage: make human-queue-run ID=<request-id>"; exit 1; }
+	@bash $(DOTFILES_DIR)/scripts/human-queue.sh run "$(ID)"
+human-queue-deny:
+	@test -n "$(ID)" || { echo "usage: make human-queue-deny ID=<request-id> [REASON=...]"; exit 1; }
+	@bash $(DOTFILES_DIR)/scripts/human-queue.sh deny "$(ID)" $(REASON)
 
 # ----------------------------------------------------------------------------
 # Drift check (dev host only)
@@ -2832,7 +2849,10 @@ help:
 	@echo "  make devhost-health-setup       Load the 5-min herdr/sshd/tailscale heartbeat → Uptime Kuma"
 	@echo "  make devhost-health-check       Run the readiness check once on demand (for testing)"
 	@echo "  make devhost-health-teardown    Unload + remove the heartbeat agent"
-	@echo "  make human-queue                MacBook: list the mini's pending present-human requests"
+	@echo "  make human-queue                MacBook: walk the mini's pending present-human requests (run/deny each)"
+	@echo "  make human-queue-list           MacBook: just list them, act on nothing"
+	@echo "  make human-queue-run ID=<id>    MacBook: review + confirm + execute one request"
+	@echo "  make human-queue-deny ID=<id> [REASON=...]  MacBook: deny one request"
 	@echo "  make human-queue-count          MacBook: print just the pending count (fast; used by the SessionStart hook)"
 	@echo "  make log-rotate-setup           Load the hourly copytruncate rotation for this repo's LaunchAgent logs"
 	@echo "  make log-rotate-check           Run the rotation once on demand (for testing)"

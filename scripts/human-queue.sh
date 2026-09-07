@@ -52,6 +52,19 @@ if on_dev_host; then
   exit 1
 fi
 
+# "Is a real human at a terminal here?" — deliberately NOT plain `[ -t 0 ]`.
+# The interactive walk reads its request ids from stdin (a here-string), so
+# inside it stdin is legitimately not a tty while a controlling terminal very
+# much exists; every prompt reads from /dev/tty for exactly that reason. A
+# launchd/cron/ssh-batch context has no controlling terminal at all, so the
+# open fails and `run` stays unreachable — the property that matters. A
+# backgrounded shell that still has one gets SIGTTIN on the read and stops,
+# which is a safe failure, not a bypass.
+have_tty() {
+  [[ -t 0 ]] && return 0
+  { : </dev/tty; } 2>/dev/null
+}
+
 # A request id is always <date>T<time>-<RANDOM> from ask-human.sh. Every
 # subcommand that embeds $id into a remote command STRING (not piped as data)
 # validates it first — the id otherwise flows unescaped into a string that a
@@ -93,6 +106,25 @@ cmd_count() {
     *) echo "$n" ;;
   esac
   return 0
+}
+
+# Same scan as remote_count_script, emitting the pending ids themselves so the
+# interactive drain can walk them without a human copy-pasting an id. The ids
+# come FROM the mini, i.e. from the design's own stated adversary, so every one
+# of them is re-validated below before it is embedded in any remote command
+# string — pending_ids is a source of untrusted input, not a source of trust.
+# shellcheck disable=SC2016
+remote_ids_script() {
+  printf 'dir="%s"; if [ -d "$dir" ]; then for f in "$dir"/*.req; do [ -e "$f" ] || continue; id=$(basename "$f" .req); [ -f "$dir/$id.res" ] || echo "$id"; done; fi' \
+    "$REMOTE_QUEUE_DIR"
+}
+
+pending_ids() {
+  local script
+  script="bash -c '$(remote_ids_script)'"
+  # shellcheck disable=SC2029
+  ssh "${SSH_OPTS[@]}" "$HOST" "$script" \
+    || die "could not reach $HOST to list the queue"
 }
 
 cmd_list() {
@@ -206,11 +238,23 @@ cmd_run() {
   [[ -n "$id" ]] || die "run requires <id>"
   validate_id "$id"
 
-  [[ -t 0 ]] || die "run requires an interactive terminal — refusing (there is no non-interactive path to executing a request)"
+  have_tty || die "run requires an interactive terminal — refusing (there is no non-interactive path to executing a request)"
 
   local req_json
   req_json="$(fetch_req "$id")"
   print_req "$req_json"
+  run_one "$id" "$req_json"
+}
+
+# The confirm-and-execute half, split out so the interactive drain can reuse it
+# after it has already printed the request. Returns 1 on abort instead of
+# exiting, so declining one request inside the drain does not end the walk —
+# the typed 'yes' gate itself is unchanged, and there is still no caller that
+# reaches it without a TTY.
+run_one() {
+  local id="$1" req_json="$2"
+
+  have_tty || die "run requires an interactive terminal — refusing (there is no non-interactive path to executing a request)"
 
   local cmd_value
   cmd_value="$(json_field "$req_json" cmd)"
@@ -221,10 +265,10 @@ cmd_run() {
   echo ""
 
   local reply=""
-  read -r -p "  type 'yes' to proceed, anything else aborts: " reply
+  read -r -p "  type 'yes' to proceed, anything else aborts: " reply </dev/tty
   if [[ "$reply" != "yes" ]]; then
     echo "  aborted — no side effects, no result written."
-    exit 0
+    return 1
   fi
 
   local ran_at status exit_code output_tail
@@ -252,6 +296,79 @@ cmd_run() {
   echo "  ✓ result written back to $HOST: $status (exit $exit_code)"
 }
 
+# The default `make human-queue` path: list, then walk each pending request in
+# front of the human and act on it in place. Purely an ergonomics layer over
+# show/run/deny — every security property lives one level down and is untouched:
+# the TTY requirement, the typed 'yes', the unmodified command string, the
+# control-byte stripping in print_req. Without a TTY it degrades to a plain
+# list, which is what the SessionStart hook and any non-interactive caller get.
+cmd_drain() {
+  if ! have_tty; then
+    cmd_list
+    return 0
+  fi
+
+  local ids
+  ids="$(pending_ids)"
+  if [[ -z "$ids" ]]; then
+    echo "  nothing pending on $HOST."
+    return 0
+  fi
+
+  # Collected into an array FIRST, never walked with `while read … <<< "$ids"`:
+  # every iteration below runs ssh (fetch_req, and write_result on run/deny),
+  # and ssh reads stdin — inside such a loop it swallows the remaining ids and
+  # the walk silently ends after the first request. Bash 3.2 here, so no
+  # mapfile.
+  local -a queue=()
+  local id
+  while IFS= read -r id; do
+    [[ -n "$id" ]] && queue+=("$id")
+  done <<< "$ids"
+  [[ ${#queue[@]} -gt 0 ]] || { echo "  nothing pending on $HOST."; return 0; }
+
+  local total n=0
+  total=${#queue[@]}
+  echo "  $total pending request(s) from $HOST."
+
+  for id in "${queue[@]}"; do
+    n=$((n + 1))
+    if ! [[ "$id" =~ ^[0-9]{8}T[0-9]{6}-[0-9]+$ ]]; then
+      echo "  !! skipping malformed request id from $HOST: $(printable "$id")" >&2
+      continue
+    fi
+
+    local req_json
+    req_json="$(fetch_req "$id")"
+    echo ""
+    echo "  ---- [$n/$total] ----"
+    print_req "$req_json"
+
+    local action=""
+    read -r -p "  [r]un / [d]eny / [s]kip / [q]uit: " action </dev/tty
+    case "$action" in
+      r|run)
+        run_one "$id" "$req_json" || true
+        ;;
+      d|deny)
+        local reason=""
+        read -r -p "  reason (optional): " reason </dev/tty
+        cmd_deny "$id" "$reason"
+        ;;
+      q|quit)
+        echo "  stopped — $((total - n + 1)) request(s) left pending."
+        return 0
+        ;;
+      *)
+        echo "  skipped — still pending."
+        ;;
+    esac
+  done
+
+  echo ""
+  echo "  ✓ walked $n request(s)."
+}
+
 cmd_deny() {
   local id="${1:-}"
   [[ -n "$id" ]] || die "deny requires <id> [reason]"
@@ -271,6 +388,8 @@ usage() {
 human-queue.sh — MacBook-side drain of the mini's present-human request queue
 
 Usage:
+  human-queue.sh                Walk every pending request and run/deny it in place
+                                (falls back to `list` without a TTY)
   human-queue.sh count          Number of pending requests (fast; 0 on any failure)
   human-queue.sh list           List pending requests (table-ish, newest last)
   human-queue.sh show <id>      Print one request in full, including any proposed cmd
@@ -279,14 +398,16 @@ Usage:
   human-queue.sh help           This message.
 
 Reaches the mini over `ssh mini` (BatchMode, 8s connect timeout). `run` is
-never non-interactive: it refuses without a TTY and requires a typed 'yes'.
+never non-interactive — including from the interactive walk: it refuses without
+a TTY and requires a typed 'yes' per request.
 See docs/remote-dev.md for the full model.
 EOF
 }
 
 main() {
-  local sub="${1:-help}"
+  local sub="${1:-drain}"
   case "$sub" in
+    drain) cmd_drain ;;
     count) cmd_count ;;
     list) cmd_list ;;
     show) shift; cmd_show "$@" ;;

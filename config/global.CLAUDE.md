@@ -258,7 +258,8 @@ terminal. Two facts worth holding:
 **`/remote-dev`** for this stack, **`make doctor`** when it's broken. Work needing
 a *present human* (biometric `op`, the ACL push, any person-only decision) is
 enqueued on the mini with `ask-human.sh ask "…" [--cmd …]` and drained on the
-MacBook with `make human-queue` — never auto-executed, always a typed `yes`.
+MacBook with `make human-queue`, which walks each one — never auto-executed,
+always a typed `yes`.
 
 ### Sudo on a server
 

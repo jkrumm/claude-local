@@ -99,7 +99,7 @@ function contextFor(backend: string): string | null {
       const pending = pendingHumanQueueCount();
       if (pending > 0) {
         lines.push(
-          `[human-queue] ${pending} request(s) from the mini await you — 'make human-queue' to list, 'human-queue.sh run <id>' to act.`,
+          `[human-queue] ${pending} request(s) from the mini await you — run 'make human-queue' to walk them (run/deny each).`,
         );
       }
       return lines.join(" ");
