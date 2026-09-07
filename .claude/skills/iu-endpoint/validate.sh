@@ -134,14 +134,14 @@ echo "## HERMES AGENT"
 HERMES="$HOME/SourceRoot/hermes-agent"
 if [[ -d "$HERMES" ]]; then
   echo "  Configured model references found (grep):"
-  grep -rEoh '(Kimi-K2\.[0-9]|claude-[a-z0-9.-]+|gpt-5[a-z0-9.-]*|gemini-[0-9][a-z0-9.-]*|GLM-[0-9]|MiniMax-M[0-9.]+|deepseek[a-z0-9./-]*)' \
+  grep -rEoh '(claude-[a-z0-9.-]+|gpt-5[a-z0-9.-]*|gemini-[0-9][a-z0-9.-]*|[Gg][Ll][Mm]-[0-9][a-z0-9.-]*|MiniMax-M[0-9.]+|[Dd]eep[Ss]eek[a-zA-Z0-9./-]*)' \
     "$HERMES" --include='*.ts' --include='*.js' --include='*.json' --include='*.env*' --include='*.toml' --include='*.yaml' --include='*.yml' 2>/dev/null \
     | sort | uniq -c | sort -rn | head -15 | sed 's/^/    /'
-  [[ -z "$(grep -rEl 'Kimi|claude-|gpt-5|gemini-' "$HERMES" 2>/dev/null | head -1)" ]] && echo "    (no model id found)"
+  [[ -z "$(grep -rEil 'claude-|gpt-5|gemini-|glm-|deepseek' "$HERMES" 2>/dev/null | head -1)" ]] && echo "    (no model id found)"
 else
   echo "  (~/SourceRoot/hermes-agent not present on this machine)"
 fi
 
 rm -f "$CATALOG"
 echo ""
-echo "Done. (Kimi-K2.6 = 1 backend / throttle-prone; Kimi-K2.5 = 2 backends / steadier.)"
+echo "Done. (backends=N per model above: more backends = fewer 429s; prefer the higher count for a default.)"

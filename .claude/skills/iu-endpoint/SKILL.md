@@ -1,6 +1,6 @@
 ---
 name: iu-endpoint
-description: Validate the IU unified endpoint and discover better models. Probes every transport, health-checks the models listed in models.txt, reports per-model backend redundancy + live latency, and diffs the live catalog to surface newer/hotter models worth adopting — for the tracked roster and for the Hermes Agent (especially Kimi). Use when checking endpoint health, picking a reliable model/host, or deciding whether to upgrade configured models.
+description: Validate the IU unified endpoint and discover better models. Probes every transport, health-checks the models listed in models.txt, reports per-model backend redundancy + live latency, and diffs the live catalog to surface newer/hotter models worth adopting — for the tracked roster and for the Hermes Agent brain. Use when checking endpoint health, picking a reliable model/host, or deciding whether to upgrade configured models.
 ---
 
 # IU Unified Endpoint — validate & discover
@@ -16,10 +16,9 @@ roster + Hermes).
 - **The model alias is the host selector.** Each id maps to one or more backend
   "sinks" (`owned_by` in the catalog). More backends = more redundant = less
   likely to 429/timeout. The validator prints `backends=N` per model.
-  - Examples: `Kimi-K2.5` (2: Nebius + Azure) is steadier than `Kimi-K2.6`
-    (1: Sweden Central, throttle-prone). `gpt-5` (9) is the most redundant GPT.
-    Don't hardcode a Claude example here — the configured aliases move (the old
-    `claude-opus-4-7` example outlived the model). Read the live counts.
+  - Don't hardcode examples here — the configured aliases move (an old
+    `claude-opus-4-7` example outlived the model, a Kimi one outlived its use).
+    Read the live counts.
 - **Transports** on the same host: `/anthropic/v1`, `/openai/v1` (rich catalog),
   `/azure/openai/...`, `/gemini/v1beta`, `/replicate/v1`. There is **no**
   `/bedrock` passthrough (404) — Bedrock is only an internal backing.
@@ -53,16 +52,15 @@ Full run takes ~30–60s (it sends a tiny completion per configured model).
    the higher-`backends` one as default (e.g. opus-4-6 over opus-4-7 for daily use).
 3. **Discover upgrades.** In the `NOTABLE` list, find `[NEW]` ids that are a newer
    version or stronger sibling of a configured `[cfg]` model (e.g. a newer Gemini
-   preview, a higher GPT-5.x, a newer Kimi). For each genuinely better one,
+   flash, a higher GPT-5.x, a newer GLM/DeepSeek). For each genuinely better one,
    propose the exact `models.txt` edit (`iu/<model>` or `iu-anthropic/<model>`).
    Verify it actually completes first with a one-shot curl (use
    `max_completion_tokens` for `gpt-5*`). Only recommend models that return
    real text.
 4. **Hermes advice.** Compare the models grepped from `~/SourceRoot/hermes-agent`
-   against the best available. Be specific about Kimi (the user runs Kimi in
-   Hermes): K2.6 is single-backend/throttle-prone, K2.5 is dual-backend/steadier
-   — recommend a primary + fallback (e.g. K2.6 primary, K2.5 fallback) and point
-   at where in hermes-agent the model is wired. Flag any newer Claude/Gemini brain
+   against the best available (`modelpick/docs/decisions/hermes-brain.md` holds
+   the rationale): recommend a primary + fallback by backend count and point at
+   where in hermes-agent the model is wired. Flag any newer Claude/Gemini brain
    worth switching to. Do not edit hermes-agent from here unless asked.
 5. **Report concisely.** A short health summary, a ranked "consider adopting"
    list with backend counts, and any concrete config edits. No key, no raw catalog dump.
