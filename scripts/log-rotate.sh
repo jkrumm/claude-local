@@ -55,14 +55,6 @@ FILES=(
   hermes-liveness.err
   hermes-backup.log
   hermes-backup.err
-  hermes-webui.log
-  hermes-webui.err
-  hermes-webui-liveness.log
-  hermes-webui-liveness.err
-  hermes-serve.log
-  hermes-serve.err
-  hermes-serve-liveness.log
-  hermes-serve-liveness.err
   # The Hermes gateway's OWN launchd streams. Absolute because `hermes gateway
   # install` generates that plist and points it at ~/.hermes/logs, not
   # ~/Library/Logs, and the plist is upstream's to write — this list bends to it
@@ -85,7 +77,6 @@ FILES=(
   # appends one audit line per invocation — including refusals — and is the only
   # record of which repos Hermes opened a Claude Code episode against.
   hermes-cc.log
-  secrets-freshness.log
   opbackup.log
   # The MacBook's userland sshd on :2222 — the only door the mini has back to
   # this machine. Its plist is KeepAlive-on-failure with a 10s throttle, so a
@@ -107,6 +98,30 @@ FILES=(
   lock-at-boot.log
   linewatch-collector.log
   batt-reset.log
+  # audio-gateway — KeepAlive LaunchAgent (com.jkrumm.audio-gateway).
+  audio-gateway.log
+  audio-gateway.err
+  # modelpick — daily 06:00 refresh (com.jkrumm.modelpick-refresh).
+  modelpick-refresh.log
+  modelpick-refresh.err
+  # meteo's eight LaunchAgents (com.jkrumm.meteo.<job>), moved off /tmp into
+  # ~/Library/Logs/meteo.<job>.{log,err} by the meteo repo's own pass.
+  meteo.serve.log
+  meteo.serve.err
+  meteo.tileserver.log
+  meteo.tileserver.err
+  meteo.sync.log
+  meteo.sync.err
+  meteo.obs.log
+  meteo.obs.err
+  meteo.fcstlog.log
+  meteo.fcstlog.err
+  meteo.blendfield.log
+  meteo.blendfield.err
+  meteo.backfill.log
+  meteo.backfill.err
+  meteo.watchdog.log
+  meteo.watchdog.err
   "$HOME/.config/herdr/plugins/config/herdr.collie/collie.log"
 )
 

@@ -55,6 +55,12 @@ XCADDY_VERSION           ?= v0.4.7
 CADDY_DNS_MODULE         ?= github.com/caddy-dns/cloudflare
 CADDY_DNS_MODULE_VERSION ?= v0.2.4
 
+# fallow — the static analyzer behind /analyze and sideclaw's check/review
+# steps. npm-global (needs Node on PATH, so not Brewfile-managed); pinned so an
+# upgrade is a reviewed diff of this line, never whatever `npm install -g`
+# resolves to on the day it runs.
+FALLOW_VERSION := 3.23.0
+
 # ============================================================================
 # Setup — idempotent, safe to run on a fresh machine or re-run after changes
 # Existing real files are backed up to <file>.bak before being replaced.
@@ -87,7 +93,6 @@ setup:
 	@$(MAKE) --no-print-directory _setup-secrets
 	@$(MAKE) --no-print-directory _setup-sdk-keys
 	@$(MAKE) --no-print-directory _setup-research-gateway-mcp
-	@$(MAKE) --no-print-directory _cleanup-hyperdx-mcp
 	@$(MAKE) --no-print-directory _setup-ssh
 	@$(MAKE) --no-print-directory _setup-karabiner
 	@$(MAKE) --no-print-directory _setup-rules
@@ -229,12 +234,20 @@ _setup-tools:
 	@command -v coderabbit >/dev/null 2>&1 \
 		&& echo "    · coderabbit (run: coderabbit auth login)" \
 		|| echo "    ✗ coderabbit [missing — run: make brew-check]"
-	@# fallow — npm global (not brew: needs Node on PATH). Static analyzer for /analyze.
-	@if command -v fallow >/dev/null 2>&1; then \
-		echo "    · fallow (ok)"; \
+	@# fallow — npm global (not brew: needs Node on PATH), pinned to FALLOW_VERSION.
+	@# Linked into ~/.local/bin as well: the fnm-global bin dir is a per-shell
+	@# multishell path that a LaunchAgent (sideclaw's `which fallow`) never sees.
+	@if [ "$$(fallow --version 2>/dev/null | head -1 | awk '{print $$2}')" = "$(FALLOW_VERSION)" ]; then \
+		echo "    · fallow $(FALLOW_VERSION) (ok)"; \
 	else \
-		npm install -g fallow 2>/dev/null || true; \
-		command -v fallow >/dev/null 2>&1 && echo "    ✓ fallow installed" || echo "    · fallow (use npx fallow as fallback)"; \
+		npm install -g "fallow@$(FALLOW_VERSION)" >/dev/null 2>&1 \
+			&& echo "    ✓ fallow $(FALLOW_VERSION) installed" \
+			|| echo "    ✗ fallow install failed — npm install -g fallow@$(FALLOW_VERSION)"; \
+	fi
+	@mkdir -p "$(HOME)/.local/bin"
+	@FALLOW_BIN="$$(npm prefix -g 2>/dev/null)/bin/fallow"; \
+	if [ -x "$$FALLOW_BIN" ]; then \
+		$(MAKE) --no-print-directory _link SRC="$$FALLOW_BIN" DST="$(HOME)/.local/bin/fallow"; \
 	fi
 
 .PHONY: _setup-caddy
@@ -360,9 +373,26 @@ _setup-secrets:
 		echo "op" > "$(HOME)/.config/secrets/backend"; \
 		echo "    ✓ backend marker written (default: op — run 'make secrets-backend-cache' on the mini)"; \
 	fi
+	@# The pre-commit gate itself: `varlock scan` refuses a commit that carries a
+	@# plaintext secret into dotfiles-private. It lived only as a hand-written
+	@# hook on the mini; converging it here is what makes it exist on a fresh
+	@# checkout. Idempotent, and never overwrites a hook someone else wrote.
 	@if command -v varlock >/dev/null 2>&1; then \
 		varlock telemetry disable >/dev/null 2>&1 || true; \
 		echo "    · varlock present (used only as the dotfiles-private pre-commit scan gate)"; \
+		HOOK="$(SECRETS_PRIVATE_REPO)/.git/hooks/pre-commit"; \
+		if [ -d "$(SECRETS_PRIVATE_REPO)/.git" ]; then \
+			if [ -f "$$HOOK" ] && ! grep -q '^varlock scan' "$$HOOK"; then \
+				echo "    ✗ $$HOOK exists without a varlock scan — add \`varlock scan\` to it by hand"; \
+			elif [ -f "$$HOOK" ]; then \
+				echo "    · dotfiles-private pre-commit varlock gate (ok)"; \
+			else \
+				printf '#!/bin/sh\nvarlock scan\n' > "$$HOOK" && chmod +x "$$HOOK" \
+					&& echo "    ✓ dotfiles-private pre-commit varlock gate installed"; \
+			fi; \
+		else \
+			echo "    · $(SECRETS_PRIVATE_REPO) not checked out — pre-commit varlock gate skipped"; \
+		fi; \
 	else \
 		echo "    · varlock not installed (optional — only the pre-commit scan uses it)"; \
 	fi
@@ -981,6 +1011,19 @@ _setup-scripts:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(DOTFILES_DIR)/scripts/agent-dispatch.sh" \
 		DST="$(HOME)/.local/bin/agent-dispatch"
+	@# ask-human.sh's push half: one Slack line to #agents per enqueued request.
+	@# Cache backend only — the queue is written on the mini; on the MacBook the
+	@# human is the one enqueuing and needs no nudge.
+	@BACKEND=$$(tr -d '[:space:]' < "$(HOME)/.config/secrets/backend" 2>/dev/null || echo ""); \
+	if [ "$$BACKEND" = "cache" ]; then \
+		mkdir -p "$(HOME)/.config/human-queue"; \
+		chmod +x $(DOTFILES_DIR)/scripts/human-queue-notify-hook.sh; \
+		$(MAKE) --no-print-directory _link \
+			SRC="$(DOTFILES_DIR)/scripts/human-queue-notify-hook.sh" \
+			DST="$(HOME)/.config/human-queue/notify-hook"; \
+	else \
+		echo "    · human-queue notify hook (cache backend only — skipped)"; \
+	fi
 
 .PHONY: _setup-zshenv
 # ~/.zshenv is the ONLY startup file zsh reads for a non-interactive,
@@ -1074,6 +1117,14 @@ _setup-skills:
 	@for skill in $(DOTFILES_DIR)/skills/*/; do \
 		name=$$(basename "$$skill"); \
 		$(MAKE) --no-print-directory _link SRC="$$skill" DST="$(CLAUDE_DIR)/skills/$$name"; \
+	done
+	@# A skill deleted here leaves a dangling symlink live, and Claude Code lists
+	@# it as a skill that then fails to load. Prune links whose target is gone —
+	@# only symlinks into this repo, never a directory someone placed there by hand.
+	@for link in $(CLAUDE_DIR)/skills/*; do \
+		[ -L "$$link" ] || continue; \
+		case "$$(readlink "$$link")" in $(DOTFILES_DIR)/skills/*) ;; *) continue ;; esac; \
+		[ -e "$$link" ] || { rm -f "$$link"; echo "    ✓ pruned dead skill link $$(basename "$$link")"; }; \
 	done
 
 .PHONY: _setup-imgcli
@@ -1184,36 +1235,6 @@ _setup-research-gateway-mcp:
 		echo "    ✓ research-gateway MCP registered (research tool)"; \
 	else \
 		echo "    · could not read op://vps/research-gateway/API_SECRET — skipping (op not authed?)"; \
-	fi
-
-# HyperDX/ClickStack is deliberately NOT a registered MCP server. The skill's
-# `skills/otel/scripts/hdx.py` speaks the same MCP endpoint over HTTP (tools,
-# schema, instructions, prompts, call) and loads only when the skill is used,
-# whereas a registration costs every session ~60 deferred tool names plus the
-# server's instructions block on every turn. The setup chain removes stale
-# registrations; `make hyperdx-mcp-register` re-adds them on purpose.
-.PHONY: _cleanup-hyperdx-mcp
-_cleanup-hyperdx-mcp:
-	@for s in hyperdx-prod hyperdx-local; do \
-		claude mcp remove $$s --scope user >/dev/null 2>&1 && echo "  ✓ removed stale $$s MCP registration (use hdx.py via the otel skill)" || true; \
-	done
-
-## Opt-in: register hyperdx-prod / hyperdx-local as MCP servers for this user.
-## Not part of `make setup` — see _cleanup-hyperdx-mcp for why.
-.PHONY: hyperdx-mcp-register
-hyperdx-mcp-register:
-	@echo "  hyperdx-prod MCP (remote HTTP — bearer via 1Password)..."
-	@TOKEN="$$(OP_ACCOUNT=tkrumm $(DOTFILES_DIR)/scripts/secrets-run read op://vps/clickstack/AGENT_ACCESS_KEY 2>/dev/null)"; \
-	if [ -n "$$TOKEN" ]; then \
-		claude mcp remove hyperdx-prod --scope user 2>/dev/null || true; \
-		claude mcp add hyperdx-prod --scope user --transport http https://hyperdx.jkrumm.com/api/mcp --header "Authorization: Bearer $$TOKEN"; \
-		echo "    ✓ hyperdx-prod MCP registered (clickstack_* tools)"; \
-	else \
-		echo "    · could not read op://vps/clickstack/AGENT_ACCESS_KEY — skipping"; \
-	fi
-	@if [ -f "$(HOME)/.config/hyperdx/local.env" ]; then \
-		KEY="$$(grep '^HYPERDX_LOCAL_ACCESS_KEY=' $(HOME)/.config/hyperdx/local.env | cut -d= -f2-)"; \
-		[ -n "$$KEY" ] && { claude mcp remove hyperdx-local --scope user 2>/dev/null || true; claude mcp add hyperdx-local --scope user --transport http http://localhost:7707/api/mcp --header "Authorization: Bearer $$KEY"; echo "    ✓ hyperdx-local MCP registered"; }; \
 	fi
 
 .PHONY: _setup-colima
@@ -2007,21 +2028,11 @@ secrets-backend-cache:
 		echo "    then add its public key as a recipient in $(SECRETS_PRIVATE_REPO)/.sops.yaml and reseed"; \
 	fi
 
-# Weekly staleness reminder for the SOPS+age secrets cache — pushes a heartbeat
-# to an Uptime Kuma push monitor (green while fresh, red once past the max
-# age). Never an automated reseed; just nudges the human to run
-# `make secrets-seed`. See scripts/secrets-freshness-check.sh.
-.PHONY: secrets-freshness-setup secrets-freshness-teardown
-secrets-freshness-setup:
-	@mkdir -p "$(LAUNCHAGENTS)"
-	@$(MAKE) --no-print-directory _render-plists PLISTS="com.jkrumm.secrets-freshness" PLIST_DIR="$(DOTFILES_DIR)/scripts"
-	@echo "    ↳ weekly Mon 09:15 → push cache staleness to Uptime Kuma"
-secrets-freshness-teardown:
-	@PLIST="$(LAUNCHAGENTS)/com.jkrumm.secrets-freshness.plist"; \
-	launchctl unload "$$PLIST" 2>/dev/null || true; \
-	rm -f "$$PLIST"; \
-	echo "  ✓ secrets-freshness torn down (unloaded + plist removed)"
-
+# One-shot staleness push for the SOPS+age secrets cache (green while fresh,
+# red once past the max age). The weekly LaunchAgent that used to run this is
+# gone — the 300 s devhost-health agent pushes the same monitor — but the
+# opbackup reseed guard still runs this after a reseal, and it is the on-demand
+# check. See scripts/secrets-freshness-check.sh.
 .PHONY: secrets-freshness-check
 secrets-freshness-check:
 	@bash $(DOTFILES_DIR)/scripts/secrets-freshness-check.sh
@@ -2371,6 +2382,9 @@ herdr-restart:
 	@sleep 2
 	@herdr status --json 2>/dev/null | jq -r '"  ✓ server v" + .server.version + " · detached_server_daemon=" + (.server.capabilities.detached_server_daemon|tostring) + " (false still prompts on desk)"' \
 		|| echo "  ! could not read herdr status"
+	@# Panes survive the restart, their processes do not — the overview `watch`
+	@# loop is the one that nobody notices is gone (the heartbeat WARNs on it).
+	@$(MAKE) --no-print-directory agent-overview || echo "  ! agent-overview not restarted — run: make agent-overview"
 
 # Collie — phone web-UI control surface for the herd (herdr plugin + Bun
 # bridge). See CLAUDE.md "Collie — the phone control surface" for the full
@@ -2828,6 +2842,12 @@ help:
 	@echo "  make brew-dump          Regenerate the Brewfile from the machine — then review the git diff"
 	@echo "  make brew-upgrade       Upgrade outdated homebrew/core formulae (skips pinned caddy + casks + third-party taps, then asserts the invariants)"
 	@echo "  make brew-upgrade-dry   Preview without upgrading"
+	@echo "  make architecture-check Assert every loaded/on-disk launchd label is in docs/architecture.md"
+	@echo "  make hooks-test         bun test hooks/ — run after any hook edit"
+	@echo "  make secrets-lint       shellcheck secrets-run + the seed/rotate scripts"
+	@echo "  make secrets-test       secrets-run regression suite (+ lint)"
+	@echo "  make opbackup-seed-test Hermetic reseed-guard regression suite"
+	@echo "  make brew-service-test  scripts/lib/brew-service.sh resolver suite"
 	@echo ""
 	@echo "  make colima-start    Start the Docker runtime service (auto-starts at login)"
 	@echo "  make colima-stop     Stop the Docker runtime service"
@@ -2849,23 +2869,33 @@ help:
 	@echo ""
 	@echo "  make secrets-seed           Seed the SOPS+age cache from 1Password (reads dotfiles-private/headless.refs)"
 	@echo "  make secrets-backend-cache  One-time: mark this machine as the headless cache backend (mini only)"
-	@echo "  make secrets-freshness-setup    Load the weekly secrets-cache staleness heartbeat (Mon 09:15)"
-	@echo "  make secrets-freshness-check    Run the staleness check once on demand (for testing)"
+	@echo "  make secrets-rotate         Rotate a cached secret end to end (biometric; refuses on a detached mini)"
+	@echo "  make secrets-freshness-check    Push the secrets-cache staleness monitor once (the 300 s heartbeat does it otherwise)"
 	@echo "  make opbackup-setup             Auto-trigger the 1Password vault backup (MacBook; hourly, guarded)"
 	@echo "  make opbackup-check             Run the guard once — prints which precondition stopped it (FORCE=1 to run)"
 	@echo "  make opbackup-teardown          Remove the auto-trigger (stamps kept)"
 	@echo ""
 	@echo "  Remote dev"
 	@echo "  make authorized-keys            Install trusted SSH keys only — no sudo, no sshd/sharing changes (safe on the IU MacBook)"
+	@echo "  make remote-access              Dev-host only: sshd + Screen Sharing + authorized keys (needs sudo)"
+	@echo "  make git-headless               Dev-host only: write ~/.gitconfig-headless (no 1Password signing)"
+	@echo "  make tailnet-sshd-setup         MacBook: userland sshd on :2222 for the mini's reverse reach"
+	@echo "  make tailnet-sshd-status        MacBook: is that sshd loaded and listening (read-only)"
+	@echo "  make tailnet-sshd-teardown      MacBook: unload + remove it"
+	@echo "  make db-tunnel-setup            MacBook: KeepAlive ssh -L forwards into the mini's databases (dbtunnel/tunnels.conf)"
+	@echo "  make db-tunnel-status           MacBook: tunnel agent + listening ports (read-only)"
+	@echo "  make db-tunnel-teardown         MacBook: unload + remove the tunnel agent"
 	@echo "  make theme                      Apply the look (terminal + herdr + prompt) and reload live — run on BOTH machines"
 	@echo "  make herdr-setup                Claude agent-state hook + project-note keybinding (+ server on the dev host)"
 	@echo "  make herdr-status               Server + brew registration + supervised boot path (read-only)"
 	@echo "  make agent-overview             Dev host: herdr workspace overview watching sideclaw /api/overview.txt (idempotent)"
+	@echo "  make herdr-restart YES=1        Dev host: bootout + bootstrap the herdr server (kills every pane), then re-run agent-overview"
 	@echo "  make devhost-health-setup       Load the 5-min herdr/sshd/tailscale heartbeat → Uptime Kuma"
 	@echo "  make devhost-health-check       Run the readiness check once on demand (for testing)"
 	@echo "  make devhost-health-teardown    Unload + remove the heartbeat agent"
 	@echo "  make human-queue                MacBook: walk the mini's pending present-human requests (run/deny each)"
 	@echo "  make human-queue-list           MacBook: just list them, act on nothing"
+	@echo "  make human-queue-show ID=<id>   MacBook: print one request verbatim"
 	@echo "  make human-queue-run ID=<id>    MacBook: review + confirm + execute one request"
 	@echo "  make human-queue-resolve ID=<id> [NOTE=...]  MacBook: mark done without running the cmd"
 	@echo "  make human-queue-deny ID=<id> [REASON=...]  MacBook: deny one request"
@@ -2874,10 +2904,14 @@ help:
 	@echo "  make log-rotate-check           Run the rotation once on demand (for testing)"
 	@echo "  make log-rotate-teardown        Unload + remove the rotation agent"
 	@echo "  make obsidian-autostart         Dev-host only: start Obsidian at login (agent door for /brain + Hermes)"
+	@echo "  make obsidian-autostart-teardown  Unload + remove the autostart agent"
+	@echo "  make drift-check-setup          Dev-host only: load the daily 09:40 upstream-drift agent → Uptime Kuma"
+	@echo "  make drift-check-teardown       Unload + remove the drift agent"
 	@echo "  make lock-at-boot-setup         Dev-host only: lock the screen right after the unattended auto-login"
 	@echo "  make lock-at-boot-check         Show FileVault / autologin / autorestart / screenLock / lock state"
 	@echo "  make lock-at-boot-teardown      Unload + remove the lock-at-boot agent"
 	@echo ""
+	@echo "  make caddy-tailnet              Dev-host only: regenerate + validate + reload the clean https://<app>.\$$DEV_DOMAIN doors from config/Caddyfile"
 	@echo "  make caddy-dns-build            Dev-host only: build Caddy w/ Cloudflare DNS module (needed for the clean https://<app>.\$$DEV_DOMAIN door; re-run after any brew upgrade of caddy)"
 	@echo "  make caddy-boot-order           NEEDS SUDO: order the caddy daemon behind the tailnet address it binds (re-run after any brew upgrade of caddy)"
 	@echo ""

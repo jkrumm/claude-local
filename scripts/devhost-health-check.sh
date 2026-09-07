@@ -127,6 +127,11 @@ COLIMA_START_WRAPPER="${COLIMA_START_WRAPPER:-$HOME/SourceRoot/dotfiles/colima/c
 CADDY_ADMIN_URL="${CADDY_ADMIN_URL:-http://127.0.0.1:2019}"
 SIDECLAW_URL="${SIDECLAW_URL:-http://127.0.0.1:7705}"
 HERMES_PORT="${HERMES_PORT:-8642}"
+AUDIO_GATEWAY_URL="${AUDIO_GATEWAY_URL:-http://127.0.0.1:7719}"
+BRAIN_WEB_URL="${BRAIN_WEB_URL:-http://127.0.0.1:7733}"
+WALKINGPAD_URL="${WALKINGPAD_URL:-http://127.0.0.1:7706}"
+USAGE_TRACKER_LOG="${USAGE_TRACKER_LOG:-$HOME/Library/Logs/usage-tracker.log}"
+PGREP_BIN="${PGREP_BIN:-/usr/bin/pgrep}"
 
 # Thresholds, every one overridable so a check can be driven to its failing
 # side on a healthy machine — otherwise the only way to test the alarm is to
@@ -142,6 +147,12 @@ TS_KEY_EXPIRY_DAYS_MIN="${DEVHOST_TS_KEY_EXPIRY_DAYS_MIN:-30}"
 RUNAWAY_CPU_MINUTES="${DEVHOST_RUNAWAY_CPU_MINUTES:-600}"
 RUNAWAY_CPU_PCT_MIN="${DEVHOST_RUNAWAY_CPU_PCT_MIN:-50}"
 SECRETS_FRESHNESS_MAX_AGE_DAYS="${SECRETS_FRESHNESS_MAX_AGE_DAYS:-8}"
+# usage-tracker runs every 900s; twice that plus slack before "it stopped".
+USAGE_TRACKER_MAX_AGE_MIN="${DEVHOST_USAGE_TRACKER_MAX_AGE_MIN:-30}"
+# Max quota is reported, never graded — except a WARN (never FAIL) when the
+# 5-hour window is nearly spent, which is the one reading that changes what an
+# agent should do next.
+QUOTA_5H_WARN_PCT="${DEVHOST_QUOTA_5H_WARN_PCT:-90}"
 SECRETS_CACHE_FILE="${SECRETS_CACHE_FILE:-$HOME/SourceRoot/dotfiles-private/cache/secrets.enc.json}"
 # Restart detection is a DELTA, so it needs somewhere to remember the last
 # reading. ~/.local/state, not /tmp: /tmp is world-writable and this file
@@ -791,7 +802,11 @@ sideclaw|$HOME/Library/LaunchAgents/com.jkrumm.sideclaw-server.plist|probe_sidec
 hermes|$HOME/Library/LaunchAgents/ai.hermes.gateway.plist|probe_hermes
 colima|$COLIMA_PLIST|probe_colima
 caddy|$(brew_service_plist caddy system 2>/dev/null || brew_service_expected_plist caddy system)|probe_caddy
-dnsmasq|$(brew_service_plist dnsmasq system 2>/dev/null || brew_service_expected_plist dnsmasq system)|probe_dnsmasq"
+dnsmasq|$(brew_service_plist dnsmasq system 2>/dev/null || brew_service_expected_plist dnsmasq system)|probe_dnsmasq
+audio-gateway|$HOME/Library/LaunchAgents/com.jkrumm.audio-gateway.plist|probe_audio_gateway
+brain-web|$HOME/Library/LaunchAgents/com.jkrumm.brain-web-refresh.plist|probe_brain_web
+usage-tracker|$HOME/Library/LaunchAgents/com.jkrumm.usage-tracker.plist|probe_usage_tracker
+walkingpad|$HOME/Library/LaunchAgents/com.jkrumm.walkingpad.plist|probe_walkingpad"
 
 probe_sideclaw() {
   local code
@@ -900,10 +915,43 @@ probe_dnsmasq() {
     || { echo "dnsmasq not resolving *.test (got ${answer:-nothing}) — every .test name on this machine is dead"; return 1; }
 }
 
+probe_audio_gateway() {
+  local code
+  code=$(http_code "$AUDIO_GATEWAY_URL/health")
+  [[ "$code" == "200" ]] || { echo "audio-gateway not answering on $AUDIO_GATEWAY_URL (got ${code:-000})"; return 1; }
+}
+
+probe_brain_web() {
+  # The reader behind brain.<dev domain>; its refresh agent is the gate, the
+  # served page is the probe — a rebuilt dist/ nothing serves is still down.
+  local code
+  code=$(http_code "$BRAIN_WEB_URL/")
+  [[ "$code" == "200" ]] || { echo "brain-web not answering on $BRAIN_WEB_URL (got ${code:-000})"; return 1; }
+}
+
+probe_usage_tracker() {
+  # A scheduled job, not a listener: liveness is "it ran recently". The log
+  # mtime moves on every run (launchd appends stdout each time), so it is the
+  # last-run timestamp without parsing a line format that is free to change.
+  [[ -f "$USAGE_TRACKER_LOG" ]] || { echo "usage-tracker has never written $USAGE_TRACKER_LOG"; return 1; }
+  local mtime age
+  mtime=$("$STAT_BIN" -f %m "$USAGE_TRACKER_LOG" 2>/dev/null) || mtime=0
+  (( mtime > 0 )) || { echo "usage-tracker log mtime unreadable at $USAGE_TRACKER_LOG"; return 1; }
+  age=$(( ($("$DATE_BIN" +%s) - mtime) / 60 ))
+  (( age <= USAGE_TRACKER_MAX_AGE_MIN )) \
+    || { echo "usage-tracker last ran ${age}m ago (max ${USAGE_TRACKER_MAX_AGE_MIN}m on a 15m cadence)"; return 1; }
+}
+
+probe_walkingpad() {
+  local code
+  code=$(http_code "$WALKINGPAD_URL/status")
+  [[ "$code" == "200" ]] || { echo "walkingpad not answering on $WALKINGPAD_URL (got ${code:-000})"; return 1; }
+}
+
 check_services() {
-  # Six always-on services that nothing watched. Each is gated on its own
-  # plist, so a machine that never installed one SKIPS it rather than failing —
-  # the collie rule, applied six more times.
+  # Always-on services that nothing watched. Each is gated on its own plist,
+  # so a machine that never installed one SKIPS it rather than failing — the
+  # collie rule, applied once per service.
   local entry name rest gate probe reason up=0 skipped=0 down=""
   while IFS= read -r entry; do
     [[ -n "$entry" ]] || continue
@@ -922,6 +970,62 @@ check_services() {
   local skip_note=""
   (( skipped == 0 )) || skip_note=", $skipped not installed"
   echo "services up (${up}${skip_note})"
+}
+
+# sideclaw's job runner, as distinct from its HTTP liveness in probe_sideclaw:
+# a daemon that answers /health while every check/review job wedges is the
+# failure that hid behind "services up". The endpoint is sideclaw's own verdict
+# (`ok:false` = FAIL); a 404 means a sideclaw that predates it and is reported
+# as starting, not failed — grading an endpoint that does not exist yet would
+# page on every machine the moment this check shipped ahead of it.
+check_sideclaw_jobs() {
+  [[ -e "$HOME/Library/LaunchAgents/com.jkrumm.sideclaw-server.plist" ]] || { echo "sideclaw jobs n/a"; return 0; }
+  local out code body ok detail
+  out=$("$CURL_BIN" -s --max-time 4 -w '\n%{http_code}' "$SIDECLAW_URL/api/jobs/health" 2>/dev/null) || out=$'\n000'
+  code=${out##*$'\n'}; body=${out%$'\n'*}
+  case "$code" in
+    200) ;;
+    404) echo "sideclaw jobs: /api/jobs/health not served yet (starting)"; return 0 ;;
+    *)   echo "sideclaw jobs endpoint not answering on $SIDECLAW_URL (got ${code:-000})"; return 1 ;;
+  esac
+  ok=$("$JQ_BIN" -r '.ok // false' <<<"$body" 2>/dev/null) || ok=""
+  detail=$("$JQ_BIN" -r '.error // .detail // .summary // empty' <<<"$body" 2>/dev/null) || detail=""
+  [[ "$ok" == "true" ]] || { echo "sideclaw jobs unhealthy${detail:+: $detail}"; return 1; }
+  echo "sideclaw jobs ok${detail:+ ($detail)}"
+}
+
+# The `make agent-overview` pane — a `watch` loop over sideclaw's overview.txt
+# in a herdr workspace. Panes survive a herdr restart, their processes do not,
+# so this is the one thing that silently stops after every `make herdr-restart`.
+# WARN, never FAIL: it is a display, and a missing display must not page "dev
+# host DOWN".
+check_overview_pane() {
+  [[ -e "$HOME/Library/LaunchAgents/com.jkrumm.sideclaw-server.plist" ]] || { echo "overview pane n/a"; return 0; }
+  if "$PGREP_BIN" -f 'watch .*overview\.txt' >/dev/null 2>&1; then
+    echo "overview pane alive"
+    return 0
+  fi
+  echo "overview pane not running (fix: make agent-overview)"
+  return 2
+}
+
+# Max quota utilisation, appended to the push msg so the heartbeat carries the
+# one number every agent decision on this host depends on. Reported, not
+# graded: a spent window is a scheduling fact, not a broken machine. The one
+# exception is a WARN at QUOTA_5H_WARN_PCT — still never a FAIL.
+check_quota() {
+  local body five seven text
+  body=$("$CURL_BIN" -s --max-time 4 "$SIDECLAW_URL/api/usage" 2>/dev/null) || body=""
+  five=$("$JQ_BIN" -r '.data.five_hour_pct // empty' <<<"$body" 2>/dev/null) || five=""
+  seven=$("$JQ_BIN" -r '.data.seven_day_pct // empty' <<<"$body" 2>/dev/null) || seven=""
+  case "$five" in ''|*[!0-9]*) echo "quota unavailable"; return 0 ;; esac
+  case "$seven" in ''|*[!0-9]*) seven="?" ;; esac
+  text="quota 5h ${five}% · 7d ${seven}%"
+  if (( five >= QUOTA_5H_WARN_PCT )); then
+    echo "$text — 5h window nearly spent"
+    return 2
+  fi
+  echo "$text"
 }
 
 claude_token_works() {
@@ -1117,15 +1221,27 @@ if (( uptime_s < BOOT_GRACE_SECONDS )); then in_boot_grace=1; fi
 
 for component in check_tailscale check_sshd check_herdr check_git_push check_dev_vhosts \
                  check_memory check_launchd_restarts check_boot_path check_services check_claude_auth \
-                 check_obsidian check_disk check_runaways; do
+                 check_obsidian check_disk check_runaways check_sideclaw_jobs check_overview_pane \
+                 check_quota; do
   # Substring match on space-padded strings — bash 3.2 has no associative
   # arrays, and this script must stay 3.2 (launchd hands it Apple's /bin/bash).
   is_transient=1
   if [[ " $IMMEDIATE_COMPONENTS " == *" $component "* ]]; then is_transient=0; fi
   streak_file="$STATE_DIR/fail-$component"
 
-  if detail=$("$component"); then
+  # Three grades, by exit code: 0 healthy, 2 WARN (named in the msg, never a
+  # page, no streak), anything else FAIL (subject to the grace and streak
+  # rules below). `|| rc=$?` rather than `if cmd`: the status of an if-compound
+  # whose branch did not run is 0, which would read every failure as healthy.
+  rc=0
+  detail=$("$component") || rc=$?
+  if (( rc == 0 )); then
     details+=("$detail")
+    rm -f "$streak_file" 2>/dev/null || true
+    continue
+  fi
+  if (( rc == 2 )); then
+    details+=("WARN: $detail")
     rm -f "$streak_file" 2>/dev/null || true
     continue
   fi

@@ -7,7 +7,7 @@ one-line gotchas live in `CLAUDE.md`.
 
 `scripts/devhost-health-check.sh` runs every 300 s via the
 `com.jkrumm.devhost-health` LaunchAgent and pushes **three** Uptime Kuma
-monitors. `MacMini Dev Host - Push` is the composite, covering **thirteen**
+monitors. `MacMini Dev Host - Push` is the composite, covering **sixteen**
 components:
 
 | Component | Checks |
@@ -20,11 +20,17 @@ components:
 | memory | pressure level + swap as a share of RAM |
 | launchd restarts | delta on `runs` for every KeepAlive job, **excluding `Terminated: 15`** (a deliberate restart) |
 | boot path | plist on disk + `launchctl print` path match for every KeepAlive job (brew services resolved under either name — `homebrew.mxcl.<x>` / `sh.brew.<x>`, see `scripts/lib/brew-service.sh`) |
-| services | sideclaw, hermes gateway, colima, caddy, dnsmasq |
+| services | sideclaw, hermes gateway, colima, caddy, dnsmasq, audio-gateway (`:7719/health`), brain-web (`:7733/`), usage-tracker (log mtime < 30 min), walkingpad (`:7706/status`) — each gated on its plist |
 | claude auth | keychain credential, then the token fallback |
 | obsidian | CLI answers (i.e. the app is running) |
 | disk | free space |
 | runaways | report-only CPU-time reaper |
+| sideclaw jobs | sideclaw `GET /api/jobs/health` — `ok:false` FAILs; a 404 (older sideclaw) reports `starting` |
+| overview pane | the `make agent-overview` `watch` loop is alive — **WARN**, never FAIL |
+| quota | Max utilisation from sideclaw `GET /api/usage`, appended ungraded (`quota 5h 48% · 7d 21%`); **WARN** at 5 h ≥ 90 % |
+
+A component exits 0 (healthy), 2 (WARN — named in the msg, no streak, never a
+page) or anything else (FAIL — subject to the boot grace and streak rules below).
 
 | Command | Purpose |
 |-|-|
