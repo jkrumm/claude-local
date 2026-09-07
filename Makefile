@@ -1969,6 +1969,16 @@ secrets-test: secrets-lint
 	@chmod +x $(DOTFILES_DIR)/scripts/secrets-seed.test.sh
 	@$(DOTFILES_DIR)/scripts/secrets-seed.test.sh
 
+# Guard regression suite for the hourly secrets-cache reseed. Fully hermetic —
+# stubs ssh/op/pgrep/ioreg and drives a local bare repo as `origin`, so it runs
+# on either machine and touches no network. It existed for weeks wired into no
+# target at all; an unrun test is a comment.
+.PHONY: opbackup-seed-test
+opbackup-seed-test:
+	@shellcheck -S warning $(DOTFILES_DIR)/scripts/opbackup-seed-auto.sh $(DOTFILES_DIR)/scripts/opbackup-seed-auto.test.sh
+	@chmod +x $(DOTFILES_DIR)/scripts/opbackup-seed-auto.test.sh
+	@$(DOTFILES_DIR)/scripts/opbackup-seed-auto.test.sh
+
 # Resolver regression suite. scripts/lib/brew-service.sh decides WHICH plist the
 # supervise/status/restart targets read and rewrite, so a bug here disarms a boot
 # path silently — the exact failure the resolver exists to end. Hermetic: it

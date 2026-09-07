@@ -85,6 +85,12 @@ set -euo pipefail
 EOF
 chmod +x "$fake_seed"
 
+# Every case must pin PRIVATE_DIR. Left unset it defaults to the real
+# ~/SourceRoot/dotfiles-private and the refs gate does a live `git fetch` —
+# a network call inside a suite that is otherwise fully stubbed.
+nogit_dir="$TMP/nogit"
+mkdir -p "$nogit_dir"
+
 run_seed() {
   local now="$1" mtime="$2" marker="$3"
   rm -f "$marker" "$marker.freshness"
@@ -101,7 +107,8 @@ run_seed() {
   OPBACKUP_SEED_PGREP="$fake_pgrep" \
   OPBACKUP_SEED_IOREG="$fake_ioreg" \
   OPBACKUP_SEED_BACKEND_FILE="$backend_file" \
-  OPBACKUP_SEED_STATE_DIR="$TMP/state" \
+  OPBACKUP_SEED_STATE_DIR="${SEED_STATE_DIR:-$TMP/state}" \
+  OPBACKUP_SEED_PRIVATE_DIR="${SEED_PRIVATE_DIR:-$nogit_dir}" \
   OPBACKUP_SEED_SCRIPT="$fake_seed" \
   OPBACKUP_SEED_OP_AGENT="$fake_agent" \
   OPBACKUP_SEED_OP="$fake_op" \
@@ -262,6 +269,7 @@ out=$(SEED_MARKER="$TMP/locked.marker" \
   OPBACKUP_SEED_IOREG="$fake_ioreg" \
   OPBACKUP_SEED_BACKEND_FILE="$backend_file" \
   OPBACKUP_SEED_STATE_DIR="$TMP/state" \
+  OPBACKUP_SEED_PRIVATE_DIR="$nogit_dir" \
   OPBACKUP_SEED_SCRIPT="$fake_seed" \
   OPBACKUP_SEED_OP="$fake_op" \
   OPBACKUP_SEED_TIMEOUT="$fake_timeout" \
@@ -277,5 +285,69 @@ case "$out" in *"locked"*) ;; *) echo "expected locked skip, got: $out" >&2; exi
 # ...and the attempt stamp must NOT be written for a locked skip, or the 6h backoff
 # would punish a state the user fixes in two seconds by unlocking the app.
 test ! -e "$TMP/state/seed-last-attempt"
+
+
+# --- the refs-change trigger -------------------------------------------------
+#
+# The bug these cover, observed 2026-09-07: an agent on the mini pushes a new
+# ref to dotfiles-private, the mini's cache is still FRESH by mtime, so the age
+# gate skipped for days while the mini enqueued a present-human request asking
+# for a manual `make secrets-seed`. And when a reseal did run it sealed this
+# machine's stale checkout, so the new ref was missing from a cache that
+# reported success.
+#
+# Fully local: a bare repo as `origin`, no network. Commit dates are pinned to
+# the same fake epoch the rest of the suite uses, or a real commit timestamp
+# would tower over FAKE_CACHE_MTIME and make every case look "refs newer".
+priv_origin="$TMP/priv-origin.git"
+priv="$TMP/priv"
+git init -q --bare -b main "$priv_origin"
+git init -q -b main "$priv"
+git -C "$priv" config user.email t@example.com
+git -C "$priv" config user.name test
+git -C "$priv" config commit.gpgsign false
+printf 'op://vault/old/ref\n' >"$priv/headless.refs"
+printf '\n' >"$priv/headless.iu.refs"
+git -C "$priv" add -A
+GIT_AUTHOR_DATE='@600000 +0000' GIT_COMMITTER_DATE='@600000 +0000' \
+  git -C "$priv" commit -q -m 'refs: initial'
+git -C "$priv" remote add origin "$priv_origin"
+git -C "$priv" push -q -u origin main
+
+# Cache newer than the newest refs commit (600000 < 690000) and only ~3h old:
+# unchanged behaviour, still a no-op.
+SEED_PRIVATE_DIR="$priv" SEED_STATE_DIR="$TMP/state-refs-a" \
+  run_seed 700000 690000 "$TMP/refs-old.marker"
+test ! -e "$TMP/refs-old.marker"
+
+# Now push a refs commit NEWER than the seal, and rewind the local checkout so
+# it is genuinely behind — exactly the shape that failed in production.
+printf 'op://vault/new/ref\n' >>"$priv/headless.refs"
+git -C "$priv" add -A
+GIT_AUTHOR_DATE='@695000 +0000' GIT_COMMITTER_DATE='@695000 +0000' \
+  git -C "$priv" commit -q -m 'refs: add the new one'
+git -C "$priv" push -q origin main
+git -C "$priv" reset -q --hard HEAD~1
+grep -q 'new/ref' "$priv/headless.refs" && { echo "setup wrong: local still has the new ref" >&2; exit 1; }
+
+# A FRESH cache must now seed anyway, because the refs list moved...
+SEED_PRIVATE_DIR="$priv" SEED_STATE_DIR="$TMP/state-refs-b" \
+  run_seed 700000 690000 "$TMP/refs-new.marker"
+test -f "$TMP/refs-new.marker"
+
+# ...and the checkout must have been fast-forwarded BEFORE sealing, or the seal
+# would deliver a cache missing the very ref that triggered it.
+grep -q 'new/ref' "$priv/headless.refs"
+
+# A checkout that cannot fast-forward must FAIL OPEN and loudly: the seed still
+# runs (so the age-driven reseal keeps working) and the log names the problem.
+# A silent skip here would be the worse failure — it is invisible and permanent.
+printf 'op://vault/local/uncommitted\n' >>"$priv/headless.refs"
+git -C "$priv" reset -q --hard HEAD~1     # behind again, and now dirty
+printf 'dirty\n' >>"$priv/headless.refs"
+out=$(SEED_PRIVATE_DIR="$priv" SEED_STATE_DIR="$TMP/state-refs-c" \
+  run_seed 700000 690000 "$TMP/refs-dirty.marker" 2>&1)
+test -f "$TMP/refs-dirty.marker"
+case "$out" in *"cannot fast-forward"*) ;; *) echo "expected a fast-forward warning, got: $out" >&2; exit 1 ;; esac
 
 printf '%s\n' 'opbackup-seed-auto: all tests passed'

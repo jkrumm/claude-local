@@ -25,6 +25,8 @@ REMOTE_HOST="${OPBACKUP_SEED_REMOTE_HOST:-mini}"
 # successful reseed. Keep the `\$HOME`; do not "simplify" it to a real path.
 REMOTE_CACHE_FILE="${OPBACKUP_SEED_REMOTE_CACHE_FILE:-\$HOME/SourceRoot/dotfiles-private/cache/secrets.enc.json}"
 SEED_SCRIPT="${OPBACKUP_SEED_SCRIPT:-$HOME/SourceRoot/dotfiles/scripts/secrets-seed.sh}"
+PRIVATE_DIR="${OPBACKUP_SEED_PRIVATE_DIR:-$HOME/SourceRoot/dotfiles-private}"
+GIT_CMD="${OPBACKUP_SEED_GIT:-/usr/bin/git}"
 REMOTE_DOTFILES_DIR="${OPBACKUP_SEED_REMOTE_DOTFILES_DIR:-\$HOME/SourceRoot/dotfiles}"
 BACKEND_FILE="${OPBACKUP_SEED_BACKEND_FILE:-$HOME/.config/secrets/backend}"
 SSH_CMD="${OPBACKUP_SEED_SSH:-/usr/bin/ssh}"
@@ -143,8 +145,54 @@ if [ "$remote_mtime" -eq 0 ]; then
 fi
 
 cache_age=$(( ${OPBACKUP_SEED_NOW:-$("$DATE_CMD" +%s)} - remote_mtime ))
-if [ "$cache_age" -lt $(( MAX_AGE_DAYS * 86400 )) ]; then
-  skip "remote cache $(( cache_age / 86400 ))d old (< ${MAX_AGE_DAYS}d)"
+
+# AGE IS NOT THE ONLY REASON A CACHE IS STALE, and treating it as one is what
+# turned this job into a daily manual chore. An agent on the mini that needs a
+# new secret commits the ref to dotfiles-private and pushes; the cache on the
+# mini is still fresh by mtime, so the age gate below skipped for up to
+# MAX_AGE_DAYS and the mini sat there enqueuing a present-human request asking
+# for `make secrets-seed` by hand. The refs list changing IS the cache going
+# stale — it just isn't visible in a timestamp.
+#
+# And the second half of the same bug: this machine seeds from its OWN checkout
+# of dotfiles-private. If it never pulls, a ref the mini pushed is simply absent
+# from the list being sealed, so even a reseal that runs delivers a cache
+# missing exactly the secret that triggered it. That failed silently on
+# 2026-09-07 — the reseal reported 161 secrets sealed and the requested ref was
+# still unresolvable on the mini.
+#
+# The comparison is the newest UPSTREAM commit touching either refs file against
+# the remote cache's mtime: refs newer than the seal ⇒ due, no new state to keep
+# and no way for it to drift. A fetch failure (offline) degrades to the age gate
+# alone rather than blocking.
+refs_due=0
+if [ -d "$PRIVATE_DIR/.git" ]; then
+  if "$GIT_CMD" -C "$PRIVATE_DIR" fetch -q --no-tags origin 2>/dev/null; then
+    upstream=$("$GIT_CMD" -C "$PRIVATE_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || echo "")
+    if [ -n "$upstream" ]; then
+      refs_ct=$("$GIT_CMD" -C "$PRIVATE_DIR" log -1 --format=%ct "$upstream" -- headless.refs headless.iu.refs 2>/dev/null || echo 0)
+      case "$refs_ct" in ''|*[!0-9]*) refs_ct=0 ;; esac
+      if [ "$refs_ct" -gt "$remote_mtime" ]; then
+        refs_due=1
+        # Fail OPEN, loudly. A dirty or diverged checkout must not become a
+        # permanent silent skip (this repo has been bitten by exactly that shape
+        # more than once) — the seed still runs, so the age-driven reseal keeps
+        # working, and refs_due stays set so the next tick tries again.
+        if "$GIT_CMD" -C "$PRIVATE_DIR" merge --ff-only "$upstream" >/dev/null 2>&1; then
+          log "refs changed upstream since the last seal — fast-forwarded $PRIVATE_DIR"
+        else
+          log "WARNING: refs changed upstream but $PRIVATE_DIR cannot fast-forward (dirty or diverged) — sealing the LOCAL list, the new refs will be MISSING"
+          notify "1Password secrets cache" "dotfiles-private cannot fast-forward — new refs will be missing."
+        fi
+      fi
+    fi
+  else
+    log "could not fetch $PRIVATE_DIR (offline?) — falling back to the age gate alone"
+  fi
+fi
+
+if [ "$refs_due" -eq 0 ] && [ "$cache_age" -lt $(( MAX_AGE_DAYS * 86400 )) ]; then
+  skip "remote cache $(( cache_age / 86400 ))d old (< ${MAX_AGE_DAYS}d) and refs unchanged"
 fi
 
 tried_ago=$(age_seconds "$ATTEMPT_STAMP")
@@ -196,7 +244,11 @@ done
 
 mkdir -p "$STATE_DIR"
 : >"$ATTEMPT_STAMP"
-log "running — remote cache $(( cache_age / 86400 ))d old; approve the Touch ID prompts"
+if [ "$refs_due" -eq 1 ]; then
+  log "running — refs changed upstream since the last seal; approve the Touch ID prompts"
+else
+  log "running — remote cache $(( cache_age / 86400 ))d old; approve the Touch ID prompts"
+fi
 notify "1Password secrets cache" "Starting — approve the Touch ID prompts."
 
 if "$SEED_SCRIPT"; then

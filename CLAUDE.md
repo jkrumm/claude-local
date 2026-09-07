@@ -153,13 +153,12 @@ Four facts to hold:
   launchd's *cache*) — it kills every pane, so it is human-timed.
 
 **human-queue** — ssh gives the mini reach, not a fingerprint. Work needing a
-*present human* (biometric `op`, the ACL push, any person-only decision) is
-enqueued on the mini with `ask-human.sh ask "…" [--cmd …] [--wait]` and drained on
-the MacBook with `make human-queue`, which **walks** each one and runs/denies it
-in place (`-list`, `-run ID=`, `-deny ID=` single-shot; no TTY → a list). The mini
-only *proposes* a command string; `run` needs a typed `yes` on a real TTY, per
-request. Nothing drains it automatically — a poller means unattended Touch ID
-forever.
+*present human* (biometric `op`, the ACL push, a person-only call) is enqueued on
+the mini with `ask-human.sh ask "…" [--cmd …]`; `make human-queue`
+**walks** each one on the MacBook (r/already-done/deny/skip; `-run`, `-resolve`,
+`-deny ID=` single-shot; no TTY → a list). `resolve` closes one satisfied out of
+band. The mini only *proposes* a string; `run` needs a typed `yes` on a real TTY,
+per request. No poller — that means unattended Touch ID forever.
 
 **`/remote-dev`** for anything touching this stack; model in `docs/remote-dev.md`.
 
@@ -527,36 +526,32 @@ Trade: `docs/remote-dev.md`.
 ## opbackup + secrets auto-reseed (MacBook only)
 
 `opbackup` (`scripts/backup-1password.py`) exports every vault, age-encrypts it in
-memory and rsyncs the ciphertext to homelab. The same hourly agent
-(`com.jkrumm.opbackup`) also reseeds the mini's secrets cache.
+memory, rsyncs the ciphertext to homelab. The same hourly agent also reseeds the
+mini's secrets cache.
 
 | Command | Does |
 |-|-|
-| `make opbackup-setup` | Seed the stamp from the newest remote backup, install + load the agent |
-| `make opbackup-check` | Run the guard once; prints which precondition stopped it. `FORCE=1` backs up now |
+| `make opbackup-setup` | Stamp from the newest remote backup, install + load the agent |
+| `make opbackup-check` | Run the guard once; prints what stopped it. `FORCE=1` backs up now |
+| `make opbackup-seed-test` | Hermetic reseed-guard regression suite |
 | `make opbackup-teardown` | Unload + remove (stamps kept) |
 
-**It does not make the backup unattended and must never be made to** — the first
-`op` call raises a biometric approval, and every way around that parks a
-credential able to export every vault. The goal is a prompt at a sane moment.
+**Never unattended, and must never be made to** — the first `op` call raises a
+biometric approval, and every way around that parks a credential able to export
+every vault. The goal is a prompt at a sane moment.
 
+- **A new ref is a stale cache even at a fresh mtime.** The guard fetches
+  dotfiles-private, fast-forwards, and reseeds when a `headless*.refs` commit is
+  newer than the mini's seal — an agent there commits and **pushes** a ref and it
+  is live within the hour, no `ask-human` round trip. Age alone meant a 5-day
+  wait, and sealing an unpulled checkout delivered a cache missing the ref that
+  triggered it. Fails open, loudly, when it cannot fast-forward.
 - **Hourly via `StartCalendarInterval`**, never `RunAtLoad`/`StartInterval` — only
-  calendar intervals coalesce a fire missed while asleep into one wake-up run.
-- **Every decision lives in `scripts/opbackup-auto.sh`**, cheapest-first, each
-  exiting **0** (a skip is the normal case). Two separate stamps (success >5d,
-  attempt >6h), because declining an approval must not mean being asked again in
-  60 minutes forever. Screen lock is `ioreg -n Root -d1 -k
-  CGSSessionScreenIsLocked` — the key is **absent** while unlocked — read into a
-  variable, never piped to `grep -q` (`pipefail` turns SIGPIPE into a false fail).
-- **Retention:** `prune_remote()` keeps the newest 8 plus the newest per calendar
-  month, deleting an explicit regex-validated filename list, never a remote glob —
-  an old dump stays decryptable after the passwords in it are rotated.
+  those coalesce a sleep-missed fire into one wake-up run.
 - **A skip line in `~/Library/Logs/opbackup.log` is a claim, not a diagnosis** —
-  three Secrets gotchas above (whoami, per-binary approval, a locked app reading as
-  "mini unreachable") each present as a clean deliberate skip.
-- **One transient `op read` failure must not discard a whole ~150-ref run** — reads
-  are `timeout -k`-bounded and retried 3× **on transient errors only**; retrying a
-  genuinely missing ref just delays an error a human has to fix.
+  every guard exits **0**, and three Secrets gotchas above each present as one.
+
+Full rationale: `docs/opbackup.md`.
 
 ## Battery charge limiter (MacBook only)
 
