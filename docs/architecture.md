@@ -94,7 +94,6 @@ exists.
 | `com.jkrumm.hermes-liveness` | 300s | Kuma push monitor |
 | `com.jkrumm.hermes-serve-liveness` | 300s | Kuma push monitor |
 | `com.jkrumm.hermes-webui-liveness` | 300s | Kuma push monitor |
-| `com.radiosilenceapp.agent` | — | dead vendor stub, safe to remove |
 | `com.1password.1password-launcher` | — | 1Password app launcher (vendor) |
 
 ### meteo
