@@ -50,10 +50,13 @@ lead, humor, minutes — once the editorial pass has run), downloads
 
 ## Flow
 
-1. **Get the source.** A brain note → read it with `/brain` (or `cat` the file
-   under `~/SourceRoot/brain/…`); a URL or article → fetch it to a temp file;
-   pasted text → write it to a temp file. Pass the *whole* text — the writer
-   only speaks facts that are in the source, so thin input makes a thin episode.
+1. **Point the gateway at the source, don't re-gather it.** The gateway runs its
+   own research loop (brain search/read, past episodes, research gateway), so a
+   brain note is passed by path (`--path "Areas/Travel/Northern Spain 2026/Northern Spain 2026.md"`,
+   repeatable) and only material that is NOT in the brain — a URL, an article, a
+   pasted text — goes through `--source <file>`. Never paste a brain note that
+   `--path` can name; two agents gathering the same material is the double loop
+   this pipeline replaced. The `--brief` says who listens and what he wants.
 2. **Write the brief.** One or two sentences: who the listener is and what they
    want. Johannes is usually the listener and usually the author of the notes,
    so say so: `--brief "Johannes plant genau diese Reise mit dem Camper; sprich
@@ -82,7 +85,7 @@ lead, humor, minutes — once the editorial pass has run), downloads
 | `PODCAST_OUTLINE_MODEL` / `PODCAST_WRITE_MODEL` | `claude-opus-5` / `claude-opus-4-6` | story pass / the voice owner (segments + every revision) |
 | `PODCAST_REVIEW_MODELS` / `PODCAST_METADATA_MODEL` | `gemini-3.8-flash,gpt-5.6-luna` / `gpt-5.6-luna` | three review lenses × each model, notes only / title, show notes, cover prompt, chapter titles, topics |
 | `PODCAST_SHOW_BIBLE` | `./docs/show-bible.md` | binding house style injected into every writer and reviewer prompt |
-| `BRAIN_DIR` / `RESEARCH_API_KEY` | `/Users/jkrumm/SourceRoot/brain` / — | unset either and research + the brain note are skipped |
+| `BRAIN_DIR` / `RESEARCH_API_KEY` | `../brain` (repo-relative) / — | unset either and research + the brain note are skipped |
 | `PODCAST_TTS_MODEL` | `elevenlabs/v3` | per-turn synthesis |
 | `PODCAST_VOICES` / `PODCAST_HOST_NAMES` | `Mark,Sarah` / `Jonas,Lena` | host A, host B |
 | `PODCAST_STABILITY` / `PODCAST_SPEEDS` | `0.5` / `0.94,1` | v3 stability preset (0 / 0.5 / 1) · per-host speed |
