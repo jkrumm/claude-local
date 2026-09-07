@@ -70,6 +70,26 @@ image-gen gateway (generate/edit/enhance) each take one kind of work off the
 mini and expose it as a submit-then-poll HTTP service — an agent on the mini
 calls out and polls rather than doing STT, TTS or image generation itself.
 
+## Diagrams
+
+Two validated artifacts in `docs/diagrams/`, each one self-contained HTML: open
+the file, no server. They carry pan/zoom, search, relationship tracing and their
+own image export, so a screenshot is never the way to share one.
+
+| File | The question it answers |
+|-|-|
+| `estate.html` | Where does everything sit, and what talks to what — the mental model above, drawn. |
+| `dispatch-path.html` | What happens between a Slack message and committed work, including the two ways it stops. |
+
+Both are compiled from the `.json` beside them with the vendored `archify`
+skill, which validates geometry and composition before it will deliver: an
+arrow through a box or a label over a node fails the build. Regenerate with
+`node skills/archify/bin/archify.mjs deliver <type> <spec.json> <out.html>
+--quality <standard|showcase>`. The estate diagram sits on `standard` on
+purpose — at `showcase` the profile forbids every unrelated crossing, and a
+twenty-node graph with two feedback loops cannot honour that without lying
+about the loops.
+
 ## Repos
 
 ### On both machines (sanctioned set)
