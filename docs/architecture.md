@@ -4,8 +4,8 @@ title: Architecture — the whole environment on one page
 tags:
   - engineering
   - infrastructure
-timestamp: 2026-09-04
-description: The whole personal environment on one page — machines, repos, launchd jobs and their owner repos, inbound doors, secrets flow, monitoring. Lives in dotfiles/docs and is symlinked into the brain vault.
+timestamp: 2026-09-07
+description: The whole personal environment on one page — the owner's mental model (what each machine and surface is FOR), then the asserted reference tables — machines, repos, launchd jobs and their owner repos, inbound doors, secrets flow, monitoring. Lives in dotfiles/docs and is symlinked into the brain vault.
 ---
 
 # Architecture — the whole environment on one page
@@ -15,11 +15,60 @@ description: The whole personal environment on one page — machines, repos, lau
 > enforces — **anything running on a machine appears here or gets deleted** — is
 > asserted by `scripts/architecture-check.sh` (run by `make doctor`): a launchd
 > label loaded or on disk with no row here exits 1.
->
-> The **MacBook** (`iumac`) is the thin client — editing, `desk`, biometric
-> 1Password. The **Mac mini** is the always-on dev host — agents, LaunchAgents,
-> Docker, dev servers. homelab and VPS are separate stacks with their own repos,
-> referenced rather than restated.
+
+## The mental model
+
+Six boxes, each with one job. Full rationale for any of these lives in the
+docs/wiki pages linked at the end of each reference table below — this section
+is only the *why this box exists*.
+
+**Mac mini — the always-on dev host.** Where agents actually run: Claude Code
+sessions (`c`/`ca`/`cap`), Hermes's gateway, sideclaw's workers, every LaunchAgent
+below. It never sleeps and holds no human-facing UI of its own; everything on it
+is reached, never sat in front of.
+
+**MacBook and iPhone — the UI layer he builds from.** Neither holds durable
+state. The MacBook is `desk` (a herdr client) plus editing and biometric
+1Password; closing the lid ends a *connection*, never the work. The iPhone is
+Collie in a browser tab — the phone-side control surface, nothing installed.
+
+**herdr, Slack, Argo, the brain reader, Collie — where he sees what happens and
+interacts.** Five different windows onto the same mini, each answering a
+different question:
+
+- **herdr** — the terminal-level view: `make agent-overview` opens a pane
+  watching every agent's live status text, and any other pane is a session he
+  can attach to directly.
+- **Slack** — Hermes's channel: `#agents` gets the 30-min digest and the
+  06:30 project-narrative line, `#briefings`/`#watchdog` get the cron
+  digests, and dispatch approvals land as buttons in the origin thread.
+- **Argo dashboard** (`/agents`) — the durable, queryable record: the mini
+  pushes every completed sideclaw overview snapshot there (plus one push every
+  10 min regardless), so a browser tab shows 24 h history after herdr and
+  Slack have scrolled past it.
+- **brain reader** (`brain.mini.jkrumm.com`) — read-only render of the vault,
+  rebuilt every 5 min; how the model in his second brain gets checked from a
+  phone or a browser with nothing installed.
+- **Collie** — the one surface here that can *act*, not just observe: it types
+  into a live herdr pane from the phone. Gated by the tailnet ACL, scoped to
+  `tag:phone` alone.
+
+**VPS — the mature, always-running stack.** Traefik-fronted production apps
+(argo, rollhook, the research/audio/image gateways' prod side, meteo's edge,
+bun-email-api, free-planning-poker, …), backed by ClickStack/HyperDX for OTel,
+alerts-as-code, and its own backup/prune crons. Nothing here depends on the mini
+being up, and it is reached over Tailscale SSH, never through the mini.
+
+**HomeLab — his own container world.** A ~36-service personal stack (Immich,
+the ebook/reading pipeline, Garmin/KoInsight, media, the VPN watchdog) plus the
+single Uptime Kuma instance every push monitor in this doc reports to — the
+mini's heartbeat destination, not a peer of the mini.
+
+**The gateways — outsourcing work and workflows.** research-gateway (agentic
+Tavily+Context7 research), audio-gateway (STT/TTS, the podcast pipeline) and the
+image-gen gateway (generate/edit/enhance) each take one kind of work off the
+mini and expose it as a submit-then-poll HTTP service — an agent on the mini
+calls out and polls rather than doing STT, TTS or image generation itself.
 
 ## Repos
 
@@ -35,11 +84,13 @@ description: The whole personal environment on one page — machines, repos, lau
 
 | Repo | Purpose | Notes |
 |-|-|-|
-| `argo` | Personal API + dashboard, the agent backbone | dev door `argo` |
+| `argo` | Personal API + dashboard, the agent backbone | hosts the `/agents` overview + narratives feed |
+| `hermes-agent` | Hermes gateway — Slack-facing control surface, dispatch bridge, 7-job cron layer | see [[hermes-as-control-surface]] |
+| `sideclaw` | Local MCP daemon behind `/check`, `/review`, `dispatch`, `/otel` | `mcp.ts` stdio-only; lives only here |
 | `audio-gateway` | STT/TTS service; repo here, container on the VPS | second instance on the mini (`com.jkrumm.audio-gateway`, `scripts/launch.sh`, :7719) runs the podcast pipeline only — brain access, STT/TTS stays on the VPS |
 | `basalt-ui` | Mantine design system (NPM) | always its own commit |
-| `basalt-ui-obsidian` | Obsidian plugin, v0 unreleased | |
-| `bun-email-api`, `clawbar`, `free-planning-poker`, `jkrumm.com`, `kobo-mods`, `ticktick-raycast`, `rollhook`, `rollhook-action`, `image-gen`, `image-share`, `modelpick`, `rb`, `research-gateway`, `sideclaw`, `usage-tracker`, `king-smith-walkingpad-mac`, `linewatch`, `hermes-agent`, `meteo`, `dispatch-scratch` | see global CLAUDE.md repo table | |
+| `basalt-ui-obsidian` | Obsidian plugin building the brain reader | |
+| `bun-email-api`, `free-planning-poker`, `jkrumm.com`, `kobo-mods`, `ticktick-raycast`, `rollhook`, `rollhook-action`, `image-gen`, `image-share`, `modelpick`, `rb`, `research-gateway`, `usage-tracker`, `king-smith-walkingpad-mac`, `linewatch`, `dispatch-scratch` | see global CLAUDE.md repo table | |
 | `meteo` | weather/wave service, 8 LaunchAgents | all 8 templated in `meteo/ops`, `make launchd-install` (idempotent; `FORCE=1` bounces all) |
 | `dispatch-scratch` | disposable dispatch test target | by design |
 | `homelab`, `homelab-private`, `vps` | server stacks, reached over Tailscale SSH | |
@@ -55,9 +106,9 @@ description: The whole personal environment on one page — machines, repos, lau
 
 Every label here is asserted by `scripts/architecture-check.sh`, and the
 KeepAlive subset also by the heartbeat's `check_boot_path`. Homebrew 6 writes
-`sh.brew.<name>` on the next start/restart and deletes `homebrew.mxcl.<name>`;
-both names map to the same row; `scripts/lib/brew-service.sh` resolves whichever
-exists.
+`sh.brew.<name>` on the next start/restart and deletes `homebrew.mxcl.<name>`
+(both still `homebrew.mxcl.*` on the mini today); both names map to the same
+row and `scripts/lib/brew-service.sh` resolves whichever exists.
 
 ### dotfiles
 
@@ -89,7 +140,13 @@ exists.
 | `ai.hermes.gateway` | KeepAlive | Hermes gateway (plist generated by hermes_cli) |
 | `com.jkrumm.hermes-backup` | 03:00 daily | backup |
 | `com.jkrumm.hermes-liveness` | 300s | Kuma push monitor |
-| `com.1password.1password-launcher` | — | 1Password app launcher (vendor) |
+
+**The launchd row above is not the whole of Hermes.** `ai.hermes.gateway` also
+runs an in-process cron layer — 7 jobs (morning briefing, evening report,
+watchdog, dispatch sweep, brain drift audit, agents-overview digest, project
+narratives) registered with `hermes cron`, invisible to launchd and to
+`architecture-check.sh` because they never leave the gateway process. Registry:
+`hermes-agent/docs/scheduled-jobs.md`; model: [[hermes-as-control-surface]].
 
 ### modelpick
 
@@ -101,7 +158,7 @@ exists.
 
 | Label | Schedule | What |
 |-|-|-|
-| `com.jkrumm.meteo.serve` | KeepAlive | API server (:8080) |
+| `com.jkrumm.meteo.serve` | KeepAlive | API server (:8080, loopback) |
 | `com.jkrumm.meteo.tileserver` | KeepAlive | map tiles (:8081) |
 | `com.jkrumm.meteo.sync` | KeepAlive | data sync |
 | `com.jkrumm.meteo.obs` | 1200s | observations ingest |
@@ -125,6 +182,17 @@ exists.
 | `com.iu.prometheus-conduktor-token` | IuRoot | 21600s |
 | `com.iu.prometheus-vpn-watcher` | IuRoot | KeepAlive |
 
+Three of the four IU jobs (`epos-token`, `state-backup`, `conduktor-token`) log
+to `/tmp` — a known gap, owned by `prometheus-scripts`, not fixed here because
+IuRoot repos are out of this map's write scope; `vpn-watcher` logs correctly
+under the repo's own `vpn/state/`.
+
+`com.1password.1password-launcher` and `com.radiosilenceapp.agent` are vendor
+LaunchAgents, not owned by any repo above — the latter lives in
+`/Library/LaunchAgents`, outside `architecture-check.sh`'s scan path
+(`~/Library/LaunchAgents` + `/Library/LaunchDaemons` only), loops on exit 78
+with no app installed, and is a stray worth removing via `make human-queue`.
+
 ## LaunchAgents — MacBook
 
 `com.jkrumm.batt-reset` (09:00) · `com.jkrumm.brain-sync` (5 min) ·
@@ -135,58 +203,65 @@ exists.
 charge limiter). The machine is MDM-managed — Jamf, Okta, Adobe and the cancom
 hardening daemons are corporate, not mapped; `architecture-check.sh` asserts only
 the `com.jkrumm.` / `sh.brew.` / `homebrew.mxcl.` / `cc.chlc.` prefixes there.
+Rationale for every one of these: `docs/macbook.md`.
 
 ## Doors (inbound)
+
+Every dev app's own `<name>.test` / `<name>.mini.jkrumm.com` door (25 of them —
+argo, sideclaw, meteo, rollhook, …) is one row in `config/Caddyfile`, the single
+registry — not repeated here. This table is everything else: the fixed,
+non-Caddy doors.
 
 | Door | Terminates at | Scope |
 |-|-|-|
 | `*.test` HTTPS | mini Caddy (`bind 127.0.0.1`) | local machine only |
 | `https://<app>.mini.jkrumm.com` | mini Caddy wildcard block | tailnet, ACL `tag:devhost → tag:mac/tag:phone/tag:tablet` on 443 |
 | `:7730` (`rb`) | `tailscale serve` → 127.0.0.1:4050 | tailnet only |
+| `:8081` (meteo tiles) | `tailscale serve` → 127.0.0.1:8081 | tailnet only |
 | `:8788` (Collie) | `tailscale serve` → 127.0.0.1:8787 | tailnet, ACL `tag:phone → tag:mac` |
 | `tcp:22` → mini | OpenSSH, key-only | tailnet `tag:mac → tag:mac` |
+| `tcp:5900` → mini | macOS Screen Sharing (VNC) | tailnet `tag:mac → tag:mac`, MacBook → mini only |
+| `tcp:8642` → mini | Hermes's OpenAI-compatible API, for Argo's chat route | tailnet `tag:vps → tag:mac`, grant only — the API server is currently off, port closed |
 | `:8443` (IU dashboard) | `tailscale serve` Funnel | **public internet** — the mini's entire public surface |
 | `tcp:2222` → iumac | userland sshd behind `tailscale serve --tcp` | tailnet `tag:mac → tag:mac` |
 | `ssh homelab` / `ssh vps` | Tailscale SSH (keyless) | tailnet ACL |
 | `tcp:445` (SMB `~/Shuttle`) | macOS smbd | tailnet `tag:mac → tag:mac` |
 
+Live rows: `dotfiles-private/tailscale-serve.mini.conf` (serve/funnel) and
+`tailscale-acl.jsonc` (grants) — this table is a snapshot, that repo is the
+source of truth.
+
 ## Secrets flow
 
-1Password (`tkrumm` personal / `careerpartner` work) → biometric seed
-(`make secrets-seed`, human-present) → SOPS+age cache
-(`dotfiles-private/cache/secrets.enc.json` on the mini) → `secrets-run`
-resolves `op://` refs at runtime, in memory. Backend marker:
-`~/.config/secrets/backend` (`cache` = mini, `op` = MacBook). Full model:
-`dotfiles-private/docs/design.md`. Tailscale ACL + serve bindings are declared
-state in `dotfiles-private`, applied from the MacBook.
+1Password → biometric seed (`make secrets-seed`) → SOPS+age cache on the mini →
+`secrets-run` resolves `op://` refs at runtime, in memory. Full model, tiering
+and the reseed trigger: `dotfiles-private/docs/design.md`.
 
 ## Monitoring (Uptime Kuma on homelab)
 
-Push monitors (the mini cannot be probed — the ACL grants `tag:homelab →
-tag:vps` but not `→ tag:mac`):
+Push, not probe — the ACL grants `tag:homelab → tag:vps` but not `→ tag:mac`.
+Full rationale: [[mac-host-monitoring]].
 
 | Monitor | Pusher | Cadence |
 |-|-|-|
-| `MacMini Dev Host - Push` | `devhost-health-check.sh` composite (16 components) | 5 min |
-| `MacMini Collie - Push` | collie behavioural check | 5 min |
-| `MacMini Secret Seed - Push` | cache-freshness check | 5 min |
-| `MacMini Drift - Push` | drift-check agent | daily |
-| `Brain Sync - Push` / `Brain Backup - Push` | brain agents | 5 min / daily |
-| `Hermes * - Push` (3) | hermes agents | 5 min / 30 min / daily |
-| `Meteo Watchdog - Push` | meteo watchdog | 15 min |
-| `Home Line - Push` | linewatch | 1 min |
-| 1Password Backup - Push | opbackup (MacBook) | ~hourly guard |
+| `MacMini Dev Host - Push` | `devhost-health-check.sh` composite (16 components, incl. sideclaw job health, the overview pane, Max quota) | 10 min |
+| `MacMini Collie - Push` | collie behavioural check | 10 min |
+| `MacMini Secret Seed - Push` | cache-freshness check | 8 days |
+| `MacMini Drift - Push` | drift-check agent | 2 days |
+| `Brain Sync - Push` | brain-sync agent | 10 min |
+| `Brain Backup - Push` | brain-backup agent | 25 h |
+| `Hermes Agent - Push` | hermes-liveness | 6 min |
+| `Hermes Watchdog - Push` | hermes watchdog poll | 35 min |
+| `Hermes Backup - Push` | hermes-backup agent | 25 h |
+| `Meteo Watchdog - Push` | meteo watchdog | 35 min |
+| `Home Line - Push` | linewatch | 4 min |
+| `1Password Backup - Push` | opbackup (MacBook) | weekly |
 
 Declarative source: `homelab/uptime-kuma/monitors.yaml` (`make uk-sync`).
 
 ## Pinning policy
 
-`caddy` is pinned — its upgrade silently replaces the xcaddy-built binary and the
-Cloudflare DNS module vanishes, invisible until the wildcard cert fails to renew
-~60 days later. **A pin must pin its dependencies too, or it rots** (a pinned
-binary still breaks when a dylib it links is upgraded underneath it). `colima` is
-deliberately unpinned — it is the Docker runtime, so pinning means sitting on an
-unpatched hypervisor — and is instead asserted after every upgrade and checked by
-the 5-minute heartbeat. Full rationale: `docs/homebrew.md`.
+`caddy` is pinned (its dependencies too, or the pin rots); `colima` is
+deliberately unpinned and asserted instead. Full rationale: `docs/homebrew.md`.
 
-Related: [[remote-dev-stack]] · [[mac-host-monitoring]]
+Related: [[remote-dev-stack]] · [[mac-host-monitoring]] · [[agent-overview-loop]] · [[hermes-as-control-surface]]
