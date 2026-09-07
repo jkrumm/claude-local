@@ -425,14 +425,16 @@ decision — an agent on the mini enqueues instead of writing prose nobody reads
 
 | Side | Command | Runs on |
 |-|-|-|
-| Enqueue | `ask-human.sh ask "<text>" [--cmd <command>] [--wait [seconds]]` | mini |
+| Enqueue | `ask-human.sh ask "<text>" [--cmd <command>] [--wait <seconds>]` | mini |
 | Inspect own request | `ask-human.sh list` / `status <id>` | mini |
 | Drain | `make human-queue` (walks each pending request) · `-list` · `-count` · `-show/-run/-deny ID=<id>` | MacBook |
 
 State is `<id>.req` + `<id>.res` under
 `${XDG_STATE_HOME:-$HOME/.local/state}/human-queue/` on the mini (dir 700, files
-600); pending = no `.res`. `--wait` polls every 5 s, exiting 0/1/2/3 for
-done/denied/failed/timeout.
+600); pending = no `.res`. `--wait <seconds>` polls every 5 s, exiting 0/1/2/3
+for done/denied/failed/timeout; the default is **0** (return at once) because
+the median resolution is about seven days — the queue drains when a MacBook
+session happens to be open — so a polling default only ever timed out.
 
 - **The transport is the existing MacBook→mini ssh hop**, not a new credential —
   no inbound door opens on the MacBook. It refuses to run on the `cache` backend.
@@ -450,6 +452,24 @@ done/denied/failed/timeout.
   biometric 1Password agent, so a poller means an unattended Touch ID prompt on a
   schedule forever. `hooks/machine-role.ts` folds a count into SessionStart on
   the `op` backend only, with a 2500 ms timeout collapsing to silence.
+
+### Human queue notifications
+
+`ask-human.sh` fires `~/.config/human-queue/notify-hook` (backgrounded, output
+discarded) with `<id> <text>` right after the request is durably on disk.
+`make setup` installs it on the cache backend only, as a symlink to
+`scripts/human-queue-notify-hook.sh`: one Slack line to `#agents` through Argo's
+Slack proxy (`POST /slack/channels/<id>/messages`, bearer from
+`secrets-run read op://common/api/SECRET`, channel id resolved by name from
+`GET /slack/channels` — the door audio-gateway uses for podcast results), with
+the question and the `make human-queue` hint.
+
+- **Every failure is soft** — no token, no channel, Argo down: the hook exits 0
+  and the request is still queued. The queue is the source of truth; Slack is
+  the nudge. The `no notify hook at …` note from `ask-human.sh` means the hook
+  was never installed on this machine (`make setup`), not a failed push.
+- **No poller on the other end, still** — the notification tells the human a
+  request exists; draining stays a `make human-queue` on the MacBook.
 
 ## launchd on the dev host
 

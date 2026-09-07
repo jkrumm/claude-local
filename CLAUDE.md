@@ -154,9 +154,9 @@ Four facts to hold:
 
 **human-queue** — ssh gives the mini reach, not a fingerprint. Work needing a
 *present human* (biometric `op`, the ACL push, a person-only call) is enqueued on
-the mini with `ask-human.sh ask "…" [--cmd …]`; `make human-queue` **walks** each
-one (r/already-done/deny/skip; `-run`, `-resolve`, `-deny ID=` one-shot; no TTY →
-a list). `resolve` closes one satisfied out of band. The mini only *proposes* a
+the mini with `ask-human.sh ask "…" [--cmd …]`; `make
+human-queue` **walks** each one (r/already-done/deny/skip; `-run`, `-resolve`,
+`-deny ID=` one-shot; no TTY → a list). `resolve` closes one satisfied out of band. The mini only *proposes* a
 string; `run` needs a typed `yes` on a real TTY, per request. No poller — that
 means unattended Touch ID forever.
 
@@ -288,9 +288,10 @@ auto-upgraded — route them through `/upgrade-deps`. `docs/homebrew.md`.
 | `make doctor` | The on-demand read-only view, including drift without pushing |
 
 `scripts/devhost-health-check.sh` pushes **three** Uptime Kuma monitors.
-`MacMini Dev Host - Push` is the composite over **13 components**: tailscale,
+`MacMini Dev Host - Push` is the composite over **16 components**: tailscale,
 sshd, herdr, git push credential, dev vhosts, memory, launchd restarts, boot path,
-services, claude auth, obsidian, disk, runaways.
+services (9), claude auth, obsidian, disk, runaways, sideclaw jobs, overview
+pane, quota (in every msg; WARN never pages).
 
 - **Push, not probe** — the ACL grants `tag:homelab → tag:vps` but not `→ tag:mac`,
   and an inbound grant purely for monitoring is new attack surface.
@@ -414,10 +415,10 @@ absent, and exporting it bills API credits instead.
 resolved from 1Password at provision time — re-run after rotating
 `op://vps/research-gateway/API_SECRET`), and **`sideclaw` on the mini only** — its
 MCP is stdio-only against `~/SourceRoot/sideclaw/server/mcp.ts`, a repo that lives
-only there, so `/check`, `/review`, `/otel`, `/read-drawing`,
-`/excalidraw-diagram` and `dispatch` are mini-only skills. Don't clone sideclaw to
-the MacBook to "fix" that; reaching it remotely would need a StreamableHTTP
-transport, which is sideclaw's design decision. HyperDX is deliberately *not*
+only there, so `/check`, `/review`, `/otel`, `/excalidraw-diagram` and
+`dispatch` are mini-only skills. Don't clone sideclaw to the MacBook to "fix"
+(remote reach = a StreamableHTTP transport).
+HyperDX is deliberately *not*
 registered — `/otel` speaks its endpoint over HTTP rather than costing every
 session ~60 deferred tool names. Keep project MCPs minimal. **CodeRabbit CLI**
 needs a one-time `coderabbit auth login`.

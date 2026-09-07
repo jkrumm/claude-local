@@ -89,9 +89,9 @@ commits follow `rules/commit-conventions.md`.
 
 | Lane | Use for |
 |-|-|
-| **inline** — session model | Work needing this conversation's context: `commit`, `pr`, `ship`, `git-cleanup`, `secrets`, `grill`, `implement`. Keep short. |
+| **inline** — session model | Work needing this conversation's context: `commit`, `pr`, `ship`, `git-cleanup`, `secrets`, `implement`. Keep short. |
 | **native subagent** (`Agent`, `~/.claude/agents/`) — `@implementer` (Sonnet, settled work), `Explore` (search), an Opus subagent (novel-hard logic). Max, but **its own cache** | **The primary offload.** Fresh context, returns a summary, edits hit the live tree. |
-| **MCP — sideclaw**, mini only: `check`, `review`, `dispatch`, `otel`, excalidraw, read-image (`SIDECLAW_WORKER_BACKEND` = `iu` default, `max` live) | Heavy work wanting schema-validated output. **Async** — job contract below. |
+| **MCP — sideclaw**, mini only: `check`, `review`, `dispatch`, `otel`, excalidraw, read-image (per-tool model/backend in `sideclaw/server/lib/routing.ts`, live table at `GET /api/routing`) | Heavy work wanting schema-validated output. **Async** — job contract below. |
 | **subprocess — `agent-dispatch`**, IU per-token (Max on the mini lane) | One durable bounded episode against a named repo, output kept out of here. |
 | **`/research`** — research-gateway MCP, tailnet-only, off Max | Any library / API / version fact, never from memory. |
 
@@ -153,7 +153,7 @@ immediately — **not the result**. Submit → note `jobId` → `job_wait({jobId
 | 1 | Parallel `mcp__sideclaw__*` in **one turn** | Independent verifiable work — the default for fan-out; under-used. |
 | 2 | subprocess (`agent-dispatch`, `claude_iu`), ~0 Max cost | Read-heavy, isolated output. |
 | 3 | Background `Agent` (`run_in_background: true`) | Long work to detach from and resume (`SendMessage`). Keep it thin. |
-| 4–5 | Foreground `Agent` on Opus (own cache) · agent teams / `/ultrareview` (N× Max) | Novel hard logic · genuinely hard parallel reasoning. Rarely worth it. |
+| 4–5 | Foreground `Agent` on Opus (own cache) · agent teams (N× Max) | Novel hard logic · genuinely hard parallel reasoning. Rarely worth it. |
 
 `Task*` tools are a built-in coordination layer, not MCP-backed. Routines /
 `/schedule` run in Anthropic's cloud and **cannot reach** sideclaw (localhost) or
@@ -197,13 +197,13 @@ no-force, no-deletion, linear). Private repos can't be protected for free.
 | `argo` | Personal API + dashboard, the agent backbone. Elysia/Bun/Postgres/Drizzle; its OpenAPI spec is the contract. |
 | `sideclaw` | Local Claude Code MCP daemon — check/review/dispatch/otel/excalidraw/read-image. **Mini only.** |
 | `research-gateway` | VPS service behind `/research`, **tailnet-only** — bearer REST + an MCP facade, same submit→poll trio. Cloud routines can't reach it. |
-| `hermes-agent` · `hermes-webui` | Mini-only personal AI over Slack; `HERMES_SKILLS` in its Makefile is the source of truth for its skill domains · the UI is an **upstream fork checkout**. |
+| `hermes-agent` | Mini-only personal AI over Slack; `HERMES_SKILLS` in its Makefile is the source of truth for its skill domains. |
 | `basalt-ui` | Mantine v9 + visx design system (NPM). No Tailwind. **Always its own commit.** |
 | `brain` · `basalt-ui-obsidian` | Obsidian vault — `wiki/` = agentic knowledge (strict lint), PARA `Projects`/`Areas` = curated human surface linking into it, no `Resources` tier; use `/brain` · the plugin building the `brain-web` reader. |
 | `modelpick` | IU models vs leaderboards + live probes. **Source of truth for model-choice rationale**, backs `cap`. |
-| `meteo` | Weather/wave service — 8 mini LaunchAgents, VPS-deployed; 6 have no in-repo plist template (known gap). |
+| `meteo` | Weather/wave service — 8 mini LaunchAgents, VPS-deployed; all 8 templated in `meteo/ops`, `make launchd-install`. |
 | `dispatch-scratch` · `photo-flow` · `shutterflow` | Disposable dispatch target · the two MacBook-resident photography apps. |
-| `audio-gateway`, `image-share`, `image-gen`, `usage-tracker`, `linewatch`, `rollhook`(`-action`), `rb`, `king-smith-walkingpad-mac`, `bun-email-api`, `free-planning-poker`, `podcast-generator`, `ticktick-raycast`, `clawbar`, `jkrumm.com`, `kobo-mods` | Services and smaller apps, all mini-resident. |
+| `audio-gateway`, `image-share`, `image-gen`, `usage-tracker`, `linewatch`, `rollhook`(`-action`), `rb`, `king-smith-walkingpad-mac`, `bun-email-api`, `free-planning-poker`, `ticktick-raycast`, `clawbar`, `jkrumm.com`, `kobo-mods` | Services and smaller apps, all mini-resident. |
 
 ### `~/IuRoot/` — work (IU)
 
@@ -239,8 +239,8 @@ monitors what. Read it, don't restate it.
 `photo-flow`, `shutterflow`.** Every other repo lives on the mini and is reached
 there — don't clone one back "just to look". `brain` is a deliberate *writing*
 mirror, not drift: the vault's only offline copy, reconciled through GitHub every
-5 min (the MacBook commits, the mini never does — a second committer would race
-`.git/index.lock`). **Conflicts are never auto-resolved.**
+5 min; who commits where is `brain/docs/brain-access.md`. **Conflicts are never
+auto-resolved.**
 
 Two separate questions — collapsing them is the usual confusion: `desk [session]`
 (= `herdr --remote mini`) puts a **terminal on** the mini, client-side, server and
@@ -345,10 +345,10 @@ a call costs. **Everything routed through sideclaw exists only on the mini.**
 
 | Mode | Skills |
 |-|-|
-| **MCP (sideclaw, async)** | `/check` (format·lint·tsc·test; pass `commands` on non-Node repos) · `/review` (multi-angle + CodeRabbit; `--deep` adds correctness + security) · `/otel` · `/read-drawing` · `/excalidraw-diagram` |
+| **MCP (sideclaw, async)** | `/check` (format·lint·tsc·test·fallow; pass `commands` on non-Node repos) · `/review` (multi-angle + CodeRabbit; `--deep` adds correctness + security) · `/otel` · `/excalidraw-diagram` (drawings are read with sideclaw `read_image` directly) |
 | **MCP · fork · subprocess** | `/research` (research-gateway, off Max) · `/browse` (chrome-devtools, haiku) · `/analyze` (fallow + `claude_iu`) |
 | **inline — git** | `/commit` (`--split`/`--amend`) · `/pr` · `/ship` · `/git-cleanup` |
-| **inline — build** | `/implement` (drives `@implementer`) · `/grill` · `/ralph` · `/upgrade-deps` · `/dataviz` · `/frontend-design` · `/skill-creator` · `/update-agent-rules` |
+| **inline — build** | `/implement` (drives `@implementer`) · `/upgrade-deps` (charts and UI: the basalt-ui per-repo skills + `rules/visx-charts.md`) |
 | **inline — ops** | `/secrets` · `/cloudflare` (via `op_account_for_cwd`) · `/remote-dev` · `/herdr` (inert unless `HERDR_ENV=1`) · `/img` (`--json`) |
 | **inline — writing** | `/brain` (via `obsidian-cli`) · `/distill` · `/podcast` |
 
