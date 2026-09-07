@@ -2340,7 +2340,8 @@ agent-overview:
 	fi; \
 	PANE=$$(herdr pane list 2>/dev/null | jq -r --arg ws "$$WS" '.result.panes[] | select(.workspace_id==$$ws) | .pane_id' | head -1); \
 	[ -n "$$PANE" ] || { echo "  ✗ no pane in workspace $$WS"; exit 1; }; \
-	herdr pane send-keys "$$PANE" C-c >/dev/null 2>&1 || true; \
+	pkill -f 'watch --color -t -n 30 curl -sfG localhost:7705/api/overview.txt' 2>/dev/null || true; \
+	herdr pane send-keys "$$PANE" C-c >/dev/null 2>&1 || true; sleep 1; \
 	herdr pane run "$$PANE" watch --color -t -n 30 'curl -sfG localhost:7705/api/overview.txt -d color=1 -d cols=$(AGENT_OVERVIEW_COLS) || echo sideclaw unreachable' >/dev/null; \
 	echo "  ✓ overview loop running in $$PANE (workspace $$WS)"
 
