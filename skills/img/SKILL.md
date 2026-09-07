@@ -1,248 +1,84 @@
 ---
 name: img
-description: Manage the personal image stack — public CDN uploads/transform URLs and the private image-share layer. Use whenever an image needs a URL (public or private) for an article, blog post, vault note, README, OpenGraph tag, or a one-off share; or when the user says "upload this image", "share this image", "private image", "publish image", "host this screenshot", "get me a CDN link", "resize this", mentions "image-share", or asks where an image lives.
+description: Manage the personal image stack — generate images on the image-gen gateway, upload to the public CDN with transform URLs, and the private image-share layer. Use whenever an image needs a URL (public or private) for an article, blog post, vault note, README, OpenGraph tag, or a one-off share; when an image must be generated or edited from a prompt; or when the user says "upload this image", "share this image", "private image", "publish image", "generate an image", "host this screenshot", "get me a CDN link", "resize this", mentions "image-share" or "image-gen", or asks where an image lives.
 ---
 
 # Image stack
 
-Three layers, two verbs.
-
 ```
-local truth  ──share──▶  private layer  ──publish──▶  public CDN
-(~/Pictures/ImageGen/,     (image-share,                (B2 img/ +
- photo trees)               homelab)                     imgproxy)
+prompt ──gen──▶ local file ──share──▶ private layer ──publish──▶ public CDN
+(image-gen        (~/Pictures/imgcli/,   (image-share,             (B2 img/ +
+ gateway, VPS)     photo trees)           homelab)                  imgproxy)
 ```
 
-- **Local truth** — files on disk. `~/Pictures/ImageGen/`, photo trees, anything not yet uploaded anywhere.
-- **Private layer** — `image-share`, a bearer-auth'd Elysia service on the homelab. It indexes the photo trees and owns its own ingest root, serves token-role share pages for handing a link to someone without making the image public, and exposes an admin/agent API.
-- **Public CDN** — imgproxy over a private B2 `img/` prefix, fronted by Cloudflare. Unsigned URLs; anything landing here is effectively public.
+- **Local truth** — files on disk: `~/Pictures/imgcli/` (what `gen` writes), photo trees, the studio app's `~/Pictures/ImageGen/` on the MacBook.
+- **Private layer** — `image-share`, bearer-auth'd Elysia service on the homelab: indexes the photo trees, owns an ingest root, serves token-role share pages, exposes the admin/agent API.
+- **Public CDN** — imgproxy over a private B2 `img/` prefix behind Cloudflare. Unsigned URLs: anything here is public, and an unguessable key *is* the access control.
 
-Consumers (vault notes, websites, agents) always consume URLs from one of the last two layers — never raw files.
+Consumers take URLs from the last two layers, never raw files. **share** = local → private. **publish** = local → private → public, always staged through the private layer. **gen** = prompt → local, then `share` (default) or `publish` (`--public`).
 
-**Two verbs:**
-- **share** = local → private. Ingests a file into image-share; gives you a durable homelab copy you can later hand out via a share-page link.
-- **publish** = local → private → public. Ingests into image-share, then pushes that same image to the CDN. Always staged through the private layer first — there is no direct local → CDN path for this verb (that's what `upload` is for). `publish --id` skips the ingest step for an image already indexed.
-
-The tool is `scripts/imgcli` (in this skill directory), symlinked onto `PATH` at
-`~/.local/bin/imgcli` by `make setup` (`_setup-imgcli` in the repo Makefile — same
-lane as `secrets-run`). Secrets resolve through `secrets-run`, so it works on both
-the MacBook and the headless mini.
-
-**Infra side:** `~/SourceRoot/vps/apps/imgproxy/` (design, security model, Cloudflare caveats — `vps/docs/image-cdn.md`) for the CDN; `~/SourceRoot/homelab` for the image-share deploy config.
+The tool is `scripts/imgcli` (→ `~/.local/bin/imgcli` via `make setup`). Secrets resolve through `secrets-run`: `op://homelab/image-share/{BASE_URL,API_SECRET}` and `op://vps/image-gen-gateway/{BASE_URL,API_SECRET}`, both in `dotfiles-private/headless.refs` (`make secrets-seed` after a rotation), never hardcoded — this repo is public. Infra: `vps/apps/imgproxy/` (CDN), `homelab` (image-share deploy), `image-gen/gateway/` (generation).
 
 ## Which command
 
 | Intent | Command | Lands in |
 |-|-|-|
-| One-off public asset (blog image, OG tag, README) | `imgcli upload` | CDN, but routed through image-share (`load_share_config`) — fails if the homelab is down |
-| Durable private copy, maybe shared via a link later | `imgcli share` | private layer only |
-| Generated/final image headed for a note or article | `imgcli publish` | private layer, then CDN |
-| Already-indexed image headed for the CDN, no local file | `imgcli publish --id` | private layer (already there), then CDN |
-| Browse what's indexed in the private layer | `imgcli library` | reads private layer |
+| Generate or edit an image from a prompt | `imgcli gen` | local + private; `--public` adds the CDN |
+| One-off public asset (blog image, OG tag, README) | `imgcli upload` | CDN, routed through image-share |
+| Durable private copy, maybe linked later | `imgcli share` | private layer |
+| Final image headed for a note or article | `imgcli publish` | private layer, then CDN |
+| Already-indexed image to the CDN, no local file | `imgcli publish --id` | CDN |
+| Browse the private index (find an id) | `imgcli library` | reads private layer |
 | Hand a friend a link to specific image(s) | `imgcli link` | private layer (share + token) |
-| Bulk mirror of a curated folder | `imgcli sync` | CDN only, **legacy direct-B2 lane** |
-| Remove an object from the CDN | `imgcli rm` | CDN only |
-
-`upload` is service-routed (`POST /api/b2/upload`) so the CDN index
-(`GET /api/b2`) is never stale for it. `sync` is the **one remaining
-direct-B2 lane** — a bulk mirror of a curated folder, unrelated to
-image-share, pending its own migration to the service.
-
-## Commands
+| Bulk mirror of a curated folder | `imgcli sync` | CDN, **legacy direct-B2 lane** |
+| Remove an object from the CDN | `imgcli rm` | CDN (really deletes; `--yes` skips the prompt) |
 
 ```bash
+imgcli gen     "<prompt>" [--size WxH|auto] [--n 1-10] [--quality low|medium|high|auto]
+               [--edit <file>] [--enhance] [--public] [--prefix gen/] [--dir <d>] [--copy] [--open] [--json]
 imgcli upload  <file> [prefix/] [--name N] [--copy] [--open] [--json]
-imgcli sync    <dir> <prefix/>          # legacy direct-B2 mirror, skip unchanged
-imgcli ls      [prefix/] [--json]
-imgcli info    <key> [--json]           # size, source dimensions, ready-made renditions
-imgcli url     <key> [transform ...]
-imgcli transforms                       # full processing-option reference
-imgcli rm      <key> [--yes] [--json]   # delete from the CDN
-
-imgcli share    <file> [--dir <dir>] [--copy] [--json]
-imgcli publish  <file> [prefix/] [--dir <dir>] [--copy] [--open] [--json]
-imgcli publish  --id <imageId> [prefix/] [--copy] [--open] [--json]
-imgcli library  [--root fuji|raws|share] [--dir <d>] [--stem <s>] [--min-rating n] [--page n] [--limit n] [--recursive] [--json]
-imgcli link     <imageId> [<imageId>...] [--role view|download|full] [--label <text>] [--expires <ISO date>] [--json]
+imgcli share   <file> [--dir <dir>] [--copy] [--json]
+imgcli publish <file> [prefix/] [--dir <dir>] [--copy] [--open] [--json]   |   --id <imageId> [prefix/]
+imgcli library [--root fuji|raws|share] [--dir <d>] [--stem <s>] [--min-rating n] [--page n] [--limit n] [--recursive] [--json]
+imgcli link    <imageId>... [--role view|download|full] [--label <text>] [--expires <ISO date>] [--json]
+imgcli ls [prefix/] · info <key> · url <key> [transform ...] · transforms · rm <key> [--yes] · sync <dir> <prefix/>
 ```
 
-Run `imgcli transforms` before hand-writing a URL — it is the verified list of
-what this deployment actually supports.
+`imgcli transforms` is the verified processing-option list — read it before hand-writing a URL.
 
-### upload
+## gen
 
-Multipart `POST /api/b2/upload` against image-share, which puts the object
-straight into the bucket and upserts its own `b2_objects` mirror — the same
-table the admin Public page and `GET /api/b2` read from. Prefix must be one of
-`fuji|blog|gen|misc`; readable prefixes keep `--name` (or the source
-filename); opaque prefixes (`gen/`, `misc/`) always get a random 16-char name
-**server-side**, regardless of `--name` — an unguessable key is the access
-control behind the CDN's unsigned URLs, and the client no longer decides it.
-Skips (does not overwrite) a key that already exists and reports that
-clearly: `uploaded` is `false` and `reason` explains why, in both human and
-`--json` output.
+`POST /generate` on the image-gen gateway (gpt-image-2, VPS, tailnet-only), or `POST /edit` with `--edit <file>` (png/jpeg/webp reference; the prompt describes the change). Each image lands at `~/Pictures/imgcli/gen-<stamp>-<id>-<i>.png`, is ingested privately under `--dir` (default `gen`), and with `--public` is published under `--prefix` (default `gen/`) with a CDN URL plus a `![]()` embed. `--enhance` first runs the brief through `POST /enhance`, the studio's Plan step: its playbook-conditioned prompt and derived size/quality/n apply unless a flag overrides, assumptions and warnings go to stderr, and a `hard` policy warning aborts before anything is paid for.
 
-### sync
+**Quality is the cost lever** — per 1024×1024 image `low` ≈ $0.006, `high` ≈ $0.21 (35×). Draft at `low`, promote the winner. Transparency is unavailable: gpt-image-2 has no alpha channel, the gateway 400s on it, and prompt text asking for a "transparent background" gets a painted checkerboard instead. The interactive studio is the ImageGen Tauri app on the MacBook (`image-gen` repo); `gen` is the agent lane.
 
-The one remaining **direct-to-B2** lane — talks to the bucket over the S3 API
-with the same credential `ls`/`info`/`url` use, unrelated to image-share.
-Kept for bulk mirrors of a curated folder (e.g. a whole camera export) where
-routing every file through a multipart upload call isn't worth it. Migrating
-it to a service-routed batch endpoint is a known follow-up, not yet done.
-
-### rm
-
-`DELETE /api/b2/:key` through image-share. Prompts for confirmation unless
-`--yes`. image-share holds its own scoped `image-share-b2` key with
-`deleteFiles` capability, so this actually deletes the object. The direct-B2
-upload credential (`sync`/`ls`/`info`/`url`) still has no `deleteFiles`
-capability by design and never will — that's a separate, more narrowly scoped
-key held only by the service.
-
-### share
-
-Ingests a file into image-share's private root (`POST /api/images`, multipart,
-optional `--dir` subdirectory). Returns the ingest id, its `relPath` inside the
-private root, and an admin file URL for viewing it directly on the homelab.
-Nothing reaches the public CDN.
-
-### publish
-
-Same ingest call as `share`, then publishes that image to the CDN
-(`POST /api/publish`) under one of the four CDN prefixes (defaults to `gen/`).
-Returns the CDN key, the full CDN URL, and a ready `![]()` markdown embed using
-an `rs:fit:800/f:jpg` rendition — paste straight into a note or article. If the
-image was already published before, image-share reports it under `skipped`
-with its existing key; `imgcli publish` treats that as success and reports the
-existing URL rather than erroring.
-
-`imgcli publish --id <imageId> [prefix/]` skips the ingest step entirely — for
-an image already sitting in the index (found via `imgcli library`), publish
-straight from its id with no local file involved.
-
-### library
-
-Read-only browse of the private index (`GET /api/library/images`), filterable
-by `--root` (`fuji|raws|share`), `--dir`, `--stem` (matches the filename stem),
-`--min-rating`, and `--recursive` to include sub-directories. Defaults to
-page 1 of 50 rows and notes when more exist; page through with `--page`/
-`--limit`. Use it to find the `imageId` for `publish --id` or `link`.
-
-### link
-
-The payoff verb: hand a friend a ready-to-send link in one command. Creates a
-`selection` share (`POST /api/shares`) over one or more image ids and mints a
-token for it, printing the `share.jkrumm.com/<slug>?token=...` URL. Defaults
-to `--role view`; a non-default role or an explicit `--label` mints an
-additional token via `POST /api/shares/:id/tokens` rather than reusing the
-share's default view token. `--expires` takes an ISO date (`2026-12-31`) or
-full ISO 8601 datetime.
-
-## URL shape
-
-```
-https://<cdn>/rs:fit:800/f:jpg/blog/photo.jpg
-             └── options ───┘ └── key ──┘
-```
-
-Options are slash-separated and optional; omit them entirely for the original.
-The key never includes the bucket's `img/` prefix (though `img/blog/x.jpg` is
-accepted and normalised).
-
-Common recipes:
-
-| Need | URL |
-|-|-|
-| In-page image | `/rs:fit:1600/<key>` |
-| Thumbnail | `/rs:fill:400:400/g:sm/<key>` |
-| OpenGraph / social | `/rs:fill:1200:630/f:jpg/<key>` |
-| Original | `/<key>` |
-
-Use `f:jpg` — not the `@jpg` extension form — when pinning a format for
-OpenGraph, RSS, or email. `@jpg` works but is not edge-cached.
-
-## Prefixes
-
-Apply to `upload`, `sync`, and `publish` — the private layer's own `--dir`
-option is unrelated (it's a subdirectory of the ingest root, not a CDN
-prefix).
+## Prefixes, naming, URLs
 
 | Prefix | For | Naming |
 |-|-|-|
-| `fuji/` | curated camera exports | filename preserved |
-| `blog/` | article images | filename preserved |
-| `gen/` | generated / ad-hoc | random 16-char name assigned (`publish` default) |
-| `misc/` | everything else | random 16-char name assigned (`upload` default) |
+| `fuji/` · `blog/` | camera exports · article images | filename preserved |
+| `gen/` · `misc/` | generated / ad-hoc · everything else | random 16-char name, server-side (`--name` ignored). `gen/` is the `publish`/`gen` default, `misc/` the `upload` default |
 
-Random names are the point for `gen/` and `misc/`: URLs are unsigned, so an
-unguessable key *is* the access control. Put anything sensitive there, never
-under a readable path. As of the service-routed `upload`, this naming happens
-**server-side** (`image-share/lib/naming.ts`) — `--name`/the source filename
-is ignored for these two prefixes even if supplied.
-
-The private layer uses a different access-control model: image-share is
-bearer-auth'd end to end (index, ingest, admin file URLs), and anything shared
-externally goes out through token-role share pages, not an unsigned key.
+`upload` and `publish` skip a key that already exists and say so (`uploaded: false` / `skipped`) — that is success, not an error. `publish` re-ingests on every run and needs **both** credential sets (`cmd_publish` calls `load_config` for `CDN_BASE`, then `load_share_config`). The private layer's `--dir` is an ingest-root subdirectory, not a CDN prefix. Keys never include the bucket's `img/`. URL shape `https://<cdn>/<options>/<key>`: `rs:fit:1600` in-page, `rs:fill:400:400/g:sm` thumbnail, `rs:fill:1200:630/f:jpg` OpenGraph, nothing for the original. Pin formats with `f:jpg`, never `@jpg` (not edge-cached).
 
 ## For agent use
 
-Every command takes `--json`. `imgcli info <key> --json` returns the object's
-metadata plus a `renditions` map of ready-to-use URLs — prefer it over
-constructing URLs by hand.
+Every command takes `--json`; prefer `imgcli info <key> --json`'s `renditions` map over hand-built URLs.
 
 ```bash
-imgcli upload  ~/shot.png blog/ --json     # → {"uploaded","key","url","dimensions","bytes"} or {"uploaded":false,"key","url","reason"}
-imgcli ls      blog/ --json                # → [{"key","url","bytes","modified"}]
-imgcli rm      blog/shot.png --yes --json  # → {"deleted":true,"key"}
-imgcli share   ~/shot.png --json           # → {"id","root","relPath","adminFileUrl"}
-imgcli publish ~/shot.png blog/ --json     # → {"id","key","cdnUrl","markdown","renditions":{...}}
-imgcli publish --id 15916 gen/ --json      # → same shape, no local file needed
-imgcli library --root share --json        # → {"data":[{"id","root","relPath","dir","stem","kind","rating","captureAt",...}],"total"}
-imgcli link    15916 15915 --role view --json  # → {"shareId","role","url"}
+imgcli gen "…" --quality low --json    # → {"id","model","size","quality","cost_usd","latency_ms","public","images":[{"file","id","relPath","adminFileUrl"}],"plan"?}
+imgcli gen "…" --public --json         # → images:[{"file","id","key","cdnUrl","markdown"}]
+imgcli upload ~/x.png blog/ --json     # → {"uploaded","key","url","dimensions","bytes"}
+imgcli share ~/x.png --json            # → {"id","root","relPath","adminFileUrl"}
+imgcli publish ~/x.png blog/ --json    # → {"id","key","cdnUrl","markdown","renditions":{...}}
+imgcli library --root share --json    # → {"data":[{"id","relPath","kind","rating",...}],"total"}
+imgcli link 15916 15915 --json         # → {"shareId","role","url"}
 ```
 
-Source dimensions are recorded in `upload`'s own output for display, but are
-**no longer attached as object metadata** now that upload is service-routed —
-`info` on a service-uploaded key will show `source_dimensions: null` (expected,
-not an error), same as objects uploaded via `sync` or outside `imgcli`
-entirely.
+Anything not wrapped (revoking tokens, updating a share): `GET <base>/api` for discovery, `<base>/openapi/json` for the contract, same bearer — the gateway likewise.
 
-**Advanced private-layer ops** beyond what's wrapped above (revoking tokens,
-updating a share, browsing dirs) are not wrapped by `imgcli`. Point an agent at
-the service directly: `GET <base>/api` for discovery and `<base>/openapi/json`
-for the full contract, both authenticated with the same bearer every
-private-layer command uses. Base URL and bearer resolve from
-`op://homelab/image-share/{BASE_URL,API_SECRET}` — never hardcode either (this
-repo is public).
+## Constraints
 
-**Headless mini:** every private-layer command (`share`, `publish`, `library`,
-`link`, `rm`, and now `upload`) needs those two refs cached to work there —
-they already are (`dotfiles-private/headless.refs:267-268`), verified live on
-the headless mini. If a read ever fails (rotation, a missing ref), the fix is
-`make secrets-seed` (biometric, present-human) to reseed the cache. `sync`,
-`ls`, `info`, `url` use the separate direct-B2 credential and don't need the
-image-share refs — but `publish` needs **both** sets: it calls `load_config`
-(direct-B2, for `CDN_BASE`) before `load_share_config` (`imgcli:512-513`), so a
-failed `publish` may be either credential set, not only the image-share one.
-
-## Constraints worth knowing
-
-- **`rm` actually deletes.** image-share holds its own scoped `image-share-b2`
-  key with `deleteFiles` capability, so `DELETE /api/b2/:key` removes the
-  object from B2. The direct-B2 upload credential (`sync`/`ls`/`info`/`url`)
-  still has no `deleteFiles` capability by design and never will.
-- **The bucket also holds database backups** under a different prefix. The
-  upload key is scoped to `img/` server-side and cannot see them. Do not
-  "fix" a permission error by widening that key.
-- **EXIF/GPS is stripped** from everything served through the CDN. Originals in
-  the bucket keep their metadata.
-- **Max source: 100 MP, 50 MB.** Service-routed lanes (`upload`, `share`,
-  `publish`) reject anything over 50 MB with a 400. Only `sync` — the direct-B2
-  lane — bypasses that check.
-- **Publish is one-way staging, not a mirror.** Re-running `publish` on the
-  same file re-ingests it (a new private-layer copy) before publishing; it
-  does not deduplicate against a prior local file, only against a prior
-  image-share id already published under that prefix.
-- **`sync` is the one lane still on direct-B2 credentials.** It's for bulk
-  mirrors of a curated folder and is unrelated to image-share; migrating it to
-  a service-routed batch endpoint is a known follow-up, not yet scheduled.
+- Service-routed lanes (`upload`, `share`, `publish`, `gen`) reject sources over 50 MB / 100 MP; only `sync` (direct-B2, migration a known follow-up) bypasses that.
+- EXIF/GPS is stripped from everything served through the CDN; originals keep theirs. `info` shows `source_dimensions: null` for service-routed uploads — expected.
+- The bucket also holds database backups under another prefix; the upload key is scoped to `img/` server-side — never widen it to "fix" a permission error.
