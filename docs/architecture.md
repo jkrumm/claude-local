@@ -88,9 +88,8 @@ calls out and polls rather than doing STT, TTS or image generation itself.
 | `hermes-agent` | Hermes gateway — Slack-facing control surface, dispatch bridge, 7-job cron layer | see [[hermes-as-control-surface]] |
 | `sideclaw` | Local MCP daemon behind `/check`, `/review`, `dispatch`, `/otel` | `mcp.ts` stdio-only; lives only here |
 | `audio-gateway` | STT/TTS service; repo here, container on the VPS | second instance on the mini (`com.jkrumm.audio-gateway`, `scripts/launch.sh`, :7719) runs the podcast pipeline only — brain access, STT/TTS stays on the VPS |
-| `basalt-ui` | Mantine design system (NPM) | always its own commit |
 | `basalt-ui-obsidian` | Obsidian plugin building the brain reader | |
-| `bun-email-api`, `free-planning-poker`, `jkrumm.com`, `kobo-mods`, `ticktick-raycast`, `rollhook`, `rollhook-action`, `image-gen`, `image-share`, `modelpick`, `rb`, `research-gateway`, `usage-tracker`, `king-smith-walkingpad-mac`, `linewatch`, `dispatch-scratch` | see global CLAUDE.md repo table | |
+| `bun-email-api`, `free-planning-poker`, `jkrumm.com`, `kobo-mods`, `ticktick-raycast`, `rollhook`, `rollhook-action`, `image-share`, `modelpick`, `rb`, `research-gateway`, `usage-tracker`, `king-smith-walkingpad-mac`, `linewatch`, `dispatch-scratch` | see global CLAUDE.md repo table | |
 | `meteo` | weather/wave service, 8 LaunchAgents | all 8 templated in `meteo/ops`, `make launchd-install` (idempotent; `FORCE=1` bounces all) |
 | `dispatch-scratch` | disposable dispatch test target | by design |
 | `homelab`, `homelab-private`, `vps` | server stacks, reached over Tailscale SSH | |
@@ -99,8 +98,9 @@ calls out and polls rather than doing STT, TTS or image generation itself.
 
 | Repo | Purpose |
 |-|-|
-| `photo-flow` | sanctioned exception |
-| `shutterflow` | sanctioned exception |
+| `photo-flow` · `shutterflow` | the two photography apps |
+| `image-gen` | the Tauri studio — a GUI app belongs on the machine with a human at it; its gateway stays on the VPS |
+| `basalt-ui` | followed image-gen: it is consumed as a `file:` dependency, so the studio's machine needs the build |
 
 ## LaunchAgents — mini (gui/501 unless noted)
 

@@ -138,7 +138,7 @@ placed on whichever machine owns the repo.
 | `agent-dispatch work <repo>` | `rd work` | local session |
 
 MacBook-resident repos are the sanctioned set: `dotfiles`, `dotfiles-private`,
-`brain`, `photo-flow`, `shutterflow`. It **refuses to nest inside an interactive
+`brain`, `photo-flow`, `shutterflow`, `image-gen`, `basalt-ui`. It **refuses to nest inside an interactive
 Claude Code session** (`CLAUDECODE` set → prints the brief, exit 1).
 `make agent-dispatch-smoke` runs a read-only task at `dispatch-scratch`.
 
