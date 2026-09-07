@@ -189,21 +189,19 @@ also always its own commit), `free-planning-poker`, `rollhook`, `rollhook-action
 get the **full** ruleset; other public repos get **lite** (no PR rule — just
 no-force, no-deletion, linear). Private repos can't be protected for free.
 
-| Repo | Purpose |
+**Every repo, what it's for and where it lives is `dotfiles/docs/architecture.md`
+§Repos — look it up there, not here.** Only the facts that change *how you work
+in* a repo, not *what it is*, earn a line:
+
+| Repo | Workflow fact |
 |-|-|
-| `dotfiles` · `dotfiles-private` | This setup (Claude config, hooks, skills, rules, bootstrap) · its secrets half: refs lists, encrypted cache, ACL + serve state. |
-| `homelab` · `vps` | Home stack + Uptime Kuma config (`make uk-sync`) · production VPS + the imgproxy CDN behind `img.jkrumm.com`. |
 | `homelab-private` | **Self-contained.** Never reference its services, hostnames or details from any other repo, doc or commit. |
-| `argo` | Personal API + dashboard, the agent backbone. Elysia/Bun/Postgres/Drizzle; its OpenAPI spec is the contract. |
-| `sideclaw` | Local Claude Code MCP daemon — check/review/dispatch/otel/excalidraw/read-image. **Mini only.** |
-| `research-gateway` | VPS service behind `/research`, **tailnet-only** — bearer REST + an MCP facade, same submit→poll trio. Cloud routines can't reach it. |
-| `hermes-agent` | Mini-only personal AI over Slack; `HERMES_SKILLS` in its Makefile is the source of truth for its skill domains. |
+| `sideclaw` | Local Claude Code MCP daemon behind check/review/dispatch/otel. **Mini only.** |
+| `research-gateway` | Behind `/research`, **tailnet-only**. Cloud routines can't reach it. |
+| `hermes-agent` | `HERMES_SKILLS` in its Makefile is the source of truth for its skill domains. |
 | `basalt-ui` | Mantine v9 + visx design system (NPM). No Tailwind. **Always its own commit.** |
-| `brain` · `basalt-ui-obsidian` | Obsidian vault — `wiki/` = agentic knowledge (strict lint), PARA `Projects`/`Areas` = curated human surface linking into it, no `Resources` tier; use `/brain` · the plugin building the `brain-web` reader. |
-| `modelpick` | IU models vs leaderboards + live probes. **Source of truth for model-choice rationale**, backs `cap`. |
-| `meteo` | Weather/wave service — 8 mini LaunchAgents, VPS-deployed; all 8 templated in `meteo/ops`, `make launchd-install`. |
-| `dispatch-scratch` · `photo-flow` · `shutterflow` | Disposable dispatch target · the two MacBook-resident photography apps. |
-| `audio-gateway`, `image-share`, `image-gen`, `usage-tracker`, `linewatch`, `rollhook`(`-action`), `rb`, `king-smith-walkingpad-mac`, `bun-email-api`, `free-planning-poker`, `ticktick-raycast`, `clawbar`, `jkrumm.com`, `kobo-mods` | Services and smaller apps, all mini-resident. |
+| `brain` | `wiki/` = agentic knowledge (strict lint), PARA `Projects`/`Areas` = curated human surface linking into it, no `Resources` tier; use `/brain`. |
+| `modelpick` | **Source of truth for model-choice rationale**, backs `cap`. |
 
 ### `~/IuRoot/` — work (IU)
 
@@ -224,42 +222,16 @@ study-progress}`, `crm-bridge-retry-tool`, `cfn-kafka`, `terraform-monitoring`.
 
 ## Machines
 
-**The mini is the dev host; the MacBook is the client** — agents run on the mini
-and outlive the MacBook. **`dotfiles/docs/architecture.md` is the map**: every
-machine, repo, launchd job and its owner, every door, the secrets flow, what
-monitors what. Read it, don't restate it.
+**The mini is the dev host; the MacBook and iPhone are the client** — agents run
+on the mini and outlive the MacBook. **`dotfiles/docs/architecture.md` is the
+map and the mental model** (what each machine and surface is FOR); **`dotfiles/CLAUDE.md`
+§Machines & remote dev** carries the reach table, the herdr-crash and
+never-`ssh mini 'claude …'` traps, and human-queue. Read them, don't restate them
+here — this file only routes:
 
-| Host | Reach | Repos |
-|-|-|-|
-| Mac mini | `ssh mini` — OpenSSH + key, agent forwarding + ControlMaster | **all** SourceRoot repos; cache backend |
-| MacBook (`iumac`) | reached FROM the mini: `ssh iumac` — dedicated key, `restrict,pty`, no agent forwarding, onto a userland sshd on **:2222** (MDM owns the system :22) | the sanctioned set only; both 1P accounts, biometric |
-| HomeLab · VPS | `ssh homelab` / `ssh vps` — Tailscale SSH, keyless | `~/homelab`(`-private`) · `~/vps` |
-
-**The MacBook's sanctioned set is `dotfiles`, `dotfiles-private`, `brain`,
-`photo-flow`, `shutterflow`.** Every other repo lives on the mini and is reached
-there — don't clone one back "just to look". `brain` is a deliberate *writing*
-mirror, not drift: the vault's only offline copy, reconciled through GitHub every
-5 min; who commits where is `brain/docs/brain-access.md`. **Conflicts are never
-auto-resolved.**
-
-Two separate questions — collapsing them is the usual confusion: `desk [session]`
-(= `herdr --remote mini`) puts a **terminal on** the mini, client-side, server and
-panes there; `rd` and `agent-dispatch` (above) put **work on** it with no
-terminal. Two facts worth holding:
-
-- A herdr crash **restores the layout and loses every process in it** → durable
-  work belongs in a `claude --bg` daemon, not a pane. A roam or lid-close ends
-  `desk`'s *connection*, never the panes — re-run it.
-- **Never `ssh mini 'claude --bg …'`** — an ssh session can't reach the login
-  keychain, so the daemon comes up `Not logged in`, silently falls back to API
-  billing, and still looks healthy in `claude agents`. `rd bg` spawns through a
-  herdr pane precisely to avoid this.
-
-**`/remote-dev`** for this stack, **`make doctor`** when it's broken. Work needing
-a *present human* (biometric `op`, the ACL push, any person-only decision) is
-enqueued on the mini with `ask-human.sh ask "…" [--cmd …]` and drained on the
-MacBook with `make human-queue`, which walks each one — never auto-executed,
-always a typed `yes`.
+`desk [session]` puts a **terminal on** the mini; `rd`/`agent-dispatch` put
+**work on** it with no terminal (two separate questions, see the map). **`/remote-dev`**
+for this stack, **`make doctor`** when it's broken.
 
 ### Sudo on a server
 
@@ -309,30 +281,12 @@ import 'basalt-ui/styles.css'            // declares @layer mantine, basalt
 
 `op_account_for_cwd` / `op_run` (`~/.zsh/conf.d/secrets.zsh`, worktree-safe)
 resolve the account from cwd: **`tkrumm`** in `~/SourceRoot/`, **`careerpartner`**
-in `~/IuRoot/`. Skills call the helper, never bare `op`.
-
-**The mini is headless — a direct `op read` / `op run` there HANGS** on a
-biometric prompt no one can answer. Use `secrets-run`: it mirrors `op` and
-resolves each ref from an age-encrypted, `op://`-keyed offline cache (decrypted in
-memory, no plaintext on disk, no network, fails closed).
-
-```bash
-secrets-run read op://vault/item/field                  # ~ op read
-secrets-run run [--env-file=<tpl>]... -- <cmd>          # ~ op run (repeats; last wins)
-```
-
-Same app code and same refs on both machines — only `~/.config/secrets/backend`
-differs (`cache` on the mini, `op` on the MacBook), and `machine-role.ts` injects
-the active one each session: **trust it over guessing**. `make secrets-seed`
-reseals the cache (biometric, present-human) from `dotfiles-private/headless.refs`;
-**only T0/T1 refs are ever cached** — `op://Private/*` and prod are refused.
-Work refs *are* cached, so an agent on the mini reaches IU credentials with no
-human present: a standing, enumerated exposure. Ops via **`/secrets`**; model in
-`dotfiles-private/docs/`.
-
-**Any edit to `secrets-run`** takes the full guardrail: `make secrets-test` +
-`shellcheck` + design.md/security-review.md in the same change + an adversarial
-`/review` — it is the sole secret path on the mini.
+in `~/IuRoot/`. Skills call the helper, never bare `op`. **Never `op read`/`op
+run` on the mini** — it hangs on a biometric prompt no one can answer; use
+`secrets-run` instead (mirrors `op`, resolves from the offline cache). Full
+model, the cache/backend split, and the tiering guardrail:
+`dotfiles/CLAUDE.md` §Secrets, `dotfiles-private/docs/design.md`. Ops via
+**`/secrets`**.
 
 ---
 
@@ -348,7 +302,7 @@ a call costs. **Everything routed through sideclaw exists only on the mini.**
 | **MCP (sideclaw, async)** | `/check` (format·lint·tsc·test·fallow; pass `commands` on non-Node repos) · `/review` (multi-angle + CodeRabbit; `--deep` adds correctness + security) · `/otel` · `/excalidraw-diagram` (drawings are read with sideclaw `read_image` directly) |
 | **MCP · fork · subprocess** | `/research` (research-gateway, off Max) · `/browse` (chrome-devtools, haiku) · `/analyze` (fallow + `claude_iu`) |
 | **inline — git** | `/commit` (`--split`/`--amend`) · `/pr` · `/ship` · `/git-cleanup` |
-| **inline — build** | `/implement` (drives `@implementer`) · `/upgrade-deps` (charts and UI: the basalt-ui per-repo skills + `rules/visx-charts.md`) |
+| **inline — build** | `/implement` (drives `@implementer`) · `/upgrade-deps` (charts and UI: the basalt-ui per-repo skills + `rules/visx-charts.md`) · `/archify` (standalone HTML diagrams — vendored, not npx) |
 | **inline — ops** | `/secrets` · `/cloudflare` (via `op_account_for_cwd`) · `/remote-dev` · `/herdr` (inert unless `HERDR_ENV=1`) · `/img` (`--json`) |
 | **inline — writing** | `/brain` (via `obsidian-cli`) · `/distill` · `/podcast` |
 
