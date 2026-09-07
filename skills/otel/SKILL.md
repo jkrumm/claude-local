@@ -17,13 +17,13 @@ Four ways in, cheapest-appropriate first.
 |-|-|
 | Quick triage, off-thread verdict | `mcp__sideclaw__otel` — read-only Sonnet worker, returns `{status, environment, timeRange, findings, recommendations}` only |
 | Interactive investigation, dashboards, alerts | `scripts/hdx.py <env> …` — the ClickStack builder tools over HTTP, discovery flow below |
-| Same tools as registered MCP (opt-in) | `mcp__hyperdx-{prod,local}__clickstack_*` — only after `make hyperdx-mcp-register`; costs ~2k tokens/turn, never required |
 | Raw SQL fallback, or HyperDX API down | `scripts/query.py --env <env> --preset ...` |
 
 **(a) `mcp__sideclaw__otel`** — call with `investigation` (error/service/trace
 id/anomaly/time range) and `environment` (`local`/`prod`). Runs read-only on
-claude-sonnet-5[1m] (Max, `SIDECLAW_WORKER_BACKEND=max`; IU fallback otherwise —
-non-EU routing, treat prod log content accordingly) via `scripts/query.py`. Only
+whichever backend/model sideclaw `GET /api/routing` assigns the tool (the result's
+`backend` field says which ran; on the IU route that is non-EU — treat prod log
+content accordingly) via `scripts/query.py`. Only
 the structured result crosses back — raw output stays in the worker. Query can
 take 1–6 min under load; the tool's 8-min timeout absorbs most of it, retry on a
 hard timeout.
@@ -44,9 +44,9 @@ callers without an MCP client. `hdx.py <env> tools`, `schema [tool]` (full
 tool-selection policy, same text as (b)), `call <tool> '<json>'`, `prompt <name>`,
 `rest <METHOD> <path> ['<json>']`, `link <dashboard-id> [--last 24h|7d]`. `<env>`
 is `local` or `prod`. This is the primary door: `hdx.py` speaks the same MCP endpoint over HTTP, so
-nothing needs to be registered. A registration (`make hyperdx-mcp-register`)
-only adds call ergonomics and costs every turn ~60 deferred tool names plus the
-server's instructions block (~2k tokens) — `make setup` removes it again.
+nothing needs to be registered — HyperDX is deliberately not an MCP server here
+(a registration costs every turn ~60 deferred tool names plus the server's
+instructions block, ~2k tokens); `hdx.py` is the door.
 
 **(d) `scripts/query.py`** — direct ClickHouse SQL (HTTP or docker exec/ssh),
 unchanged. Use when the HyperDX API itself is down, or for ad-hoc SQL the

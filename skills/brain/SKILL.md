@@ -36,7 +36,7 @@ The first-party `obsidian-cli` (`/usr/local/bin/obsidian`) is metadata-aware —
 - Prefer editing an existing concept over creating an orphan. Check with `obsidian search` first.
 - Frontmatter: `type` + `description` required on every `wiki/` note; add `title`, `tags`, `timestamp` (ISO 8601) where meaningful.
 - Links: `[[wikilinks]]` only. Every new note gets ≥1 outbound link.
-- Update the nearest `wiki/` `index.md` MOC. Append a line to root `log.md`.
+- Update the nearest `wiki/` `index.md` MOC. Never touch root `log.md` — it is the human essay journal, and automated writers do not append to it.
 - Run `node .scripts/vault-lint.mjs` before committing; 0 errors required. Passing is necessary, not sufficient — judgment stays human.
 
 Curating a **human page** (`Projects`/`Areas`) is lighter: no forced schema, link *down* into `wiki/` rather than duplicating detail, keep links resolving, and prefer editing the existing folder note over adding a new page. When adding a subfolder that will hold more than one note, create its folder note (`{foldername}.md`) in the same write — see the vault's `AGENTS.md` → Reserved filenames; a pure attachment/spec bucket already covered by the parent's folder note doesn't need one.
@@ -63,8 +63,8 @@ Compiled pieces live on the curated surface (an Area/Project folder note, or a h
 
 **AGENTS.md → Ingestion is canonical** — read it before any migration. The full promotion runbook, the three wikilink cases, provenance/no-re-migration, and "migration preserves, does not recommend" all live there. The non-negotiables:
 
-- **Never an autonomous loop.** v1 was scrapped for exactly that (`.docs/post-mortem-v1.md`). Promote one concept at a time, human-reviewed.
-- Connectors and the vault drop **raw** captures into `Inbox/` only — never straight into `wiki/` or an evergreen Area/Project. Log every skip with a reason in `log.md`; no silent drops.
+- **Never an autonomous loop.** v1 was scrapped for exactly that (`wiki/engineering/human-gated-ingestion.md`). Promote one concept at a time, human-reviewed.
+- Connectors and the vault drop **raw** captures into `Inbox/` only — never straight into `wiki/` or an evergreen Area/Project. Record every skip with a reason in the commit message (`skip: <source> — <reason>`); no silent drops, and never in `log.md`, the human essay journal.
 - Show the user the `git diff` before it lands. Small batches.
 - Do not touch `Inbox/` or run ingestion unless explicitly asked.
 

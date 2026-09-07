@@ -208,7 +208,8 @@ also reach back: `ssh iumac` / `rsync … iumac:…`, over a dedicated
 `usage-tracker` stats, syncing `brain`/`dotfiles` — not for anything needing
 `op://Private/*`: `op` over `ssh iumac` fails **fast** ("account is not signed
 in", exit 1), it does not hang, so the biometric gate holds. `make doctor`
-checks this leg from the MacBook. Full model: `dotfiles/docs/remote-dev.md` §10.
+checks this leg from the MacBook. Full model: `dotfiles/docs/remote-dev.md` →
+*mini → iumac — the reverse reach, on :2222*.
 
 ## Moving files between the Macs
 
@@ -253,16 +254,19 @@ secrets-seed`), the Tailscale ACL push, any judgment call — an agent on the mi
 enqueues instead of blocking or editing a handover doc nobody may read for days:
 
 ```bash
-ask-human.sh ask "<text>" [--cmd <command>] [--wait [seconds]]   # on the mini
-make human-queue          # list pending requests, on the MacBook
+ask-human.sh ask "<text>" [--cmd <command>] [--wait <seconds>]   # on the mini
+make human-queue          # walk pending requests (run/deny/skip each), on the MacBook
 make human-queue-count    # just the count, on the MacBook
 ```
 
 Draining (`human-queue.sh run <id>`) happens only on the MacBook and requires a
 typed `yes` on a real TTY — there is no non-interactive path to it, so a
 compromised or misbehaving mini can only ever put a string in front of a human,
-never execute one. `--wait` polls for the result and exits 0/1/2/3 for
-done/denied/failed/timeout. Full model: `dotfiles/docs/remote-dev.md` §9.
+never execute one. `--wait <seconds>` polls for the result and exits 0/1/2/3
+for done/denied/failed/timeout; the default is 0 (return at once — the median
+resolution is ~7 days). Each enqueue posts one line to Slack `#agents` through
+Argo (`docs/remote-dev.md` → *Human queue notifications*). Full model:
+`dotfiles/docs/remote-dev.md` → *human-queue — the present-human channel*.
 
 ## Monitoring
 

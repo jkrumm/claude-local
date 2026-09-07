@@ -34,7 +34,7 @@ Analyze, validate, upgrade npm/bun dependencies, run validation, and commit chan
 
 ### Token Savings
 
-`/research` routes through the **research-gateway** MCP (hosted VPS service on IU models, off Max — a blocking call) and `/check` routes through **sideclaw** (claude-haiku-4-5, currently on Max — async job). Verbose work stays off the main thread; only the structured result returns.
+`/research` routes through the **research-gateway** MCP (hosted VPS service on IU models, off Max — async: submit returns `{ jobId }`, then `job_wait` until `stillRunning` is false) and `/check` routes through **sideclaw** (async job; backend per `GET /api/routing`). Verbose work stays off the main thread; only the structured result returns.
 
 ---
 
@@ -230,9 +230,9 @@ Research for each major upgrade:
 
 ---
 
-**⏸️ Proceed with upgrades?**
-- [ ] Safe upgrades only (patch + minor)
-- [ ] Safe + low-risk majors
+**⏸️ Proceed with upgrades?** (one package at a time, each with a reason — never a blind tree-wide update; see `rules/dependency-hygiene.md`)
+- [ ] Patch + minor upgrades, package by package
+- [ ] Those plus low-risk majors
 - [ ] All upgrades (with code changes)
 ```
 
@@ -242,22 +242,20 @@ Research for each major upgrade:
 
 **IMPORTANT:** All commands run from project root. Never cd.
 
-### Safe upgrades (patch + minor only):
+### One package at a time, deliberately (`rules/dependency-hygiene.md`)
+
+Never a tree-wide `--target minor -u` / `bun update` / `npm update`: that
+mass-update reflex is exactly what supply-chain attacks count on, and the
+release-age cooldown (`~/.bunfig.toml` → `minimumReleaseAge`) only protects an
+install that was chosen. Name each package, keep the exact-version pin, and
+install after each one so a break is attributable:
 
 ```bash
-# npm
-npx npm-check-updates --target minor -u && npm install
+# patch / minor — per package, in the order listed in the plan
+npx npm-check-updates -u --target minor <package> [--packageManager bun] && [npm|bun] install
 
-# bun
-npx npm-check-updates --target minor -u --packageManager bun && bun install
-
-# With --deep for workspaces
-npx npm-check-updates --target minor -u --deep [--packageManager bun] && [npm|bun] install
-```
-
-### Major upgrades (after research confirms safe):
-```bash
-npx npm-check-updates -u <package1> <package2> [--packageManager bun] && [npm|bun] install
+# major — only after research confirmed the migration
+npx npm-check-updates -u <package> [--packageManager bun] && [npm|bun] install
 ```
 
 ---
@@ -307,10 +305,7 @@ git add "**/package.json" 2>/dev/null  # For workspaces
 
 Commit message format:
 ```bash
-# For patch/minor only:
-git commit -m "chore: upgrade dependencies"
-
-# For specific packages:
+# Named packages, always:
 git commit -m "chore: upgrade <package1>, <package2>"
 
 # For major version:
@@ -355,8 +350,8 @@ Peer deps: react-dom must also upgrade
 
 ⚡ Upgrade Commands
 -------------------
-# Safe (patch+minor):
-npx npm-check-updates --target minor -u --deep --packageManager bun && bun install
+# Patch/minor, per package:
+npx npm-check-updates -u --target minor react-dom --packageManager bun && bun install
 
 ✅ Validation Results (via /check skill)
 -----------------------------------------------

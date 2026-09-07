@@ -5,13 +5,13 @@ description: Guided implementation with research, exploration, and validation. S
 
 # Implement — Guided Implementation
 
-Context-aware implementation flow. Scales its approach based on task complexity — from quick focused edits to multi-subagent orchestration. Not a full `/ralph` loop, but capable of handling substantial tasks while keeping the main agent's context window lean.
+Context-aware implementation flow. Scales its approach based on task complexity — from quick focused edits to multi-subagent orchestration, while keeping the main agent's context window lean.
 
-> **sideclaw tools are async.** `mcp__sideclaw__{check,review}` return `{ jobId }`, not the result — then `mcp__sideclaw__job_wait({ jobId })` (loop while `stillRunning`) yields the structured output. (`/research` is the separate **research-gateway** MCP — a blocking call, no jobId.) **Implementation runs on the native `@implementer` Sonnet subagent** (synchronous, on Max, its own prompt cache — no orchestrator-cache penalty), not on sideclaw. See the async-job contract in global CLAUDE.md.
+> **sideclaw tools are async.** `mcp__sideclaw__{check,review}` return `{ jobId }`, not the result — then `mcp__sideclaw__job_wait({ jobId })` (loop while `stillRunning`) yields the structured output. (`/research` is the separate **research-gateway** MCP with the same contract: submit returns `{ jobId }`, then `mcp__research-gateway__job_wait({ jobId })` until `stillRunning` is false.) **Implementation runs on the native `@implementer` Sonnet subagent** (synchronous, on Max, its own prompt cache — no orchestrator-cache penalty), not on sideclaw. See the async-job contract in global CLAUDE.md.
 
 ## When to Use
 
-- You have a clear task (from `/grill`, a PRD, or a direct request)
+- You have a clear task (a PRD or a direct request)
 - The task touches one or many files — complexity is handled by scaling the approach
 - You want research + explore + implement + validate in one coordinated flow
 
@@ -46,7 +46,7 @@ For Quick tasks: skip the formality, just implement and validate. State the tier
 
 **Primary goal: keep the orchestrator's context window small.**
 
-All subagent work uses the native `Agent` tool with an explicit `subagent_type`. Subagents have their own prompt cache — switching models inside a subagent does **not** invalidate the orchestrator's cache. The `@implementer` subagent runs Sonnet 4.6 at high effort (the implementor-tier default — ≈ Opus on SWE-bench at ~1/5 the cost). Fan out Sonnet implementers on **disjoint** file groups freely; reserve Opus subagents for novel-hard reasoning. Note: parallel subagents run on Max — they buy detachment and context isolation, not free parallelism.
+All subagent work uses the native `Agent` tool with an explicit `subagent_type`. Subagents have their own prompt cache — switching models inside a subagent does **not** invalidate the orchestrator's cache. The `@implementer` subagent runs the `sonnet` alias at high effort (the implementer-tier default — near-Opus quality at a fraction of the cost). Fan out Sonnet implementers on **disjoint** file groups freely; reserve Opus subagents for novel-hard reasoning. Note: parallel subagents run on Max — they buy detachment and context isolation, not free parallelism.
 
 | Phase | Quick | Standard | Heavy |
 |-|-|-|-|
@@ -58,7 +58,7 @@ All subagent work uses the native `Agent` tool with an explicit `subagent_type`.
 | Validate (runtime) | Only if obvious | Assess need | Always assess |
 
 **Heavy implementer choice (delegate to protect orchestrator CONTEXT — implementation now runs on Max/Sonnet):**
-- **Settled multi-file work**: delegate to **`@implementer`** (native Sonnet 4.6, effort high). Pass a complete brief — exact paths, the change/shape, acceptance criteria, intent, and explicit scope limits (no extra features, no refactoring untouched code). It loads the CLAUDE.md rules automatically (house-style fidelity a foreign worker can't match) and returns a diff summary. It has `Read`/`Grep`, so pass **file pointers, not pre-extracted snippets**, to save orchestrator context. Review the actual diff before committing.
+- **Settled multi-file work**: delegate to **`@implementer`** (native `sonnet` alias, effort high). Pass a complete brief — exact paths, the change/shape, acceptance criteria, intent, and explicit scope limits (no extra features, no refactoring untouched code). It loads the CLAUDE.md rules automatically (house-style fidelity a foreign worker can't match) and returns a diff summary. It has `Read`/`Grep`, so pass **file pointers, not pre-extracted snippets**, to save orchestrator context. Review the actual diff before committing.
 - **Independent file groups**: fire **multiple `@implementer` calls in one turn** (one per group). Parallelize **only on disjoint file sets** — never two implementers on the same file. Remember parallel = N× Sonnet-on-Max (detachment, not free).
 - **Novel hard logic, complex decomposition, multi-system reasoning**: keep it on Opus — `Agent` with `subagent_type: general-purpose`, `model: opus, effort: high`. The worker is a literal executor, not a planner.
 - **Mass mechanical migration (codemod across many files)**: parallel `@implementer` subagents on disjoint groups, or the `for f in ...; claude -p ... --allowedTools` fan-out (optionally pointed at the IU endpoint to keep it off Max). The retired sideclaw implement worker is **not** an option.
@@ -114,7 +114,7 @@ State your approach in 3-5 bullets and **proceed**. Include:
 
 **Quick (≤2 files): implement inline.**
 
-**Standard / Heavy settled work: delegate to the `@implementer` subagent** (native Sonnet 4.6, high effort). **Heavy novel-hard logic: `Agent` with `subagent_type: general-purpose`, `model: opus, effort: high`.** Either way the executor has zero prior context, so the `task` + `context` must include:
+**Standard / Heavy settled work: delegate to the `@implementer` subagent** (native `sonnet` alias, high effort). **Heavy novel-hard logic: `Agent` with `subagent_type: general-purpose`, `model: opus, effort: high`.** Either way the executor has zero prior context, so the `task` + `context` must include:
 - The full task description and acceptance criteria
 - Exploration findings (file paths + line numbers + patterns)
 - Research findings (if any)

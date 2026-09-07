@@ -77,26 +77,26 @@ Run analyses based on SCOPE argument:
 - SCOPE is "health": run complexity only
 - SCOPE is a package name (e.g. "web", "api"): run all with --workspace <SCOPE>
 
-Commands to run (npx downloads the fallow binary automatically if not installed):
+Commands to run (`fallow` is installed globally by dotfiles `make setup`, pinned to `FALLOW_VERSION`; `which fallow` must succeed — do not fall back to `npx`):
 
 ```bash
 # Full analysis
-npx fallow --format json 2>/dev/null
+fallow --format json 2>/dev/null
 
 # OR individual analyses for targeted reporting
-npx fallow dead-code --format json 2>/dev/null
-npx fallow dupes --format json 2>/dev/null
-npx fallow health --format json 2>/dev/null
+fallow dead-code --format json 2>/dev/null
+fallow dupes --format json 2>/dev/null
+fallow health --format json 2>/dev/null
 
 # Scoped to workspace
-npx fallow dead-code --workspace web --format json 2>/dev/null
+fallow dead-code --workspace web --format json 2>/dev/null
 
 # Changed files only (useful during active development)
-npx fallow dead-code --changed-since main --format json 2>/dev/null
+fallow dead-code --changed-since main --format json 2>/dev/null
 ```
 
 Parse each JSON result. If fallow reports no .fallowrc.json and is unable to detect entry
-points, note this in the report and suggest running `npx fallow init`.
+points, note this in the report and suggest running `fallow init`.
 
 ## Output Format (under 2000 chars)
 
@@ -131,6 +131,6 @@ rm -f "$TMPFILE"
 `claude_iu` (from `~/.zsh/conf.d/claude.zsh`) is a zsh function, not a binary on
 PATH — invoke it via `zsh -ic '…'` so it loads from an interactive shell. It runs
 `claude -p` against the IU unified endpoint's native Anthropic transport (Keychain
-creds, off Max quota, billed IU per-token). Analysis is pure `npx fallow` + Bash,
+creds, off Max quota, billed IU per-token). Analysis is pure `fallow` + Bash,
 so the no-WebSearch/WebFetch constraint doesn't bite. If the Keychain lookup fails
 it errors with a `make setup` hint; do not fall back to inline execution.

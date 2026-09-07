@@ -25,6 +25,8 @@ brew "shellcheck"
 brew "aom"
 # Interpreted, interactive, object-oriented programming language
 brew "python@3.14"
+# Official Amazon AWS command-line interface (imgcli needs `aws`; replaces the 2023 x86_64 pkg under Rosetta)
+brew "awscli"
 # B2 Cloud Storage Command-Line Tools
 brew "b2-tools"
 # Limit max battery charge on Apple silicon (MacBook only — see `make batt-setup`)
