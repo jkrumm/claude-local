@@ -122,7 +122,7 @@ substitutes for another.** `claude --bg` rides on top of all three.
 | Work *placed on* the mini, no terminal | `rd repos\|work\|bg\|agents\|read\|say` (`scripts/remote-dev.sh`; shorthands `work`/`agents`/`repos`) |
 | One bounded episode, either machine | `agent-dispatch bg <repo> '<task>'` · `agent-dispatch work <repo>` |
 | Work that must not die | `claude --bg '<prompt>'` — reparents to PID 1, survives ssh, herdr and lid-close. Conflicts with `-p`. |
-| What every agent is doing | `make agent-overview` — herdr workspace `overview` watching sideclaw `GET /api/agents.txt`; the JSON twin `/api/agents` is the one producer for Hermes, brain and Argo. |
+| What every agent is doing | `make agent-overview` — herdr workspace `overview` watching sideclaw `GET /api/overview.txt`; its JSON twin is the one producer for Hermes, brain and Argo. |
 
 Commands take a repo **name, never a path** — resolution happens on the host.
 `agent-dispatch` routes on the backend marker crossed with whether the repo exists
