@@ -157,9 +157,17 @@ worth building.
   `CLAUDE.md` and `rules/` for environment facts and explicitly tells it *not*
   to read `skills/`, `agents/` or the output style — importing the framing is
   how a second opinion turns into an echo.
+- **That combination is its own trust boundary**, not an inherited one: an
+  unsandboxed agent with no human in the loop, holding a tool that fetches
+  arbitrary web pages. Text in a fetched page is reachable input to a shell it
+  can run unrestricted. The same shape as Claude Code + WebFetch here, but a
+  second instance of it — treat an unfamiliar repo or a research-heavy run as
+  the case for `cx -s workspace-write -a on-request`.
 - **research-gateway is wired into codex too** (`[mcp_servers]`, bearer via
   `RESEARCH_GATEWAY_TOKEN`, `tool_timeout_sec = 7200` because one `job_wait`
-  blocks for the whole job). `cx mcp list` reports it.
+  blocks for the whole job). `cx mcp list` reports it. The bearer is resolved
+  once per launch into an env var, where Claude Code's headers helper re-reads
+  it on every reconnect — so a mid-session rotation needs a codex restart.
 - **`codex exec` blocks on stdin** when it isn't a TTY and no prompt is piped —
   redirect `</dev/null` in scripts or it hangs with no output at all.
 - **`codex --strict-config` is the validator**: it names the exact unknown key

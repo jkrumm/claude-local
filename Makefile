@@ -435,6 +435,12 @@ _setup-codex:
 	@# is an internal IU URL that never enters git (rules/security.md). The
 	@# template ships the placeholder; the host comes from the same Keychain
 	@# entry `_setup-sdk-keys` just wrote (cache fallback for the mini).
+	@#
+	@# codex APPENDS to this file at runtime (`[projects."/path"] trust_level`),
+	@# so a plain re-render would silently drop every project it has learned to
+	@# trust — the Karabiner failure mode. Everything below the sentinel line is
+	@# therefore carried over verbatim; codex only ever appends, so its writes
+	@# land there. Mode 600 because codex sets that itself.
 	@BASE=$$(security find-generic-password -s claude-sdk-base-url -w 2>/dev/null || true); \
 	if [ -z "$$BASE" ]; then BASE=$$(secrets-run read op://common/anthropic/BASE_URL 2>/dev/null || true); fi; \
 	if [ -z "$$BASE" ]; then \
@@ -442,8 +448,13 @@ _setup-codex:
 	else \
 		BASE=$${BASE%/}; ROOT=$${BASE%/anthropic}; \
 		DST="$(HOME)/.codex/config.toml"; \
-		sed "s|@@IU_OPENAI_V1@@|$$ROOT/openai/v1|" \
-			"$(DOTFILES_DIR)/config/codex/config.toml.tpl" > "$$DST.new"; \
+		SENT='# codex-local-state-below'; \
+		{ sed "s|@@IU_OPENAI_V1@@|$$ROOT/openai/v1|" \
+			"$(DOTFILES_DIR)/config/codex/config.toml.tpl"; \
+		  echo ""; echo "$$SENT"; \
+		  [ -f "$$DST" ] && awk -v s="$$SENT" 'f{print} $$0==s{f=1}' "$$DST" || true; \
+		} > "$$DST.new"; \
+		chmod 600 "$$DST.new"; \
 		if [ -f "$$DST" ] && ! grep -q 'codex-config-managed-by-dotfiles' "$$DST"; then \
 			cp "$$DST" "$$DST.bak"; echo "    · backed up existing config.toml → config.toml.bak"; \
 		fi; \

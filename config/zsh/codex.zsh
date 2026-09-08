@@ -14,11 +14,22 @@
 # the MacBook, the SOPS cache on the mini — and pass by prefix assignment rather
 # than `env VAR=…`, which would leak them into `ps auxww`.
 
-# Keychain first (milliseconds, no prompt), the secrets shim second.
+# Keychain first (milliseconds, no prompt), the secrets shim second — and the
+# shim is time-boxed: on the MacBook it resolves through 1Password and can raise
+# a biometric prompt nobody is watching, which would otherwise hang the launch
+# on an optional secret. `mcp-research-headers.sh` bounds the same call for the
+# same reason.
 _codex_secret() {
-  local svc="$1" ref="$2" val
+  local svc="$1" ref="$2" val to
   val=$(security find-generic-password -s "$svc" -w 2>/dev/null)
-  [[ -n "$val" ]] || val=$(secrets-run read "$ref" 2>/dev/null)
+  if [[ -z "$val" ]]; then
+    to=$(command -v timeout || command -v gtimeout)
+    if [[ -n "$to" ]]; then
+      val=$("$to" 8 secrets-run read "$ref" 2>/dev/null)
+    else
+      val=$(secrets-run read "$ref" 2>/dev/null)
+    fi
+  fi
   print -r -- "$val"
 }
 

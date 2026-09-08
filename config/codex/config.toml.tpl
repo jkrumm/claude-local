@@ -22,14 +22,8 @@ model_reasoning_effort = "high"
 model_reasoning_summary = "auto"
 model_verbosity = "medium"
 
-# Parity with how Claude Code runs here (`--dangerously-skip-permissions`): no
-# prompts, no sandbox. `workspace-write` is not the middle ground it looks like
-# — it keeps `.git` read-only, so every commit turns into a refusal, and its
-# network is off by default, which is what made `bun outdated` fail with
-# DNSResolveFailed until it got escalated out of the sandbox.
-#
-# `-s workspace-write` / `-a on-request` per invocation when you want the
-# guardrails back for an unfamiliar repo.
+# Parity with how Claude Code runs here. Why not `workspace-write`, and the
+# per-run escape hatch: dotfiles/CLAUDE.md §Codex.
 approval_policy = "never"
 sandbox_mode = "danger-full-access"
 

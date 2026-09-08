@@ -26,7 +26,10 @@ challenge a plan or produce a different one. Disagreement is the product.
 - Commits are `{type}({scope}): {description}`. `~/IuRoot` needs an `EP-XX`
   prefix and a PR against `main`; `~/SourceRoot` goes direct to master unless
   the repo is listed in `~/.claude/pr-required-repos.json`.
-- Never add AI or tool attribution to code, commits, PRs or docs.
+- Never add AI or tool attribution anywhere — no `Co-Authored-By`, no
+  "Generated with Codex/OpenAI/GPT", no "AI-assisted" note, no tool footer in
+  a commit message, PR description, code comment or doc. This includes
+  crediting *yourself*: your output is tooling, not authorship.
 - Never write a real host, IP, token or internal URL into a tracked file. Use a
   placeholder; the value belongs in 1Password.
 - Verify library versions, APIs and config options before recommending them —
