@@ -5,10 +5,10 @@ description: Deep technical research via the research-gateway MCP — agentic Ta
 
 # Research — via research-gateway MCP
 
-The standalone research-gateway service (Elysia + Bun on the VPS, Tailscale-only) runs the agentic loop on IU models, off Max. It uses an **async job contract** (mirrors sideclaw's `check`/`review`): submit → wait → read. No single call blocks for the whole run, so long/deep research can't trip the MCP HTTP transport's ~60s first-byte timeout.
+The standalone research-gateway service (Elysia + Bun on the VPS, Tailscale-only) runs the agentic loop on IU models, off Max. It uses an **async job contract** (mirrors sideclaw's `check`/`review`): submit → wait → read. The submit never blocks; `job_wait` then blocks for the WHOLE job (the server holds the stream open with 15s keep-alives), so one wait call is normally the entire interaction.
 
 1. **Submit.** Call `mcp__research-gateway__research` with `query` set to the user's question, optionally `depth` (`quick` | `standard` | `deep`, default `standard`). It returns IMMEDIATELY with `{ jobId, status }` — **not** the report. Note the `jobId`; do not treat this response as the answer.
-2. **Wait.** Call `mcp__research-gateway__job_wait({ jobId })`. It blocks up to ~50s (with progress heartbeats) and returns the job state. If `stillRunning` is `true`, call `job_wait` again with the same `jobId` — loop until `stillRunning` is `false`. (`job_status({ jobId })` is a non-blocking peek if you want to do other work between checks.)
+2. **Wait.** Call `mcp__research-gateway__job_wait({ jobId })` — once. It blocks until the job actually finishes (quick ~40s, standard ~2min, deep up to ~20min) and returns the terminal state. Only if it comes back with `stillRunning: true` — meaning the wait was cut short, not that the job failed — call it again with the same `jobId`. (`job_status({ jobId })` is a non-blocking peek if you want to do other work meanwhile.)
 3. **Read the result.** When `status` is `done`, the `result` field (also `structuredContent`) is a `ResearchReport`:
    - `report` — narrative, cited answer in markdown
    - `citations` — `[{ claim, url, confidence }]`, each key claim tied to a source, carrying the researching worker's `high` | `medium` | `low` confidence in that specific claim
@@ -19,4 +19,4 @@ The standalone research-gateway service (Elysia + Bun on the VPS, Tailscale-only
 
    On `done`, the text content already inlines the report plus a Citations and Sources section, so text-only clients still get the full picture. When `status` is `error`, `error` holds the failure message.
 
-Depth: `quick` = fast, snippet-level; `standard` (default) balances quality and speed; `deep` = most thorough but slowest. Submit is instant at every depth — only the number of `job_wait` loops grows with depth, so `deep` is now safe to use. If the gateway is at capacity, `research` returns an error (`isError`) — retry shortly.
+Depth: `quick` = fast, snippet-level; `standard` (default) balances quality and speed; `deep` = most thorough but slowest. Submit is instant at every depth, and one `job_wait` covers any of them — only how long that single call blocks grows with depth, so `deep` is safe to use. If the gateway refuses the submit, `research` returns an `isError` whose text says which of three reasons it was — `queue_full` (backlog), memory pressure (it is shedding new work to protect running jobs), or draining (it is restarting). All three mean retry shortly, not that the query was bad.
