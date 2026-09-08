@@ -40,10 +40,20 @@ _codex_run() {
     print -ru2 "codex: IU key missing — run 'make setup' in dotfiles"
     return 1
   fi
-  # A missing research bearer is not fatal: codex still starts, the MCP server
-  # just answers 401 — which reads as the auth problem it is.
+
+  # An unset (or empty) bearer_token_env_var is FATAL to codex's MCP startup —
+  # it refuses to start the client rather than connecting and taking a 401. So
+  # an unresolvable bearer disables the server for this launch instead, which
+  # costs research and nothing else. Chiefly this fires on a shell that hasn't
+  # re-sourced this file since the server was wired up: `sz`.
+  local -a args=()
   token=$(_codex_secret research-gateway-token op://vps/research-gateway/API_SECRET)
-  IU_API_KEY="$key" RESEARCH_GATEWAY_TOKEN="$token" command codex "$@"
+  if [[ -z "$token" ]]; then
+    print -ru2 "codex: research-gateway bearer unresolvable — starting without it"
+    args=(-c mcp_servers.research-gateway.enabled=false)
+  fi
+
+  IU_API_KEY="$key" RESEARCH_GATEWAY_TOKEN="$token" command codex "${args[@]}" "$@"
 }
 
 # gpt-5.6-sol, effort high. The everyday challenger.
