@@ -323,9 +323,12 @@ declarations) lives in `~/SourceRoot/dotfiles-private`; full model in its
 absent, and exporting it bills API credits instead.
 
 **MCP servers**, registered at user scope by `make setup`: `chrome-devtools`
-(deferred; use only via `/browse`), `research-gateway` (remote HTTP, bearer
-resolved from 1Password at provision time — re-run after rotating
-`op://vps/research-gateway/API_SECRET`), and **`sideclaw` on the mini only** — its
+(deferred; use only via `/browse`), `research-gateway` (remote HTTP; the bearer
+is **not** in `~/.claude.json` — `headersHelper` runs
+`scripts/mcp-research-headers.sh` per connect, Keychain first, `secrets-run`
+second. Rotating `op://vps/research-gateway/API_SECRET` means
+`security delete-generic-password -s research-gateway-token` then
+`make setup`), and **`sideclaw` on the mini only** — its
 MCP is stdio-only against `~/SourceRoot/sideclaw/server/mcp.ts`, a repo that lives
 only there, so `/check`, `/review`, `/otel`, `/excalidraw-diagram` and
 `dispatch` are mini-only skills. Don't clone sideclaw to the MacBook to "fix"

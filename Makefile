@@ -1221,21 +1221,31 @@ _setup-sideclaw-mcp:
 	fi
 
 # research-gateway is a REMOTE HTTP MCP (research.jkrumm.com/mcp) — unlike the
-# stdio servers above, it needs a bearer token. The secret never lands in git:
-# resolve it from 1Password at provision time and pass it to `claude mcp add`,
-# which writes the resolved header into ~/.claude.json (untracked). Re-run after
-# rotating op://vps/research-gateway/API_SECRET. Runs after _setup-op-token so op is authed.
+# stdio servers above, it needs a bearer token. The token is NOT written into the
+# config: `--header` would resolve it into ~/.claude.json, a file every agent
+# reads routinely, and rotating it would mean re-running setup on both machines.
+# Instead `headersHelper` runs scripts/mcp-research-headers.sh on every connect,
+# which reads the Keychain (fast, no prompt) and falls back to the secrets shim.
+# Rotating op://vps/research-gateway/API_SECRET therefore needs the Keychain entry
+# dropped (`security delete-generic-password -s research-gateway-token`) and this
+# target re-run — no `claude mcp` change. Runs after _setup-op-token so op is authed.
 .PHONY: _setup-research-gateway-mcp
 _setup-research-gateway-mcp:
-	@echo "  research-gateway MCP (remote HTTP — bearer via 1Password)..."
-	@TOKEN="$$(OP_ACCOUNT=tkrumm $(DOTFILES_DIR)/scripts/secrets-run read op://vps/research-gateway/API_SECRET 2>/dev/null)"; \
-	if [ -n "$$TOKEN" ]; then \
-		claude mcp remove research-gateway --scope user 2>/dev/null || true; \
-		claude mcp add research-gateway --scope user --transport http https://research.jkrumm.com/mcp --header "Authorization: Bearer $$TOKEN"; \
-		echo "    ✓ research-gateway MCP registered (research tool)"; \
+	@echo "  research-gateway MCP (remote HTTP — bearer via a headers helper)..."
+	@if security find-generic-password -s research-gateway-token -w >/dev/null 2>&1; then \
+		echo "    · bearer cached in Keychain (ok)"; \
 	else \
-		echo "    · could not read op://vps/research-gateway/API_SECRET — skipping (op not authed?)"; \
+		TOKEN="$$(OP_ACCOUNT=tkrumm $(DOTFILES_DIR)/scripts/secrets-run read op://vps/research-gateway/API_SECRET 2>/dev/null)"; \
+		if [ -n "$$TOKEN" ]; then \
+			security add-generic-password -a "$$USER" -s research-gateway-token -w "$$TOKEN" -T /usr/bin/security; \
+			echo "    ✓ bearer cached in Keychain"; \
+		else \
+			echo "    · could not read op://vps/research-gateway/API_SECRET — the helper will fall back to secrets-run"; \
+		fi; \
 	fi
+	@claude mcp remove research-gateway --scope user >/dev/null 2>&1 || true
+	@claude mcp add-json research-gateway --scope user '{"type":"http","url":"https://research.jkrumm.com/mcp","headersHelper":"$(DOTFILES_DIR)/scripts/mcp-research-headers.sh","timeout":7200000}' >/dev/null
+	@echo "    ✓ research-gateway MCP registered (no token in ~/.claude.json)"
 
 .PHONY: _setup-colima
 _setup-colima:
