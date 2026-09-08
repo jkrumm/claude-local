@@ -206,17 +206,21 @@ narratives) registered with `hermes cron`, invisible to launchd and to
 | `com.iu.prometheus-state-backup` | IuRoot | 3600s |
 | `com.iu.prometheus-conduktor-token` | IuRoot | 21600s |
 | `com.iu.prometheus-vpn-watcher` | IuRoot | KeepAlive |
+| `com.iu.prometheus-artefact-daily` | IuRoot | 07:30 daily |
 
-Three of the four IU jobs (`epos-token`, `state-backup`, `conduktor-token`) log
-to `/tmp` — a known gap, owned by `prometheus-scripts`, not fixed here because
-IuRoot repos are out of this map's write scope; `vpn-watcher` logs correctly
-under the repo's own `vpn/state/`.
+Four of the five IU jobs (`epos-token`, `state-backup`, `conduktor-token`,
+`artefact-daily`) log to `/tmp` — a known gap, owned by `prometheus-scripts`,
+not fixed here because IuRoot repos are out of this map's write scope, and one
+that bites on a schedule: macOS sweeps `/tmp` files untouched for three days,
+and launchd opens its stdio once at spawn, so a swept log leaves the job writing
+into an unlinked inode. `vpn-watcher` logs correctly under the repo's own
+`vpn/state/`.
 
-`com.1password.1password-launcher` and `com.radiosilenceapp.agent` are vendor
-LaunchAgents, not owned by any repo above — the latter lives in
-`/Library/LaunchAgents`, outside `architecture-check.sh`'s scan path
-(`~/Library/LaunchAgents` + `/Library/LaunchDaemons` only), loops on exit 78
-with no app installed, and is a stray worth removing via `make human-queue`.
+`com.1password.1password-launcher` is a vendor LaunchAgent, not owned by any
+repo above. `com.radiosilenceapp.agent` used to sit beside it in
+`/Library/LaunchAgents` looping on exit 78 with no app installed; it was removed
+2026-09-08. `architecture-check.sh` now scans that directory too, so the next
+such stray fails the assertion instead of hiding from it.
 
 ## LaunchAgents — MacBook
 
