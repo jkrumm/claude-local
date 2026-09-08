@@ -89,8 +89,8 @@ else
       body="{\"model\":\"$model\",\"max_tokens\":16,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}"
     else
       url="$OPENAI/chat/completions"; auth=(-H "Authorization: Bearer $KEY")
-      # GPT-5 reasoning models reject max_tokens — they require max_completion_tokens.
-      if [[ "$model" == gpt-5* ]]; then tok='"max_completion_tokens":16'; else tok='"max_tokens":16'; fi
+      # GPT-5/6 reasoning models reject max_tokens — they require max_completion_tokens.
+      if [[ "$model" == gpt-[56]* ]]; then tok='"max_completion_tokens":16'; else tok='"max_tokens":16'; fi
       body="{\"model\":\"$model\",$tok,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}"
     fi
     hdrf=$(mktemp)
@@ -115,7 +115,7 @@ echo ""
 echo "## NOTABLE CHAT MODELS IN CATALOG  ([cfg]=configured, [NEW]=available, not configured)"
 if [[ $catalog_ok -eq 1 ]]; then
   configured=$(grep -vE '^\s*(#|$)' "$CFG" 2>/dev/null | sed -E 's#^[^/]+/##' | sort -u)
-  NOTABLE='claude-(opus|sonnet|haiku)-4|^gpt-5|gemini-3|gemini-2\.5-pro|Kimi|^GLM-[0-9]|MiniMax-M|Qwen3.*(Coder|397B|235B|Thinking)|DeepSeek-V|mistral-large|codestral|devstral|magistral|Hermes-[0-9]|^sonar'
+  NOTABLE='claude-(opus|sonnet|haiku)-4|^gpt-[56]|gemini-3|gemini-2\.5-pro|Kimi|^GLM-[0-9]|MiniMax-M|Qwen3.*(Coder|397B|235B|Thinking)|DeepSeek-V|mistral-large|codestral|devstral|magistral|Hermes-[0-9]|^sonar'
   EXCLUDE='embed|tts|image|audio|realtime|transcribe|moderation|search-preview|dall-e|whisper|ocr|voxtral|robotics|computer-use|-live|native-audio|customtools'
   jq -r '.data[] | "\(.id)\t\(.owned_by // "")"' "$CATALOG" 2>/dev/null |
     grep -Ei "$NOTABLE" | grep -Eiv "$EXCLUDE" | sort |
@@ -134,10 +134,10 @@ echo "## HERMES AGENT"
 HERMES="$HOME/SourceRoot/hermes-agent"
 if [[ -d "$HERMES" ]]; then
   echo "  Configured model references found (grep):"
-  grep -rEoh '(claude-[a-z0-9.-]+|gpt-5[a-z0-9.-]*|gemini-[0-9][a-z0-9.-]*|[Gg][Ll][Mm]-[0-9][a-z0-9.-]*|MiniMax-M[0-9.]+|[Dd]eep[Ss]eek[a-zA-Z0-9./-]*)' \
+  grep -rEoh '(claude-[a-z0-9.-]+|gpt-[56][a-z0-9.-]*|gemini-[0-9][a-z0-9.-]*|[Gg][Ll][Mm]-[0-9][a-z0-9.-]*|MiniMax-M[0-9.]+|[Dd]eep[Ss]eek[a-zA-Z0-9./-]*)' \
     "$HERMES" --include='*.ts' --include='*.js' --include='*.json' --include='*.env*' --include='*.toml' --include='*.yaml' --include='*.yml' 2>/dev/null \
     | sort | uniq -c | sort -rn | head -15 | sed 's/^/    /'
-  [[ -z "$(grep -rEil 'claude-|gpt-5|gemini-|glm-|deepseek' "$HERMES" 2>/dev/null | head -1)" ]] && echo "    (no model id found)"
+  [[ -z "$(grep -rEil 'claude-|gpt-[56]|gemini-|glm-|deepseek' "$HERMES" 2>/dev/null | head -1)" ]] && echo "    (no model id found)"
 else
   echo "  (~/SourceRoot/hermes-agent not present on this machine)"
 fi

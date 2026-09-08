@@ -93,6 +93,7 @@ setup:
 	@$(MAKE) --no-print-directory _setup-secrets
 	@$(MAKE) --no-print-directory _setup-sdk-keys
 	@$(MAKE) --no-print-directory _setup-research-gateway-mcp
+	@$(MAKE) --no-print-directory _setup-codex
 	@$(MAKE) --no-print-directory _setup-ssh
 	@$(MAKE) --no-print-directory _setup-karabiner
 	@$(MAKE) --no-print-directory _setup-rules
@@ -422,6 +423,40 @@ _setup-sdk-keys:
 			echo "    ✗ Could not read op://common/anthropic/BASE_URL — skipping"; \
 		fi; \
 	fi
+
+.PHONY: _setup-codex
+_setup-codex:
+	@echo "  Codex CLI (IU unified endpoint)..."
+	@mkdir -p $(HOME)/.codex
+	@# Only the two config FILES are managed — ~/.codex also holds auth.json,
+	@# sessions/ and tmp/, which are machine-local runtime state.
+	@#
+	@# config.toml is RENDERED, not symlinked: it needs the endpoint host, which
+	@# is an internal IU URL that never enters git (rules/security.md). The
+	@# template ships the placeholder; the host comes from the same Keychain
+	@# entry `_setup-sdk-keys` just wrote (cache fallback for the mini).
+	@BASE=$$(security find-generic-password -s claude-sdk-base-url -w 2>/dev/null || true); \
+	if [ -z "$$BASE" ]; then BASE=$$(secrets-run read op://common/anthropic/BASE_URL 2>/dev/null || true); fi; \
+	if [ -z "$$BASE" ]; then \
+		echo "    ✗ IU base URL unavailable — re-run 'make setup' once the SDK keys are cached"; \
+	else \
+		BASE=$${BASE%/}; ROOT=$${BASE%/anthropic}; \
+		DST="$(HOME)/.codex/config.toml"; \
+		sed "s|@@IU_OPENAI_V1@@|$$ROOT/openai/v1|" \
+			"$(DOTFILES_DIR)/config/codex/config.toml.tpl" > "$$DST.new"; \
+		if [ -f "$$DST" ] && ! grep -q 'codex-config-managed-by-dotfiles' "$$DST"; then \
+			cp "$$DST" "$$DST.bak"; echo "    · backed up existing config.toml → config.toml.bak"; \
+		fi; \
+		if cmp -s "$$DST.new" "$$DST" 2>/dev/null; then \
+			rm -f "$$DST.new"; echo "    · ~/.codex/config.toml (ok)"; \
+		else \
+			mv "$$DST.new" "$$DST"; echo "    ✓ ~/.codex/config.toml rendered"; \
+		fi; \
+	fi
+	@# The astra profile carries no host, so it stays a plain symlink.
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(DOTFILES_DIR)/config/codex/astra.config.toml" \
+		DST="$(HOME)/.codex/astra.config.toml"
 
 .PHONY: _setup-ssh
 _setup-ssh:
@@ -1011,6 +1046,12 @@ _setup-scripts:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(DOTFILES_DIR)/scripts/agent-dispatch.sh" \
 		DST="$(HOME)/.local/bin/agent-dispatch"
+	@# astra — the one-shot Responses call at reasoning.mode="pro", the one
+	@# setting no coding harness can send. Complements `cxa`, see config/codex/.
+	@chmod +x $(DOTFILES_DIR)/scripts/astra.sh
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(DOTFILES_DIR)/scripts/astra.sh" \
+		DST="$(HOME)/.local/bin/astra"
 	@# ask-human.sh's push half: one Slack line to #agents per enqueued request.
 	@# Cache backend only — the queue is written on the mini; on the MacBook the
 	@# human is the one enqueuing and needs no nudge.

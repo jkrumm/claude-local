@@ -1,0 +1,13 @@
+# `cx --profile astra`, i.e. `cxa`. Symlinked to ~/.codex/astra.config.toml —
+# unlike config.toml it carries no host, so it can live in git as-is.
+#
+# Overlays the user config; the provider block stays in config.toml (profile
+# files may not define model_providers).
+#
+# Effort on this endpoint is low | medium | high | xhigh | max. `none` and
+# `minimal` are rejected for this model, and codex's own catalog additionally
+# lists `ultra`, which the endpoint rejects — don't set it.
+model = "gpt-6-astra"
+model_reasoning_effort = "xhigh"
+model_reasoning_summary = "auto"
+model_verbosity = "medium"

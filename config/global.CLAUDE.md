@@ -338,6 +338,14 @@ Max; `claude-sonnet-5[1m]` default) · `cap` = pick a model from measured data,
 then launch `ca` · `claude_iu` = the headless `claude -p` helper. `[1m]` and
 `_CA_CTX` rules: `dotfiles/CLAUDE.md`.
 
+**The non-Anthropic lane** — Claude Code is 99% of the work; this is the rare
+second opinion. `cx` (gpt-5.6-sol) · `cxa` (gpt-6-astra, several times the price)
+· `astra '<q>'` = one Responses call at `reasoning.mode="pro"`, no agent loop,
+the strongest single shot available and something no coding harness can send.
+Codex is the harness because its wire protocol is **Responses**-only, the only
+way OpenAI reasoning models keep reasoning items across tool calls — never route
+Claude Code at an OpenAI model through a gateway. `dotfiles/CLAUDE.md` §Codex.
+
 ---
 
 ## Config hierarchy

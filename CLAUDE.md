@@ -22,11 +22,12 @@ monitors what. Anything running on a machine appears there or gets deleted:
 |-|-|-|
 | `config/global.CLAUDE.md` | `~/.claude/CLAUDE.md` | Global Claude instructions (single source — no per-workspace layer) |
 | `config/zshrc` | `~/.zshrc` | Thin loader — sources all modules in conf.d |
-| `config/zsh/*.zsh` | `~/.zsh/conf.d/` (dir symlink) | ai, aliases, brew, claude, claude-auth, git, keybindings, path, prompt, remote-dev, secrets, secrets-cache, ssh-agent, tools |
+| `config/zsh/*.zsh` | `~/.zsh/conf.d/` (dir symlink) | ai, aliases, brew, claude, claude-auth, codex, git, keybindings, path, prompt, remote-dev, secrets, secrets-cache, ssh-agent, tools |
 | `config/gitconfig{,-personal,-work}` | `~/.gitconfig*` | `includeIf` per workspace; 1Password commit signing |
 | `config/bunfig.toml` | `~/.bunfig.toml` | Supply-chain `minimumReleaseAge` cooldown (Bun is every SourceRoot repo's package manager) |
 | `config/gitignore_global` | `~/.gitignore_global` | sc-note.md, CLAUDE.local.md |
 | `config/starship.toml` | `~/.config/starship.toml` | Prompt. ANSI color names, never hex, so it follows the light/dark switch |
+| `config/codex/astra.config.toml` | `~/.codex/astra.config.toml` | The `cxa` profile. `config/codex/config.toml.tpl` is **rendered**, not linked (below) |
 | `config/herdr/config.toml` | `~/.config/herdr/config.toml` | The **file** only — the same dir holds herdr's sockets and logs |
 | `config/ghostty/config` | `~/.config/ghostty/config` | The one terminal config. Themes under `config/ghostty/themes/` are **copied**, not symlinked (Ghostty theme names are exact filenames) |
 | `config/Caddyfile` | `$(brew --prefix)/etc/Caddyfile` | Local HTTPS proxy + the single app registry — edit here, then `caddy reload` |
@@ -40,12 +41,15 @@ monitors what. Anything running on a machine appears there or gets deleted:
 | `scripts/statusline.sh` · `scripts/fetch_usage.py` | `~/.claude/` | Statusline · Claude.ai usage-% fetcher (uv script) — `docs/statusline.md` |
 | `scripts/secrets-run` | `~/.local/bin/secrets-run` | Drop-in `op` shim (see Secrets) |
 | `scripts/agent-dispatch.sh` | `~/.local/bin/agent-dispatch` | One bounded episode on whichever machine owns the repo |
+| `scripts/astra.sh` | `~/.local/bin/astra` | One-shot Responses call at `reasoning.mode="pro"` — see *Codex* |
 | `scripts/keyprobe.py` | `~/.local/bin/keyprobe` | Raw-byte key probe — the only unambiguous test that Caps-Lock-as-Hyper works. Run it in a **bare** terminal. |
 | `skills/img/scripts/imgcli` | `~/.local/bin/imgcli` | `/img` CLI |
 | `scripts/wakeup.sh` | `~/.wakeup` | sleepwatcher hook — `caddy reload` on wake |
 | `raycast/` | `~/.raycast-scripts` (dir symlink) | Raycast Script Commands (battery limiter), MacBook-only via `make batt-setup` |
 
-**Not symlinked:** `~/.ssh/config` (copied from `config/ssh_config` — colima
+**Not symlinked:** `~/.codex/config.toml` (rendered by `_setup-codex` from
+`config/codex/config.toml.tpl` — it needs the IU endpoint host, which never
+enters git) · `~/.ssh/config` (copied from `config/ssh_config` — colima
 appends its own `Include`; all four hosts are MagicDNS short names, so it installs
 identically on a headless machine, no secret and no `op` call) ·
 `config/karabiner/karabiner.json` (copied; Karabiner rewrites the live file on
@@ -109,6 +113,42 @@ authorization.
 Keep this file **under 40k chars** (`wc -c CLAUDE.md`; the agent context limit is
 150k). When a section grows, move its narrative verbatim into the matching
 `docs/*.md` and leave commands, tables and one-line gotchas with a pointer.
+
+## Codex — the non-Anthropic lane
+
+Claude Code stays the driver; this is the rare second opinion, and the whole
+reason it is Codex and not a proxy is the **wire protocol**. OpenAI's reasoning
+models only carry reasoning items across tool calls over the **Responses** API,
+and Codex is the one harness whose `wire_api` is Responses-only. Chat-completions
+drops them silently — the model re-derives its plan every tool round trip.
+Routing Claude Code at an OpenAI model through a gateway is strictly worse
+(double translation, thinking dropped, `reasoning_effort` ignored) and is not
+worth building.
+
+| Command | Model | Effort |
+|-|-|-|
+| `cx` | `gpt-5.6-sol` | `high` |
+| `cxa` | `gpt-6-astra` — several times the price, opt-in on purpose | `xhigh` |
+| `astra '<question>'` | `gpt-6-astra`, **no agent loop, no tools** | `xhigh` + `mode="pro"` |
+
+- **`reasoning.mode = "pro"` is why `astra` exists.** The endpoint accepts it;
+  codex has no config key for it (only `model_reasoning_effort`), so the
+  strongest single shot the estate can fire is a bare Responses call. Take its
+  plan, execute it in Claude Code.
+- **Effort on this endpoint is `low|medium|high|xhigh|max`.** `none` and
+  `minimal` are rejected for these models, and codex's own catalog lists
+  `ultra`, which the endpoint rejects — don't set it.
+- **`--profile NAME` loads `$CODEX_HOME/NAME.config.toml`**, not the legacy
+  `[profiles.NAME]` table, which still parses and does nothing.
+- **`codex exec` blocks on stdin** when it isn't a TTY and no prompt is piped —
+  redirect `</dev/null` in scripts or it hangs with no output at all.
+- **`codex --strict-config` is the validator**: it names the exact unknown key
+  and line. Run it after any edit to `config/codex/`.
+- The key never enters the config file — `cx`/`cxa` resolve it per call
+  (Keychain, then the mini's cache) into `IU_API_KEY` by prefix assignment, so
+  it stays out of `ps auxww`.
+- Casks are never auto-upgraded: `make brew-upgrade` reports codex, `/upgrade-deps`
+  applies it.
 
 ## Machines & remote dev
 

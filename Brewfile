@@ -134,6 +134,10 @@ cask "audacity"
 cask "clipgrab"
 # AI code review CLI
 cask "coderabbit"
+# OpenAI Codex CLI — the non-Anthropic second opinion, pointed at the IU
+# unified endpoint (config/codex/, launched with `cx`/`cxa`). Cask, so it is
+# reported by `make brew-upgrade` and never auto-upgraded.
+cask "codex"
 # All-in-one toolbox for developers
 cask "devutils"
 # Both are declared on purpose — the Nerd Font cask does NOT register a family

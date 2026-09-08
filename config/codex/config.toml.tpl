@@ -1,0 +1,42 @@
+# codex-config-managed-by-dotfiles
+#
+# Codex CLI — the OpenAI lane, on the IU unified endpoint.
+#
+# RENDERED (not symlinked) into ~/.codex/config.toml by `make setup`: the
+# endpoint host is an internal IU URL and never enters git (rules/security.md),
+# so `@@IU_OPENAI_V1@@` is substituted from the Keychain `claude-sdk-base-url`
+# entry at setup time. Edit THIS file, then re-run `make setup`.
+#
+# Why Codex exists here at all, when Claude Code is the daily driver: OpenAI's
+# reasoning models only carry reasoning items across tool calls over the
+# *Responses* API, and Codex is the one harness whose wire protocol is
+# Responses-only. Over chat-completions the model re-derives its plan on every
+# tool round trip. A Claude-Code-through-an-OpenAI-proxy setup is strictly
+# worse than this and is not worth building.
+#
+# Launch with `cx` / `cxa` (config/zsh/codex.zsh) — they inject the API key.
+
+model = "gpt-5.6-sol"
+model_provider = "iu"
+model_reasoning_effort = "high"
+model_reasoning_summary = "auto"
+model_verbosity = "medium"
+
+# Codex's own interactive posture: writes confined to the workspace, and it
+# still asks before anything that leaves it. Deliberately NOT the
+# `--dangerously-skip-permissions` equivalent Claude Code runs under — this lane
+# is a rare second opinion, not an unattended worker with a CLAUDE.md hierarchy
+# behind it.
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+# The default is the cheaper 5.6 flagship on purpose. GPT-6 Astra costs several
+# times more per token, so it is opt-in via `cxa` (= `--profile astra`).
+#
+# `--profile NAME` loads $CODEX_HOME/NAME.config.toml — since codex 0.134 it is
+# NOT the legacy `[profiles.NAME]` table, which still parses and does nothing.
+[model_providers.iu]
+name = "IU Unified Endpoint"
+base_url = "@@IU_OPENAI_V1@@"
+env_key = "IU_API_KEY"
+wire_api = "responses"
