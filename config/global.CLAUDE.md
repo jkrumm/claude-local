@@ -121,13 +121,19 @@ branch + **draft** PR). One verdict, **no steering** (that is `rd bg` + `rd say`
 **Every tier gets its own worktree, read-only ones included** — `readOnly: true`
 disables Edit and Write but **not Bash**, and the brief is attacker-influenced.
 
-### sideclaw async-job contract
+### Async-job contract — both MCPs
 
-`mcp__sideclaw__{check,review,dispatch,otel}` return `{ jobId, status }`
-immediately — **not the result**. Submit → note `jobId` → `job_wait({jobId})`
-(blocks ~50 s; loop while `stillRunning: true`) → read `result` on
+`mcp__sideclaw__{check,review,dispatch,otel}` and
+`mcp__research-gateway__research` return `{ jobId, … }` immediately — **not the
+result**. Submit → note `jobId` → `job_wait({jobId})` → read `result` on
 `status: "done"`, `error` on failed. `job_status` is the non-blocking peek.
 **The submit call is not the answer.**
+
+The wait differs **per door**: sideclaw's returns after ~50 s regardless, so
+**loop while `stillRunning: true`**; research-gateway's *MCP* wait blocks for the
+whole job over a kept-alive stream, so **one call is normally the whole wait** —
+call again only if it still comes back `stillRunning`. Its REST door (Hermes's
+lane) still polls.
 
 ### Rules
 
@@ -197,7 +203,7 @@ in* a repo, not *what it is*, earn a line:
 |-|-|
 | `homelab-private` | **Self-contained.** Never reference its services, hostnames or details from any other repo, doc or commit. |
 | `sideclaw` | Local Claude Code MCP daemon behind check/review/dispatch/otel. **Mini only.** |
-| `research-gateway` | Behind `/research`, **tailnet-only**. Cloud routines can't reach it. |
+| `research-gateway` | Behind `/research`, **tailnet-only**. Cloud routines can't reach it. One `job_wait` covers a whole job. |
 | `hermes-agent` | `HERMES_SKILLS` in its Makefile is the source of truth for its skill domains. |
 | `basalt-ui` | Mantine v9 + visx design system (NPM). No Tailwind. **Always its own commit.** |
 | `brain` | `wiki/` = agentic knowledge (strict lint), PARA `Projects`/`Areas` = curated human surface linking into it, no `Resources` tier; use `/brain`. |

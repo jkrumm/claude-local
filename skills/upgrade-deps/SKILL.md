@@ -34,7 +34,7 @@ Analyze, validate, upgrade npm/bun dependencies, run validation, and commit chan
 
 ### Token Savings
 
-`/research` routes through the **research-gateway** MCP (hosted VPS service on IU models, off Max — async: submit returns `{ jobId }`, then `job_wait` until `stillRunning` is false) and `/check` routes through **sideclaw** (async job; backend per `GET /api/routing`). Verbose work stays off the main thread; only the structured result returns.
+`/research` routes through the **research-gateway** MCP (hosted VPS service on IU models, off Max — async: submit returns `{ jobId }`, then one `job_wait` blocks for the whole job) and `/check` routes through **sideclaw** (async job; backend per `GET /api/routing`). Verbose work stays off the main thread; only the structured result returns.
 
 ---
 
