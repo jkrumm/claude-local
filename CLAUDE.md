@@ -177,6 +177,10 @@ worth building.
   it stays out of `ps auxww`.
 - Casks are never auto-upgraded: `make brew-upgrade` reports codex, `/upgrade-deps`
   applies it.
+- **Spend is tracked**: usage-tracker's `codex` collector reads
+  `~/.codex/sessions/**/rollout-*.jsonl` and pushes to Argo like every other
+  lane. Local only — codex runs on the MacBook are invisible until that
+  collector gains an iumac mirror.
 
 ## Machines & remote dev
 
