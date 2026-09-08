@@ -55,6 +55,8 @@ FILES=(
   hermes-liveness.err
   hermes-backup.log
   hermes-backup.err
+  hermes-triage.log
+  hermes-triage.err
   # The Hermes gateway's OWN launchd streams. Absolute because `hermes gateway
   # install` generates that plist and points it at ~/.hermes/logs, not
   # ~/Library/Logs, and the plist is upstream's to write — this list bends to it
