@@ -141,6 +141,16 @@ worth building.
   `ultra`, which the endpoint rejects — don't set it.
 - **`--profile NAME` loads `$CODEX_HOME/NAME.config.toml`**, not the legacy
   `[profiles.NAME]` table, which still parses and does nothing.
+- **No prompts, no sandbox** — `approval_policy = "never"` +
+  `sandbox_mode = "danger-full-access"`, parity with how `claude` runs here.
+  `workspace-write` is not a middle ground: it keeps `.git` read-only and its
+  network is off, so commits refuse and `bun outdated` dies on DNS. Per-run
+  guardrails: `cx -s workspace-write -a on-request`.
+- **The TUI probes the terminal background once, at startup**, and picks its
+  colours from that (`terminal_bg` → a syntect theme, set through a `OnceLock`).
+  It does not re-probe, and there is no documented `[tui]` theme key — so after
+  `make theme` or an automatic light/dark flip, restart codex. herdr and Claude
+  Code both switch live; this one doesn't.
 - **`codex exec` blocks on stdin** when it isn't a TTY and no prompt is piped —
   redirect `</dev/null` in scripts or it hangs with no output at all.
 - **`codex --strict-config` is the validator**: it names the exact unknown key

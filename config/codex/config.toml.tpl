@@ -22,13 +22,16 @@ model_reasoning_effort = "high"
 model_reasoning_summary = "auto"
 model_verbosity = "medium"
 
-# Codex's own interactive posture: writes confined to the workspace, and it
-# still asks before anything that leaves it. Deliberately NOT the
-# `--dangerously-skip-permissions` equivalent Claude Code runs under — this lane
-# is a rare second opinion, not an unattended worker with a CLAUDE.md hierarchy
-# behind it.
-approval_policy = "on-request"
-sandbox_mode = "workspace-write"
+# Parity with how Claude Code runs here (`--dangerously-skip-permissions`): no
+# prompts, no sandbox. `workspace-write` is not the middle ground it looks like
+# — it keeps `.git` read-only, so every commit turns into a refusal, and its
+# network is off by default, which is what made `bun outdated` fail with
+# DNSResolveFailed until it got escalated out of the sandbox.
+#
+# `-s workspace-write` / `-a on-request` per invocation when you want the
+# guardrails back for an unfamiliar repo.
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
 
 # The default is the cheaper 5.6 flagship on purpose. GPT-6 Astra costs several
 # times more per token, so it is opt-in via `cxa` (= `--profile astra`).
