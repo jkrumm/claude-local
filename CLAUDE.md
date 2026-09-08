@@ -70,10 +70,11 @@ endpoint and diffs the live catalog against `models.txt`.
 | `make status` | Prerequisites + symlink health, then `doctor --local`. |
 | `make doctor` | Read-only health. Self-routes on the backend marker (below). |
 | `make help` | Every target, one line each. |
+| `make worktree-audit` / `worktree-prune` | List / reclaim clean, fully-merged git worktrees across `~/SourceRoot` + `~/IuRoot` — they pile up in four different parent dirs (repo-local, `.claude/worktrees/`, `~/IuRoot/worktrees/`, `~/IuRoot/.wt/`), so it asks git rather than assuming a location. |
 
 `make doctor` on **both** machines: LaunchAgent grading, the architecture-map
-assertion, the brew report. **Mini** adds drift (no push) and names the heartbeat
-rather than running it (it always pushes). **MacBook** adds the remote path
+assertion, the brew report, a worktree-audit nudge. **Mini** adds drift (no push)
+and names the heartbeat rather than running it (it always pushes). **MacBook** adds the remote path
 (Tailscale, ssh, ControlMaster reuse, agent forwarding, herdr `--remote`, GitHub
 credential + `git push --dry-run`), Kuma monitor states, then recurses into the
 mini's doctor over ssh — `--local` skips that. Read-only by construction.

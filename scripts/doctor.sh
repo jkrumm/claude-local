@@ -162,6 +162,17 @@ section_brew() {
   fi
 }
 
+# --- Worktrees (both machines) ------------------------------------------------
+# Nudge only, never fails: reclaimable git worktrees across SourceRoot +
+# IuRoot. scripts/worktree-audit.sh --count does the actual scan/classify;
+# this just surfaces the one-line result.
+section_worktrees() {
+  hdr "Worktrees"
+  local line
+  line=$(bash "$DOTFILES_DIR/scripts/worktree-audit.sh" --count 2>/dev/null) || line="worktrees: check failed"
+  skip "worktrees" "${line#worktrees: }"
+}
+
 # --- Drift (mini only, no push) -----------------------------------------------
 # scripts/drift-check.sh --no-push: same report the daily agent would push to
 # Uptime Kuma, without touching Kuma. Never applies anything — see that
@@ -302,6 +313,7 @@ section_kuma() {
 section_launchagents
 section_architecture
 section_brew
+section_worktrees
 
 if [ "$BACKEND" = "cache" ]; then
   section_drift

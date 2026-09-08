@@ -909,6 +909,16 @@ brain-sync-teardown:
 architecture-check:
 	@bash $(DOTFILES_DIR)/scripts/architecture-check.sh
 
+# Worktrees accumulate across the estate in four different parent directories
+# (repo/.claude/worktrees/, ~/IuRoot/worktrees/, ~/IuRoot/.wt/, and inside the
+# repo itself) and nothing ever reclaims them — see scripts/worktree-audit.sh's
+# header. Read-only by default; -prune only removes clean, fully-merged ones.
+.PHONY: worktree-audit worktree-prune
+worktree-audit:
+	@bash $(DOTFILES_DIR)/scripts/worktree-audit.sh
+worktree-prune:
+	@bash $(DOTFILES_DIR)/scripts/worktree-audit.sh --prune
+
 # Persistent loopback forwards into the mini's dev databases, so dbOSK (and the
 # mysql CLI, and any script) has a fixed endpoint that is simply always there.
 # Declared state + the full "why not tailscale serve / not Caddy" argument:
@@ -2895,6 +2905,8 @@ help:
 	@echo "  make brew-upgrade-dry   Preview without upgrading"
 	@echo "  make architecture-check Assert every loaded/on-disk launchd label is in docs/architecture.md"
 	@echo "  make hooks-test         bun test hooks/ — run after any hook edit"
+	@echo "  make worktree-audit     List stale git worktrees across SourceRoot + IuRoot (read-only)"
+	@echo "  make worktree-prune     Remove the ones that are clean and fully merged into origin's default branch"
 	@echo "  make secrets-lint       shellcheck secrets-run + the seed/rotate scripts"
 	@echo "  make secrets-test       secrets-run regression suite (+ lint)"
 	@echo "  make opbackup-seed-test Hermetic reseed-guard regression suite"
