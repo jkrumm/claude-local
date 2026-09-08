@@ -9,31 +9,35 @@
 # `make setup`, because the endpoint host never enters git) plus
 # ~/.codex/astra.config.toml for the `astra` profile.
 #
-# The key never enters the config file. codex reads it from IU_API_KEY, which
-# these functions resolve per call — Keychain on the MacBook, the SOPS cache on
-# the mini — and pass by prefix assignment rather than `env VAR=…`, which would
-# leak it into `ps auxww`.
+# Neither secret enters a config file. codex reads them from IU_API_KEY and
+# RESEARCH_GATEWAY_TOKEN, which these functions resolve per call — Keychain on
+# the MacBook, the SOPS cache on the mini — and pass by prefix assignment rather
+# than `env VAR=…`, which would leak them into `ps auxww`.
 
-_codex_iu_key() {
-  local key
-  key=$(security find-generic-password -s claude-sdk-api-key -w 2>/dev/null)
-  [[ -n "$key" ]] || key=$(secrets-run read op://common/anthropic/API_KEY 2>/dev/null)
+# Keychain first (milliseconds, no prompt), the secrets shim second.
+_codex_secret() {
+  local svc="$1" ref="$2" val
+  val=$(security find-generic-password -s "$svc" -w 2>/dev/null)
+  [[ -n "$val" ]] || val=$(secrets-run read "$ref" 2>/dev/null)
+  print -r -- "$val"
+}
+
+_codex_run() {
+  local key token
+  key=$(_codex_secret claude-sdk-api-key op://common/anthropic/API_KEY)
   if [[ -z "$key" ]]; then
     print -ru2 "codex: IU key missing — run 'make setup' in dotfiles"
     return 1
   fi
-  print -r -- "$key"
+  # A missing research bearer is not fatal: codex still starts, the MCP server
+  # just answers 401 — which reads as the auth problem it is.
+  token=$(_codex_secret research-gateway-token op://vps/research-gateway/API_SECRET)
+  IU_API_KEY="$key" RESEARCH_GATEWAY_TOKEN="$token" command codex "$@"
 }
 
 # gpt-5.6-sol, effort high. The everyday challenger.
-cx() {
-  local key; key=$(_codex_iu_key) || return 1
-  IU_API_KEY="$key" command codex "$@"
-}
+cx() { _codex_run "$@" }
 
 # gpt-6-astra, effort xhigh. Several times the price — reach for it when the
 # question is genuinely hard, not to save a `cx` invocation.
-cxa() {
-  local key; key=$(_codex_iu_key) || return 1
-  IU_API_KEY="$key" command codex --profile astra "$@"
-}
+cxa() { _codex_run --profile astra "$@" }

@@ -28,6 +28,7 @@ monitors what. Anything running on a machine appears there or gets deleted:
 | `config/gitignore_global` | `~/.gitignore_global` | sc-note.md, CLAUDE.local.md |
 | `config/starship.toml` | `~/.config/starship.toml` | Prompt. ANSI color names, never hex, so it follows the light/dark switch |
 | `config/codex/astra.config.toml` | `~/.codex/astra.config.toml` | The `cxa` profile. `config/codex/config.toml.tpl` is **rendered**, not linked (below) |
+| `config/codex/AGENTS.md` | `~/.codex/AGENTS.md` | Codex's global brief — environment facts only, deliberately **not** the Claude method |
 | `config/herdr/config.toml` | `~/.config/herdr/config.toml` | The **file** only — the same dir holds herdr's sockets and logs |
 | `config/ghostty/config` | `~/.config/ghostty/config` | The one terminal config. Themes under `config/ghostty/themes/` are **copied**, not symlinked (Ghostty theme names are exact filenames) |
 | `config/Caddyfile` | `$(brew --prefix)/etc/Caddyfile` | Local HTTPS proxy + the single app registry — edit here, then `caddy reload` |
@@ -151,6 +152,14 @@ worth building.
   It does not re-probe, and there is no documented `[tui]` theme key — so after
   `make theme` or an automatic light/dark flip, restart codex. herdr and Claude
   Code both switch live; this one doesn't.
+- **`~/.codex/AGENTS.md` loads on every run** (verified: a marker planted in a
+  scratch `CODEX_HOME` came back without any file read). It points codex at
+  `CLAUDE.md` and `rules/` for environment facts and explicitly tells it *not*
+  to read `skills/`, `agents/` or the output style — importing the framing is
+  how a second opinion turns into an echo.
+- **research-gateway is wired into codex too** (`[mcp_servers]`, bearer via
+  `RESEARCH_GATEWAY_TOKEN`, `tool_timeout_sec = 7200` because one `job_wait`
+  blocks for the whole job). `cx mcp list` reports it.
 - **`codex exec` blocks on stdin** when it isn't a TTY and no prompt is piped —
   redirect `</dev/null` in scripts or it hangs with no output at all.
 - **`codex --strict-config` is the validator**: it names the exact unknown key

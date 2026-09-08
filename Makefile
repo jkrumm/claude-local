@@ -457,6 +457,12 @@ _setup-codex:
 	@$(MAKE) --no-print-directory _link \
 		SRC="$(DOTFILES_DIR)/config/codex/astra.config.toml" \
 		DST="$(HOME)/.codex/astra.config.toml"
+	@# AGENTS.md is codex's CLAUDE.md equivalent and is read from CODEX_HOME on
+	@# every run. Deliberately thin: environment facts only, never the other
+	@# agent's method — see the file's own first section.
+	@$(MAKE) --no-print-directory _link \
+		SRC="$(DOTFILES_DIR)/config/codex/AGENTS.md" \
+		DST="$(HOME)/.codex/AGENTS.md"
 
 .PHONY: _setup-ssh
 _setup-ssh:
