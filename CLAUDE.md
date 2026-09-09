@@ -137,6 +137,11 @@ worth building.
   codex has no config key for it (only `model_reasoning_effort`), so the
   strongest single shot the estate can fire is a bare Responses call. Take its
   plan, execute it in Claude Code.
+- **`astra` has a ceiling, and it is the endpoint's front door, not `curl -m`.**
+  `pro` + `xhigh` + a ~400-line `-f` attachment came back as an HTML `500 - The
+  request timed out` after ~5 min; the same question at `-e high` returned a full
+  answer in ~4 min. There is no knob for it — drop to `-e high`, drop `-m pro`, or
+  send less. The script names this case explicitly now rather than printing markup.
 - **Effort on this endpoint is `low|medium|high|xhigh|max`.** `none` and
   `minimal` are rejected for these models, and codex's own catalog lists
   `ultra`, which the endpoint rejects — don't set it.

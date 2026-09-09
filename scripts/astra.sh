@@ -129,6 +129,19 @@ raw = open(path, encoding="utf-8", errors="replace").read()
 try:
     d = json.loads(raw)
 except json.JSONDecodeError:
+    # The endpoint sits behind a front door with its own request timeout, well
+    # under the curl -m 1800 above, and it answers with an HTML error page
+    # rather than JSON. Measured: pro + xhigh + a ~400-line attachment exceeds
+    # it; the same question at -e high returned in ~4 min. Name the fix instead
+    # of printing markup -- the raw body says 500 and nothing about what to
+    # change. No apostrophes anywhere in this block: it is single-quoted shell.
+    if "<html" in raw[:200].lower():
+        if "timed out" in raw.lower():
+            hint = ("front-door timeout, not curl. Retry with a lower -e (high), "
+                    "drop -m pro, or shrink the -f attachment.")
+        else:
+            hint = "the endpoint returned an HTML error page, not JSON."
+        sys.exit("astra: HTTP %s -- %s" % (http, hint))
     sys.exit("astra: HTTP %s, unparseable response\n%s" % (http, raw[:800]))
 if d.get("error"):
     sys.exit("astra: HTTP %s — %s" % (http, json.dumps(d["error"])))
