@@ -58,9 +58,10 @@ FILES=(
   hermes-triage.log
   hermes-triage.err
   # warden's four agents (com.jkrumm.warden-{loop,poll,sweep,backup}) — the
-  # control plane extracted out of hermes-agent. warden-loop is the same act-loop
-  # com.jkrumm.hermes-triage runs today, so the two triage entries above stay only
-  # until that cutover lands; warden-poll and warden-sweep are the ingest and
+  # control plane extracted out of hermes-agent. warden-loop replaced
+  # com.jkrumm.hermes-triage on 2026-09-09; the two triage entries above are kept
+  # only so the logs that agent already wrote still get rotated, and can go once
+  # they age out. warden-poll and warden-sweep are the ingest and
   # verdict-folding jobs promoted off the gateway's scheduler, which is the whole
   # point of the split (a control plane cannot live inside the thing it
   # supervises). Declared ahead of the agents existing: a missing file is skipped
