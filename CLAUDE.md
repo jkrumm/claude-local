@@ -30,7 +30,6 @@ monitors what. Anything running on a machine appears there or gets deleted:
 | `config/codex/astra.config.toml` | `~/.codex/astra.config.toml` | The `cxa` profile. `config/codex/config.toml.tpl` is **rendered**, not linked (below) |
 | `config/codex/AGENTS.md` | `~/.codex/AGENTS.md` | Codex's global brief — environment facts only, deliberately **not** the Claude method |
 | `config/herdr/config.toml` | `~/.config/herdr/config.toml` | The **file** only — the same dir holds herdr's sockets and logs |
-| `config/herdr/space-groups/` | `herdr plugin link` — **not** a symlink | Sidebar section headers, re-applied by its `[[startup]]` hook. Declaration is `config/herdr/groups.json`, read straight from the repo |
 | `config/ghostty/config` | `~/.config/ghostty/config` | The one terminal config. Themes under `config/ghostty/themes/` are **copied**, not symlinked (Ghostty theme names are exact filenames) |
 | `config/Caddyfile` | `$(brew --prefix)/etc/Caddyfile` | Local HTTPS proxy + the single app registry — edit here, then `caddy reload` |
 | `config/pr-required-repos.json` | `~/.claude/pr-required-repos.json` | Source of truth for PR-required repos — read by `protect-branches.ts` **and** `scripts/github-config.sh` |
@@ -234,19 +233,19 @@ Four facts to hold:
   `make herdr-restart YES=1` (bootout + bootstrap; `kickstart -k` re-reads
   launchd's *cache*) — it kills every pane, so it is human-timed.
 
-**Sidebar groups** — herdr has no folders, so `config/herdr/groups.json` declares
-them and `make herdr-groups` applies both halves: the socket API's
-`workspace.move_block` for the order, and a `$group` metadata token rendered by
-`[ui.sidebar.spaces].rows` as a header, since a row with no values disappears.
-It rides the **last** space of the *previous* group as that entry's final row —
-herdr indents rows 2+ of an entry, so putting it first pushed each group's
-leading repo out of line with its siblings; the first group is unlabelled. Order persists in herdr's
-`session.json`; **the headers do not**, which is the whole reason
-`config/herdr/space-groups` is a linked plugin — its `[[startup]]` hook
-re-applies them once the restored server's socket is up. `make
-herdr-groups-check` prints the plan without touching anything. Adding a repo is
-one line in the JSON, and a space that isn't open is skipped, so listing one
-early costs nothing.
+**Sidebar groups** — herdr has no folder and no separator primitive, so
+`config/herdr/groups.json` declares the taxonomy and `make herdr-groups` makes
+each header a **workspace** whose label is the rule (`── TOOLING ─────`),
+ordered above its members via the socket API's `workspace.move_block`. A
+metadata token in its own sidebar row was tried first and lost: herdr indents
+rows 2+ of an entry, so any two-row entry pushes its own name out of line —
+`scripts/herdr-groups.py` carries the full comparison. Nothing re-applies this
+and nothing has to; both halves are workspace state, which `session.json`
+persists. A separator costs an idle shell and a slot in the workspace picker,
+and stays invisible to sideclaw's overview (agent-driven; `workspace list` is
+only an id→label map there). `make herdr-groups-check` prints the plan,
+`herdr-groups.py clear` is the undo. Adding a repo is one line in the JSON; an
+unopened space is skipped, so listing one early costs nothing.
 
 **human-queue** — ssh gives the mini reach, not a fingerprint. Work needing a
 *present human* (biometric `op`, the ACL push, a person-only call) is enqueued on

@@ -2326,45 +2326,21 @@ herdr-setup:
 	@herdr server reload-config >/dev/null 2>&1 \
 		&& echo "    ✓ config.toml reloaded into the running server" \
 		|| echo "    · no running server to reload (config applies on next launch)"
-	@$(MAKE) --no-print-directory _herdr-groups-link
+	@# Section headers are workspaces, so applying them is one call with nothing
+	@# to install — it prints and exits 0 when no server is running.
+	@$(MAKE) --no-print-directory herdr-groups
 
-# Link the space-groups plugin and apply the grouping once. LINKED, NOT
-# INSTALLED: `plugin link` references the tracked directory in place, so
-# config/herdr/space-groups IS the live plugin and an edit needs no reinstall —
-# the opposite of collie, which must be re-cloned. Re-linking an already-linked
-# path is a no-op that exits 0.
+# Apply the declared sidebar grouping in config/herdr/groups.json: one separator
+# WORKSPACE per group, whose label is the header rule, ordered above its members.
+# Idempotent, and safe with no server (it says so and exits 0).
 #
-# The link needs a running server, so liveness is probed first and separately:
-# collapsing "no server" into "link failed" would print the benign message for a
-# bad manifest or a min_herdr_version mismatch, and on the dev host — where a
-# server is always up — that is exactly the failure worth seeing. Verified: a
-# manifest demanding a newer herdr exits 1 with a readable `plugin_requires_
-# newer_herdr`, which the else-branch surfaces.
+# NOTHING RE-APPLIES THIS AND NOTHING HAS TO: both halves are workspace state,
+# which herdr persists in session.json — the order, and the separator spaces
+# whose labels ARE the headers. Run it by hand after opening a new space, which
+# lands at the end under OTHER until you do.
 #
-# THE PROBE IS A STRING MATCH BECAUSE THE EXIT CODE LIES. `herdr status server`
-# prints `status: not running` and still exits 0, as does `herdr plugin list`
-# against a dead socket — measured. Nothing in this CLI's exit code
-# distinguishes a live server from a missing one.
-.PHONY: _herdr-groups-link
-_herdr-groups-link:
-	@if ! herdr status server 2>/dev/null | grep -q "^status: running"; then \
-		echo "    · no running server — space-groups plugin not linked"; \
-	elif OUT=$$(herdr plugin link $(DOTFILES_DIR)/config/herdr/space-groups 2>&1); then \
-		echo "    ✓ space-groups plugin linked (headers re-applied on server start)"; \
-		$(MAKE) --no-print-directory herdr-groups; \
-	else \
-		echo "  ✗ space-groups plugin link failed:"; echo "    $$OUT"; exit 1; \
-	fi
-
-# Apply the declared sidebar grouping in config/herdr/groups.json: the spaces are
-# reordered into the declared group order, and the first space of each group gets
-# the `$$group` metadata token that [ui.sidebar.spaces].rows renders as a section
-# header. Idempotent, and safe with no server (it says so and exits 0).
-#
-# ORDER SURVIVES A RESTART, HEADERS DO NOT — herdr persists workspace order in
-# session.json but reported metadata is live-only, which is why the plugin's
-# startup hook re-runs this. Run it by hand after opening a new space, or from
-# inside herdr via the plugin's "Regroup spaces" action.
+# `clear` is the undo: it closes every separator space and drops the metadata
+# token an earlier design rendered headers with.
 .PHONY: herdr-groups
 herdr-groups:
 	@/usr/bin/python3 $(DOTFILES_DIR)/scripts/herdr-groups.py apply
