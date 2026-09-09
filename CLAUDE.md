@@ -30,6 +30,7 @@ monitors what. Anything running on a machine appears there or gets deleted:
 | `config/codex/astra.config.toml` | `~/.codex/astra.config.toml` | The `cxa` profile. `config/codex/config.toml.tpl` is **rendered**, not linked (below) |
 | `config/codex/AGENTS.md` | `~/.codex/AGENTS.md` | Codex's global brief — environment facts only, deliberately **not** the Claude method |
 | `config/herdr/config.toml` | `~/.config/herdr/config.toml` | The **file** only — the same dir holds herdr's sockets and logs |
+| `config/herdr/space-groups/` | `herdr plugin link` — **not** a symlink | Sidebar section headers, re-applied by its `[[startup]]` hook. Declaration is `config/herdr/groups.json`, read straight from the repo |
 | `config/ghostty/config` | `~/.config/ghostty/config` | The one terminal config. Themes under `config/ghostty/themes/` are **copied**, not symlinked (Ghostty theme names are exact filenames) |
 | `config/Caddyfile` | `$(brew --prefix)/etc/Caddyfile` | Local HTTPS proxy + the single app registry — edit here, then `caddy reload` |
 | `config/pr-required-repos.json` | `~/.claude/pr-required-repos.json` | Source of truth for PR-required repos — read by `protect-branches.ts` **and** `scripts/github-config.sh` |
@@ -232,6 +233,20 @@ Four facts to hold:
   `herdr session list|attach|stop`. Apply a fix to the live server with
   `make herdr-restart YES=1` (bootout + bootstrap; `kickstart -k` re-reads
   launchd's *cache*) — it kills every pane, so it is human-timed.
+
+**Sidebar groups** — herdr has no folders, so `config/herdr/groups.json` declares
+them and `make herdr-groups` applies both halves: the socket API's
+`workspace.move_block` for the order, and a `$group` metadata token rendered by
+`[ui.sidebar.spaces].rows` as a header, since a row with no values disappears.
+It rides the **last** space of the *previous* group as that entry's final row —
+herdr indents rows 2+ of an entry, so putting it first pushed each group's
+leading repo out of line with its siblings; the first group is unlabelled. Order persists in herdr's
+`session.json`; **the headers do not**, which is the whole reason
+`config/herdr/space-groups` is a linked plugin — its `[[startup]]` hook
+re-applies them once the restored server's socket is up. `make
+herdr-groups-check` prints the plan without touching anything. Adding a repo is
+one line in the JSON, and a space that isn't open is skipped, so listing one
+early costs nothing.
 
 **human-queue** — ssh gives the mini reach, not a fingerprint. Work needing a
 *present human* (biometric `op`, the ACL push, a person-only call) is enqueued on

@@ -1,0 +1,36 @@
+# Re-applies the sidebar section headers after a herdr server restart.
+#
+# WHY A PLUGIN AT ALL. herdr persists workspace ORDER in session.json, so the
+# grouping survives a restart — but reported metadata is live-only state and
+# does not. Without this hook the headers silently vanish on every
+# `make herdr-restart`, brew upgrade of herdr, or reboot, and the feature reads
+# as broken rather than stale. `[[startup]]` runs once per enabled plugin after
+# the session is restored and the API socket is ready, which is exactly the
+# moment the tokens can be re-reported.
+#
+# Linked, never installed: `herdr plugin link` references this directory in
+# place, so the tracked file IS the live plugin (the collie note in the Makefile
+# is about `plugin install`, which re-clones from GitHub instead). `make setup`
+# links it.
+#
+# PATHS ARE RELATIVE TO THIS DIRECTORY — herdr runs plugin commands with the
+# plugin directory as their working directory and does NOT use a shell, so
+# there is no `$HOME` expansion and no `~`. `../../../scripts` is
+# dotfiles/scripts. `/usr/bin/python3` rather than a bare `python3` because a
+# launchd-spawned server's PATH need not contain Homebrew's; the script is
+# deliberately 3.9-compatible for that reason.
+id = "jkrumm.space-groups"
+name = "Space Groups"
+version = "0.1.0"
+min_herdr_version = "0.8.0"
+description = "Section headers and declared order for the spaces sidebar"
+platforms = ["macos"]
+
+[[startup]]
+command = ["/usr/bin/python3", "../../../scripts/herdr-groups.py", "apply"]
+
+[[actions]]
+id = "regroup"
+title = "Regroup spaces"
+contexts = ["workspace"]
+command = ["/usr/bin/python3", "../../../scripts/herdr-groups.py", "apply"]

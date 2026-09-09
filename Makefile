@@ -2326,6 +2326,52 @@ herdr-setup:
 	@herdr server reload-config >/dev/null 2>&1 \
 		&& echo "    ✓ config.toml reloaded into the running server" \
 		|| echo "    · no running server to reload (config applies on next launch)"
+	@$(MAKE) --no-print-directory _herdr-groups-link
+
+# Link the space-groups plugin and apply the grouping once. LINKED, NOT
+# INSTALLED: `plugin link` references the tracked directory in place, so
+# config/herdr/space-groups IS the live plugin and an edit needs no reinstall —
+# the opposite of collie, which must be re-cloned. Re-linking an already-linked
+# path is a no-op that exits 0.
+#
+# The link needs a running server, so liveness is probed first and separately:
+# collapsing "no server" into "link failed" would print the benign message for a
+# bad manifest or a min_herdr_version mismatch, and on the dev host — where a
+# server is always up — that is exactly the failure worth seeing. Verified: a
+# manifest demanding a newer herdr exits 1 with a readable `plugin_requires_
+# newer_herdr`, which the else-branch surfaces.
+#
+# THE PROBE IS A STRING MATCH BECAUSE THE EXIT CODE LIES. `herdr status server`
+# prints `status: not running` and still exits 0, as does `herdr plugin list`
+# against a dead socket — measured. Nothing in this CLI's exit code
+# distinguishes a live server from a missing one.
+.PHONY: _herdr-groups-link
+_herdr-groups-link:
+	@if ! herdr status server 2>/dev/null | grep -q "^status: running"; then \
+		echo "    · no running server — space-groups plugin not linked"; \
+	elif OUT=$$(herdr plugin link $(DOTFILES_DIR)/config/herdr/space-groups 2>&1); then \
+		echo "    ✓ space-groups plugin linked (headers re-applied on server start)"; \
+		$(MAKE) --no-print-directory herdr-groups; \
+	else \
+		echo "  ✗ space-groups plugin link failed:"; echo "    $$OUT"; exit 1; \
+	fi
+
+# Apply the declared sidebar grouping in config/herdr/groups.json: the spaces are
+# reordered into the declared group order, and the first space of each group gets
+# the `$$group` metadata token that [ui.sidebar.spaces].rows renders as a section
+# header. Idempotent, and safe with no server (it says so and exits 0).
+#
+# ORDER SURVIVES A RESTART, HEADERS DO NOT — herdr persists workspace order in
+# session.json but reported metadata is live-only, which is why the plugin's
+# startup hook re-runs this. Run it by hand after opening a new space, or from
+# inside herdr via the plugin's "Regroup spaces" action.
+.PHONY: herdr-groups
+herdr-groups:
+	@/usr/bin/python3 $(DOTFILES_DIR)/scripts/herdr-groups.py apply
+
+.PHONY: herdr-groups-check
+herdr-groups-check:
+	@/usr/bin/python3 $(DOTFILES_DIR)/scripts/herdr-groups.py check
 
 # Converge herdr's brew-service plist so the server starts as a SESSION LEADER.
 # Same shape, same trap and same reason as _colima-supervise: BREW REGENERATES
@@ -2968,6 +3014,8 @@ help:
 	@echo "  make theme                      Apply the look (terminal + herdr + prompt) and reload live — run on BOTH machines"
 	@echo "  make herdr-setup                Claude agent-state hook + project-note keybinding (+ server on the dev host)"
 	@echo "  make herdr-status               Server + brew registration + supervised boot path (read-only)"
+	@echo "  make herdr-groups               Apply config/herdr/groups.json — reorder spaces + section headers"
+	@echo "  make herdr-groups-check         Print the grouping the sidebar would get (read-only)"
 	@echo "  make agent-overview             Dev host: herdr workspace overview watching sideclaw /api/overview.txt (idempotent)"
 	@echo "  make herdr-restart YES=1        Dev host: bootout + bootstrap the herdr server (kills every pane), then re-run agent-overview"
 	@echo "  make devhost-health-setup       Load the 5-min herdr/sshd/tailscale heartbeat → Uptime Kuma"

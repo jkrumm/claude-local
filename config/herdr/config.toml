@@ -182,9 +182,46 @@ show_agent_labels_on_pane_borders = true
 # Inline styles accept strict hex, so such a value cannot adapt per mode and must
 # clear both terminal backgrounds (#1f1f23 dark, #f2f2f5 light) — #358a5c was the
 # best worst-case green tried, at 3.86 / 3.80.
+#
+# `$group` IS HOW TWENTY SPACES GET FOLDERS, and herdr has no folder feature —
+# this is the one row here that is not a subtraction. It renders a workspace
+# metadata token reported by scripts/herdr-groups.py (`make herdr-groups`,
+# declared in config/herdr/groups.json), and the whole trick is documented
+# behaviour: "a row disappears when none of its tokens have a value". Give the
+# token to exactly one space per group and this row is a section header there
+# and absent everywhere else — INFRA, TOOLING, PERSONAL, APPS, WORK, in that
+# order, because the applier also reorders via the socket API's
+# `workspace.move_block`.
+#
+# IT MUST STAY THE LAST ROW, and that is a fix rather than a preference.
+# herdr INDENTS ROWS 2+ OF AN ENTRY. With `$group` first, the header sat flush
+# and its group's first space was pushed right while every sibling stayed flush
+# — which reads as "only the first repo is in this group", and was read exactly
+# that way. Carrying the label on the LAST space of the PREVIOUS group instead,
+# as that entry's final row, lands it in the same place on screen while making
+# every repo name row 1, so they all align. The header itself is the indented
+# line now, and the first group is unlabelled because nothing precedes it.
+#
+# NO STYLE ON IT, AND THAT IS THE MEASURED CHOICE. Captured from a pty client
+# against a throwaway `--session grptest`, in both modes (the light frame by
+# answering the DEC 2031 probe with `CSI ?997;2n`, exactly as in the theme block
+# above), herdr renders `$group` in the theme's MAUVE slot — #C678DD under
+# one-dark, #8839ef under catppuccin-latte. That is the same slot `branch` used
+# and that this file retired it over, and here it is the right answer rather
+# than the trap: a header SHOULD read as a different kind of thing from a
+# workspace name, and a token style is strict hex, so an explicit `fg` would be
+# ONE value across both terminal backgrounds while mauve resolves per theme for
+# free. Against the terminal backgrounds it lands at 5.58 (dark) and 4.85
+# (light) — over AA, and under body text at 7.71 / 7.15, which is the
+# subordinate-to-content ranking a section header wants.
+#
+# `dim = true` was tried first and dropped: Ghostty's faint blend is not
+# measured here, so it would have made those numbers a claim rather than a
+# fact, and the hue already carries the separation.
 rows = [
   ["state_icon", "workspace"],
   ["git_status"],
+  ["$group"],
 ]
 
 [ui.sidebar.agents]
