@@ -57,7 +57,7 @@ FILES=(
   hermes-backup.err
   hermes-triage.log
   hermes-triage.err
-  # warden's four agents (com.jkrumm.warden-{loop,poll,sweep,backup}) — the
+  # warden's five agents (com.jkrumm.warden-{loop,poll,sweep,backup,api}) — the
   # control plane extracted out of hermes-agent. warden-loop replaced
   # com.jkrumm.hermes-triage on 2026-09-09; the two triage entries above are kept
   # only so the logs that agent already wrote still get rotated, and can go once
@@ -75,6 +75,13 @@ FILES=(
   warden-sweep.err
   warden-backup.log
   warden-backup.err
+  # warden-api is the only LONG-RUNNING one, and the only one whose log grows
+  # per request rather than per scheduled pass: BaseHTTPRequestHandler writes a
+  # line to stderr for every GET. Negligible while `make status` is the only
+  # caller; not negligible once Argo polls it (warden Wave 4), which is exactly
+  # the kind of "it was fine until it wasn't" this list exists to get ahead of.
+  warden-api.log
+  warden-api.err
   # The Hermes gateway's OWN launchd streams. Absolute because `hermes gateway
   # install` generates that plist and points it at ~/.hermes/logs, not
   # ~/Library/Logs, and the plist is upstream's to write — this list bends to it
