@@ -2341,6 +2341,16 @@ herdr-setup:
 #
 # `clear` is the undo: it closes every separator space and drops the metadata
 # token an earlier design rendered headers with.
+# The herdr upgrade, with the two ways it goes wrong taken away: it refuses to
+# run inside a herdr pane (the shell it would kill mid-sequence) and it
+# converges the plist brew silently reverts. Writes a restore inventory first,
+# and gates on agents that are working or blocked. Full reasoning, including
+# where live handoff goes when herdr supports it from a brew install:
+# scripts/herdr-upgrade.sh.
+.PHONY: herdr-upgrade
+herdr-upgrade:
+	@bash $(DOTFILES_DIR)/scripts/herdr-upgrade.sh
+
 .PHONY: herdr-groups
 herdr-groups:
 	@/usr/bin/python3 $(DOTFILES_DIR)/scripts/herdr-groups.py apply
@@ -2990,6 +3000,7 @@ help:
 	@echo "  make theme                      Apply the look (terminal + herdr + prompt) and reload live — run on BOTH machines"
 	@echo "  make herdr-setup                Claude agent-state hook + project-note keybinding (+ server on the dev host)"
 	@echo "  make herdr-status               Server + brew registration + supervised boot path (read-only)"
+	@echo "  make herdr-upgrade              Upgrade herdr: inventory + agent gate + plist convergence + restart + assert"
 	@echo "  make herdr-groups               Apply config/herdr/groups.json — reorder spaces + section headers"
 	@echo "  make herdr-groups-check         Print the grouping the sidebar would get (read-only)"
 	@echo "  make agent-overview             Dev host: herdr workspace overview watching sideclaw /api/overview.txt (idempotent)"

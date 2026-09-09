@@ -215,8 +215,14 @@ session** (`CLAUDECODE` set → prints the brief, exit 1) — use a subagent ins
 
 Four facts to hold:
 
-- **A herdr crash restores the layout and loses every process in it** (new
-  `terminal_id`) → durable work belongs in a `claude --bg` daemon, not a pane.
+- **A herdr restart restores the layout and loses the processes in it** (new
+  `terminal_id`) — but **not the Claude panes**: herdr's native agent session
+  restore brings each one back with `claude --resume <id>`, which needs
+  integration version 6+ (this machine reports 8) and
+  `[session].resume_agents_on_restore`, true by default. Shells, dev servers and
+  `bun` loops still die, and a resumed agent still lost whatever turn was in
+  flight, so work that must not be *interrupted* still belongs in a `claude --bg`
+  daemon rather than a pane.
 - **`ssh iumac '<cmd>'` reaches the MacBook but carries no SSH identity by
   default** — `.zshrc` is not read by a remote command shell, so `SSH_AUTH_SOCK`
   is unset and every `git@github.com:` remote there fails `Permission denied
@@ -231,7 +237,12 @@ Four facts to hold:
 - **`herdr attach` is not a command** — `herdr --session <name>`,
   `herdr session list|attach|stop`. Apply a fix to the live server with
   `make herdr-restart YES=1` (bootout + bootstrap; `kickstart -k` re-reads
-  launchd's *cache*) — it kills every pane, so it is human-timed.
+  launchd's *cache*) — it kills every pane, so it is human-timed. A version
+  bump is **`make herdr-upgrade`**, which owns the whole sequence: it refuses to
+  run inside a herdr pane (the shell it would kill mid-sequence), writes a
+  restore inventory with each agent's resume id, gates on working/blocked
+  agents, converges the plist `brew upgrade herdr` silently reverts, then
+  asserts the server, the config and the groups.
 
 **Sidebar groups** — herdr has no folder and no separator primitive, so
 `config/herdr/groups.json` declares the taxonomy and `make herdr-groups` makes
