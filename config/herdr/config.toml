@@ -202,6 +202,21 @@ show_agent_labels_on_pane_borders = true
 # every repo name row 1, so they all align. The header itself is the indented
 # line now, and the first group is unlabelled because nothing precedes it.
 #
+# THE REMAINING ARTIFACT IS KNOWN AND ACCEPTED: because the label is a row of
+# the entry above it, focusing a group's LAST space paints the focus background
+# over the next group's header. That was weighed against the alternative and
+# kept — it is transient, one row, only while that space is focused, whereas the
+# indent misread membership permanently. There is no third shape: an inline
+# label (`── WORK · epos.student-enrolment`) overflows a 29-column sidebar, and
+# "token styles never change separators or row backgrounds", so the header
+# cannot opt out of the highlight.
+#
+# WHAT TO RE-CHECK ON A HERDR UPGRADE, in this order — 0.9.0 has none of them:
+# a parent/group field on `workspace.create` (grouping is still worktree
+# provenance only, and WorkspaceCreateParams is {cwd, env, focus, label}); a
+# sidebar separator or section primitive; any control over the rows-2+ indent.
+# The first would make this whole file's grouping a real, collapsible tree.
+#
 # NO STYLE ON IT, AND THAT IS THE MEASURED CHOICE. Captured from a pty client
 # against a throwaway `--session grptest`, in both modes (the light frame by
 # answering the DEC 2031 probe with `CSI ?997;2n`, exactly as in the theme block
