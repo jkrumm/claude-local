@@ -218,9 +218,21 @@ show_agent_labels_on_pane_borders = true
 # `dim = true` was tried first and dropped: Ghostty's faint blend is not
 # measured here, so it would have made those numbers a claim rather than a
 # fact, and the hue already carries the separation.
+#
+# `git_status` GOES THE SAME WAY AS `branch`, and for the same reason plus one
+# more. The ahead/behind counts are already in the prompt of every pane inside
+# the workspace, where starship renders them next to the branch they belong to;
+# in the sidebar they were a second, indented line on whichever repos happened
+# to be unpushed. That indent is not free — with git_status gone, the ONLY
+# multi-row entries left are the ones carrying a group header, so every repo
+# name is the entry's single row and the list reads as one flat column of
+# names under each header.
+#
+# The state_icon still carries the thing that actually needs watching. If
+# "is anything unpushed" ever needs to be visible from here rather than from a
+# pane, that is `make doctor`'s drift check, not a sidebar column.
 rows = [
   ["state_icon", "workspace"],
-  ["git_status"],
   ["$group"],
 ]
 
