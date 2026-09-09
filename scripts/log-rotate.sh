@@ -57,6 +57,23 @@ FILES=(
   hermes-backup.err
   hermes-triage.log
   hermes-triage.err
+  # warden's four agents (com.jkrumm.warden-{loop,poll,sweep,backup}) — the
+  # control plane extracted out of hermes-agent. warden-loop is the same act-loop
+  # com.jkrumm.hermes-triage runs today, so the two triage entries above stay only
+  # until that cutover lands; warden-poll and warden-sweep are the ingest and
+  # verdict-folding jobs promoted off the gateway's scheduler, which is the whole
+  # point of the split (a control plane cannot live inside the thing it
+  # supervises). Declared ahead of the agents existing: a missing file is skipped
+  # below, and a log that appears before its rotation entry does is the failure
+  # this list exists to prevent.
+  warden-loop.log
+  warden-loop.err
+  warden-poll.log
+  warden-poll.err
+  warden-sweep.log
+  warden-sweep.err
+  warden-backup.log
+  warden-backup.err
   # The Hermes gateway's OWN launchd streams. Absolute because `hermes gateway
   # install` generates that plist and points it at ~/.hermes/logs, not
   # ~/Library/Logs, and the plist is upstream's to write — this list bends to it
