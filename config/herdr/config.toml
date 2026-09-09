@@ -321,3 +321,16 @@ command = "exec bash \"$HOME/SourceRoot/dotfiles/scripts/brain-note.sh\""
 description = "project note"
 width = "80%"
 height = "80%"
+
+[ui.toast]
+# Background agent-state pop-ups go to the OS notification service rather than
+# an in-app toast. herdr's four options are `off`, `herdr` (an in-app toast),
+# `terminal` (ask the outer terminal to raise a desktop notification) and
+# `system` (ask the OS directly) — the last is the only one that survives not
+# looking at the herdr window.
+#
+# NOT MEASURED, and the thing to check if a notification never arrives: WHICH
+# machine's notification centre fires on the `desk` path. `terminal` delivery
+# is explicitly the client's terminal and therefore the MacBook; `system` is
+# plausibly the SERVER's, which would be the mini, where no one is looking.
+delivery = "system"
