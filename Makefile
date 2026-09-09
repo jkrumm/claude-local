@@ -2456,7 +2456,12 @@ agent-overview:
 	@curl -sf localhost:7705/api/overview.txt >/dev/null || { echo "  ✗ sideclaw not answering on :7705 — is com.jkrumm.sideclaw-server loaded?"; exit 1; }
 	@WS=$$(herdr workspace list 2>/dev/null | jq -r '.result.workspaces[] | select(.label=="overview") | .workspace_id' | head -1); \
 	if [ -z "$$WS" ]; then \
-		WS=$$(herdr workspace create --cwd "$$HOME" --label overview --no-focus | jq -r '.result.workspace.workspace_id'); \
+		OUT=$$(herdr workspace create --cwd "$$HOME" --label overview --no-focus 2>&1); \
+		WS=$$(printf '%s' "$$OUT" | jq -r '.result.workspace.workspace_id // empty' 2>/dev/null); \
+		[ -n "$$WS" ] || { \
+			echo "  ✗ workspace create failed: $$(printf '%s' "$$OUT" | jq -r '.error.message // .' 2>/dev/null | head -2)"; \
+			exit 1; \
+		}; \
 		echo "  created herdr workspace overview ($$WS)"; \
 	fi; \
 	PANE=$$(herdr pane list 2>/dev/null | jq -r --arg ws "$$WS" '.result.panes[] | select(.workspace_id==$$ws) | .pane_id' | head -1); \
@@ -2489,11 +2494,18 @@ herdr-restart:
 		sleep 0.5; \
 	done; \
 	launchctl bootstrap "gui/$$U" "$$PLIST" || { echo "  ✗ bootstrap failed"; exit 1; }
-	@sleep 2
-	@herdr status --json 2>/dev/null | jq -r '"  ✓ server v" + .server.version + " · detached_server_daemon=" + (.server.capabilities.detached_server_daemon|tostring) + " (false still prompts on desk)"' \
+	@# WAIT, DO NOT SLEEP. `bootout` retires the launchd job but does not stop the
+	@# server — since 0.9.0 it is a detached daemon and holds the socket until it
+	@# exits itself, so for a moment the OLD binary still answers. A `sleep 2`
+	@# here is what made the 0.8.2 → 0.9.0 upgrade run agent-overview against a
+	@# protocol-20 server and die with `no pane in workspace `.
+	@bash $(DOTFILES_DIR)/scripts/lib/herdr-ready.sh --timeout 60 \
+		|| { echo "    ↳ brew services info herdr --json"; exit 1; }
+	@herdr status --json 2>/dev/null | jq -r '"    · detached_server_daemon=" + (.server.capabilities.detached_server_daemon|tostring) + " (false still prompts on desk)"' \
 		|| echo "  ! could not read herdr status"
 	@# Panes survive the restart, their processes do not — the overview `watch`
 	@# loop is the one that nobody notices is gone (the heartbeat WARNs on it).
+	@# Only reachable once the readiness gate above passed.
 	@$(MAKE) --no-print-directory agent-overview || echo "  ! agent-overview not restarted — run: make agent-overview"
 
 # Collie — phone web-UI control surface for the herd (herdr plugin + Bun

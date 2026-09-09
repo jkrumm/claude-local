@@ -242,7 +242,12 @@ Four facts to hold:
   run inside a herdr pane (the shell it would kill mid-sequence), writes a
   restore inventory with each agent's resume id, gates on working/blocked
   agents, converges the plist `brew upgrade herdr` silently reverts, then
-  asserts the server, the config and the groups.
+  asserts the server, the config and the groups. **`bootout` does not stop the
+  server** — since 0.9.0 it is a detached daemon holding the socket until it
+  exits itself, so both targets wait on
+  `scripts/lib/herdr-ready.sh` (running + protocol-compatible + expected
+  version) rather than sleeping. A `sleep 2` there is what made the 0.8.2 →
+  0.9.0 run talk to a protocol-20 server and fail a green upgrade.
 
 **Sidebar groups** — herdr has no folder and no separator primitive, so
 `config/herdr/groups.json` declares the taxonomy and `make herdr-groups` makes

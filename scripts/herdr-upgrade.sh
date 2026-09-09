@@ -22,12 +22,27 @@
 # defaults to true. The inventory below is written anyway, because "eligible"
 # is not "observed" and a list beats memory.
 #
-# LATER, ON A NEWER HERDR: `server.live_handoff` takes {import_exe,
-# expected_version, expected_protocol} over the socket, which replaces a running
-# server while KEEPING pane processes alive — i.e. an upgrade with no restart at
-# all, drivable without herdr's self-updater fighting the brew install. It is
-# experimental and opt-in upstream, and a stop is still required for the
-# one-time move off a pre-generation-1 server. This script is where that goes.
+# LIVE HANDOFF — CHECKED ON 0.9.0, DELIBERATELY NOT WIRED YET. The capability is
+# real: the running server reports `capabilities.live_handoff: true`, and
+# `server.live_handoff` takes {import_exe, expected_version, expected_protocol}
+# over the socket, replacing a running server while KEEPING pane processes
+# alive. There is NO `herdr server live-handoff` subcommand — `herdr server` is
+# {stop, reload-config, agent-manifests, update-agent-manifests,
+# reload-agent-manifests} — and the two CLI doors, `herdr update --handoff` and
+# `herdr --remote <target> --handoff`, both route through herdr's self-updater,
+# which would install a binary outside brew and fight the Brewfile. So from this
+# install the only route is the socket method, and that part is easy.
+#
+# WHAT BLOCKS IT IS LAUNCHD, NOT HERDR. This server is a launchd-supervised
+# session leader on purpose (_herdr-supervise, herdr/herdr-server-start.py), and
+# a handoff hands the panes to a process THIS repo did not start. Unresolved,
+# and unresolvable without a restart to test with: whether the brew-service job
+# then sees its process exit and KeepAlive-spawns a second server, and whether
+# the survivor is still a session leader. Two servers, or one unsupervised one,
+# is a worse failure than a bounce that costs an interrupted turn — and since
+# native agent session restore already brings the Claude panes back, a bounce is
+# cheap. Resolve those two questions on a throwaway `--session` first; this is
+# where the code goes once they are answered.
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -115,16 +130,15 @@ make -C "$DOTFILES_DIR" --no-print-directory herdr-restart YES=1
 
 # --- assert ------------------------------------------------------------------
 
-for _ in $(seq 1 30); do
-  herdr status server 2>/dev/null | grep -q "^status: running" && break
-  sleep 1
-done
-herdr status server 2>/dev/null | grep -q "^status: running" \
-  || die "herdr server did not come back — launchctl print $(brew services info herdr --json | jq -r '.[0].name // "herdr"')"
-
-RUNNING=$(herdr status server 2>/dev/null | awk -F': ' '/^version:/{print $2; exit}')
-[[ "$RUNNING" == "$LATEST" ]] \
-  || echo "  · server reports '$RUNNING', expected '$LATEST' — a client may be pinning an old build"
+# The gate, not a guess. `make herdr-restart` already waited for a compatible
+# server before it ran agent-overview; this waits for the RIGHT ONE — a server
+# that is up, protocol-compatible AND reporting the version brew just poured.
+# The old probe here grepped `herdr status server` for "status: running" and
+# called a healthy 0.9.0 server dead: it ran while the detached 0.8.2 daemon
+# still held the socket, and nothing in that text form says which binary
+# answered. A green upgrade exited 1.
+bash "$DOTFILES_DIR/scripts/lib/herdr-ready.sh" --timeout 120 --version "$LATEST" \
+  || die "herdr $LATEST never took the socket — brew services info herdr --json"
 
 # A new herdr can reject a key the old one accepted, and a rejected config is
 # silently the default rather than an error at startup.
