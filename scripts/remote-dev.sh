@@ -321,24 +321,22 @@ cmd_work() {
 
 # The wave-chaining lane: near-twin of `work`, for an agent that has just
 # finished a wave and needs to hand off to a fresh one rather than continue in
-# its own (increasingly long) context. Four differences from `work`, all
-# deliberate:
+# its own (increasingly long) context. Four differences from `work`:
 #
-#   1. Not idempotent. `work` focuses an existing agent for the repo, because
-#      two Claude agents in one checkout race each other's edits — the same
-#      hazard is guarded below (the busy check), but a *new* wave is by
-#      definition a new pane, so unlike `work` this never folds into one that
-#      already exists.
+#   1. A TAB in the repo's existing space, not a new space. Every repo already
+#      has one workspace and the sidebar is grouped by `herdr-groups.py`, so a
+#      per-wave workspace does not read as "wave 2 of this repo" — it reads as a
+#      second, unrelated entry in the sidebar, in the wrong group. Waves are
+#      tabs inside the repo's space; a workspace is created only when the repo
+#      has none at all.
 #   2. Solo mode. `--dangerously-skip-permissions` rides the `-- [AGENT_ARG]`
 #      tail into `herdr agent start`, because an unattended wave has no one to
 #      answer a permission prompt. `work` deliberately omits it — that pane
 #      has a human sitting in front of it.
 #   3. It submits a prompt. `work` hands you an empty pane; `wave` is the
-#      automated form of "open a tab, start claude solo, paste the handover",
-#      so the handover text goes in as the first prompt.
+#      automated form of "open a tab, start claude solo, paste the handover".
 #   4. It is bounded. See RD_WAVE_MAX below — a wave that can spawn its own
-#      successor is exactly the shape of a chain with no natural end, and
-#      nothing else in this script stops one from running away.
+#      successor is exactly the shape of a chain with no natural end.
 cmd_wave() {
   local name="${1:-}"; shift || true
   local prompt="${*:-}"
@@ -348,25 +346,36 @@ cmd_wave() {
   local path
   path=$(resolve_repo "$name") || die "no git repo named '$name' on $HOST — try 'repos $name'"
 
-  # Wave numbers come from existing workspace labels (`<repo>#<n>`), not a
-  # counter kept anywhere — herdr's workspace list is already the durable
-  # record of what has run, and a separate counter file would just be a
-  # second source of truth that can drift from it. A label that does not
-  # parse, or no workspaces at all, is not a reason to refuse to work — it
-  # just means this is wave 1.
-  local list_json n
-  list_json=$(host_run 'herdr workspace list' 2>/dev/null)
-  n=$(NAME="$name" python3 -c '
-import json, os, re, sys
+  # The repo's space is the one labelled with its bare name — the convention
+  # `work` establishes and `herdr-groups.py` groups by. Waves live inside it as
+  # tabs labelled `wave <n>`, so the number comes from that tab list rather than
+  # from a counter anywhere: herdr already holds the durable record, and a
+  # second source of truth would only drift from it.
+  local ws n
+  ws=$(NAME="$name" python3 -c '
+import json, os, sys
 name = os.environ["NAME"]
 try:
     workspaces = json.load(sys.stdin)["result"]["workspaces"]
 except Exception:
     workspaces = []
-pat = re.compile("^" + re.escape(name) + r"#(\d+)$")
-nums = [int(m.group(1)) for w in workspaces for m in [pat.match(w.get("label") or "")] if m]
+for w in workspaces:
+    if (w.get("label") or "").strip() == name:
+        print(w["workspace_id"]); break
+' <<<"$(host_run 'herdr workspace list' 2>/dev/null)" 2>/dev/null)
+
+  if [[ -n $ws ]]; then
+    n=$(host_run "herdr tab list --workspace '$ws'" 2>/dev/null | python3 -c '
+import json, re, sys
+try:
+    tabs = json.load(sys.stdin)["result"]["tabs"]
+except Exception:
+    tabs = []
+nums = [int(m.group(1)) for t in tabs
+        for m in [re.match(r"^wave (\d+)$", (t.get("label") or "").strip())] if m]
 print((max(nums) + 1) if nums else 1)
-' <<<"$list_json" 2>/dev/null)
+' 2>/dev/null)
+  fi
   [[ -n $n ]] || n=1
 
   # An agent that can spawn its own successor is exactly the shape of a chain
@@ -376,32 +385,36 @@ print((max(nums) + 1) if nums else 1)
   (( n <= wave_max )) \
     || die "wave $n would exceed RD_WAVE_MAX=$wave_max — refusing to keep an unbounded self-spawning chain going"
 
-  # Same hazard `work`'s comment describes, checked the other way round: a
-  # LIVE predecessor (working or blocked) means two Claude agents about to
-  # edit one checkout at once. An idle or done predecessor is exactly what a
-  # finished previous wave looks like, so those are expected, not a reason to
-  # stop.
+  # Same hazard `work`'s comment describes: two Claude agents editing one
+  # checkout race each other. But the CALLER is normally the finishing wave
+  # handing over, and herdr still reports it `working` because it is mid-turn —
+  # so an unqualified check refuses the command's primary use case. Excluding
+  # our own pane is exact: any OTHER live agent in that checkout is still a hard
+  # stop. An idle or done predecessor is what a finished wave looks like, so
+  # those were never the concern.
   local roster busy
   roster=$(herdr_agent_list) || exit 1
-  busy=$(CWD="$path" python3 -c '
+  busy=$(CWD="$path" SELF="${HERDR_PANE_ID:-}" python3 -c '
 import json, os, sys
-cwd = os.environ["CWD"]
+cwd, self_pane = os.environ["CWD"], os.environ.get("SELF") or None
 try:
     agents = json.load(sys.stdin)["result"]["agents"]
 except Exception:
     agents = []
 for a in agents:
-    if a.get("cwd") == cwd and a.get("agent_status") in ("working", "blocked"):
+    if a.get("cwd") != cwd or a.get("pane_id") == self_pane:
+        continue
+    if a.get("agent_status") in ("working", "blocked"):
         print("%s %s" % (a.get("pane_id") or "?", a.get("agent_status")))
         break
 ' <<<"$roster" 2>/dev/null)
   [[ -z $busy ]] \
-    || die "a previous wave in $path is still ${busy#* } (pane ${busy%% *}) — two agents editing one checkout race each other"
+    || die "another agent in $path is ${busy#* } (pane ${busy%% *}) — two agents editing one checkout race each other"
 
   # `agent_name` clips at 32 because that is herdr's cap — appending the wave
   # suffix afterwards pushes it back over, so the base gets clipped by the
   # suffix's width first. A name that overflows is rejected at `agent start`,
-  # i.e. after the workspace already exists.
+  # i.e. after the tab already exists.
   local suffix agent
   suffix="-w${n}"
   agent="$(agent_name "$name")"
@@ -410,15 +423,38 @@ for a in agents:
   # Everything above can be wrong before anything gets created — RD_DRY_RUN
   # stops here for the same reason `say` stops before the send.
   if [[ -n ${RD_DRY_RUN:-} ]]; then
-    echo "would create workspace '$name#$n' at $path"
-    echo "would start agent '$agent' solo in that workspace and prompt it"
+    if [[ -n $ws ]]; then
+      echo "would add tab 'wave $n' to existing space $ws ($name) at $path"
+    else
+      echo "would create space '$name' at $path (no space exists yet) and use its first tab"
+    fi
+    echo "would start agent '$agent' solo in it and prompt it"
     return 0
   fi
 
-  local pane
-  pane=$(host_run "herdr workspace create --cwd '$path' --label '$name#$n' --no-focus" \
-    | python3 -c "import json,sys; print(json.load(sys.stdin)['result']['root_pane']['pane_id'])" 2>/dev/null)
-  [[ -n $pane ]] || die "herdr workspace create failed for $path"
+  local created json pane tab
+  if [[ -n $ws ]]; then
+    created=tab
+    json=$(host_run "herdr tab create --workspace '$ws' --cwd '$path' --label 'wave $n' --no-focus")
+  else
+    created=workspace
+    json=$(host_run "herdr workspace create --cwd '$path' --label '$name' --no-focus")
+  fi
+  pane=$(printf '%s' "$json" | python3 -c \
+    "import json,sys; print(json.load(sys.stdin)['result']['root_pane']['pane_id'])" 2>/dev/null)
+  tab=$(printf '%s' "$json" | python3 -c \
+    "import json,sys; print(json.load(sys.stdin)['result']['root_pane']['tab_id'])" 2>/dev/null)
+  [[ -n $pane ]] || die "herdr $created create failed for $path: $json"
+
+  # Roll back only what we made. Closing the WORKSPACE when we only added a tab
+  # to an existing one would take the repo's other panes with it.
+  rollback_wave() {
+    if [[ $created == tab ]]; then
+      host_run "herdr tab close '$tab'" >/dev/null 2>&1
+    else
+      host_run "herdr workspace close '${pane%%:*}'" >/dev/null 2>&1
+    fi
+  }
 
   # Same `agent_pane_busy` race `work` retries around — the pane exists before
   # its shell does.
@@ -433,7 +469,7 @@ for a in agents:
   done
 
   if ! echo "$out" | grep -q '"type":"agent_started"'; then
-    host_run "herdr workspace close '${pane%%:*}'" >/dev/null 2>&1
+    rollback_wave
     die "agent start failed: $out"
   fi
 
@@ -450,17 +486,16 @@ for a in agents:
   # (`{"error":{"code":"agent_not_found",…}}`, verified 2026-09-10 against a
   # bogus pane id), so `rc` is not the signal — the body is. Unchecked, a
   # failed submission is the worst outcome this command has: the pane exists,
-  # a fresh Claude is sitting in it, and it was never told what to do. The
-  # workspace is deliberately NOT rolled back here — unlike the `agent start`
-  # failure above, there is a live agent in it now, and the fix is one `rd say`
-  # rather than a respawn.
+  # a fresh Claude is sitting in it, and it was never told what to do. Nothing
+  # is rolled back here — unlike the `agent start` failure above there is a
+  # live agent in it now, and the fix is one `rd say` rather than a respawn.
   if echo "$sent" | grep -q '"error"'; then
     note "   pane $pane is live but UNPROMPTED — recover with:"
     note "     rd say $agent '<the handover prompt>'"
     die "wave $n started but the prompt was rejected: $sent"
   fi
 
-  echo "→ wave $n started: claude '$agent' in pane $pane  ($path)"
+  echo "→ wave $n started: claude '$agent' in ${ws:+space $ws, }pane $pane  ($path)"
   note "   'rd read $agent' to watch · 'rd say $agent \"...\"' to steer"
 }
 

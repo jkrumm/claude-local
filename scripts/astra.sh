@@ -105,6 +105,9 @@ json.dump({
 # EXIT trap would delete the body before it could be read, leaving `curl: (22)`
 # in place of the endpoint's actual error message. Take the status, then always
 # parse the body.
+# python3, not `date +%s%N`: BSD date on macOS has no sub-second format, and
+# python3 is already a hard dependency of this script.
+start_ms=$(python3 -c 'import time; print(int(time.time() * 1000))')
 http=000
 set +e
 http=$(printf 'header = "Authorization: Bearer %s"\n' "$KEY" |
@@ -116,6 +119,8 @@ http=$(printf 'header = "Authorization: Bearer %s"\n' "$KEY" |
     -w '%{http_code}')
 curl_rc=$?
 set -e
+end_ms=$(python3 -c 'import time; print(int(time.time() * 1000))')
+duration_ms=$((end_ms - start_ms))
 if [ "$curl_rc" -ne 0 ] && [ ! -s "$WORK/response.json" ]; then
   echo "astra: request failed (curl exit $curl_rc, no response body)" >&2
   exit 1
@@ -124,7 +129,7 @@ fi
 python3 -c '
 import json, sys
 
-path, http = sys.argv[1], sys.argv[2]
+path, http, duration_ms, effort, mode = sys.argv[1:6]
 raw = open(path, encoding="utf-8", errors="replace").read()
 try:
     d = json.loads(raw)
@@ -165,4 +170,49 @@ print(
     ),
     file=sys.stderr,
 )
-' "$WORK/response.json" "$http"
+
+# Usage sink for the usage tracker: this is the only place gpt-6-astra spend is
+# ever recorded, since it is not a Codex session and the codex collector cannot
+# see it. Never let this cost the user an answer that already succeeded and
+# already printed above -- swallow every failure (missing dir, full disk, perms).
+try:
+    import pathlib
+    import uuid
+    from datetime import datetime, timezone
+
+    request_id = d.get("id")
+    synthetic_id = False
+    if not request_id:
+        # No id on the response body -- synthesize one rather than letting two
+        # calls collapse onto the same (missing) dedup key, and flag it so the
+        # collector can tell a real id from a stand-in.
+        request_id = str(uuid.uuid4())
+        synthetic_id = True
+
+    # input_tokens_details.cached_tokens is the Responses API cache-read count;
+    # fall back to 0 when the endpoint omits the block rather than guessing.
+    cached_tokens = (u.get("input_tokens_details") or {}).get("cached_tokens", 0)
+
+    record = {
+        "ts": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "request_id": request_id,
+        "model": d.get("model"),
+        "input_tokens": u.get("input_tokens", 0),
+        "output_tokens": u.get("output_tokens", 0),
+        "reasoning_tokens": detail.get("reasoning_tokens", 0),
+        "cached_tokens": cached_tokens,
+        "effort": effort,
+        "mode": mode,
+        "outcome": "ok",
+        "duration_ms": int(duration_ms),
+    }
+    if synthetic_id:
+        record["synthetic_request_id"] = True
+
+    sink_dir = pathlib.Path.home() / ".local" / "share" / "usage-tracker"
+    sink_dir.mkdir(parents=True, exist_ok=True)
+    with open(sink_dir / "astra.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(record) + "\n")
+except Exception:
+    pass
+' "$WORK/response.json" "$http" "$duration_ms" "$EFFORT" "$MODE"

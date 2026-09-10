@@ -28,10 +28,6 @@ fi
 #                    SourceRoot → ~/SourceRoot/.claude skills
 #                    IuRoot    → per-project .claude/ skills
 #
-# ── AI shell helpers ─────────────────────────────────────────────────────────
-# ai "<desc>"        generate zsh command from description → confirm → run
-# fix                re-run last failed command, ask Claude to fix → confirm
-#
 # ── Git ──────────────────────────────────────────────────────────────────────
 # nb <branch>        smart branch switch / create
 #                    • switches + rebases if branch exists (local or remote)
