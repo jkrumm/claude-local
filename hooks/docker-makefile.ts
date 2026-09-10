@@ -635,14 +635,14 @@ export function projectDirectories(command: string, sessionCwd: string): string[
   return [...new Set(dirs)].filter(isDirectory);
 }
 
-function expandPath(target: string, base: string): string {
+export function expandPath(target: string, base: string): string {
   const home = process.env.HOME ?? "";
   const expanded =
     target === "~" ? home : target.startsWith("~/") ? home + target.slice(1) : target;
   return expanded.startsWith("/") ? expanded : `${base}/${expanded}`;
 }
 
-function isDirectory(path: string): boolean {
+export function isDirectory(path: string): boolean {
   const result = Bun.spawnSync(["test", "-d", path], { stdout: "pipe", stderr: "pipe" });
   return result.exitCode === 0;
 }
