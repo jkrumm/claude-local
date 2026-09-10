@@ -87,3 +87,18 @@ the verdicts — not the raw material.
   library/version facts → `/research`.
 - Grinding through reads, edits, and test loops inline is the exception and needs
   a reason (tight iteration, or work coupled to context only this session holds).
+
+## The orchestrator's model is not the workers' model
+
+The expensive model is here to hold the plan. It is not here to run inside a
+subagent, where it buys judgment on work whose plan is already settled.
+
+- **`CLAUDE_CODE_SUBAGENT_MODEL` pins every subagent to Sonnet.** Frontmatter
+  `model:` overrides it, an explicit `model` param overrides both.
+- **Never `subagent_type: "fork"` from Fable or Opus.** A fork always inherits the
+  parent's model — that is architectural, no setting overrides it. A fork on Fable
+  is the most expensive call available. Spawn a named agent instead. A *skill's*
+  `context: fork` is a different mechanism and is fine — it honours the skill's own
+  `model:` (that is how `/browse` stays on Haiku).
+- **Raise a worker above Sonnet only for novel hard logic**, and say in one clause
+  why the settled-work default did not fit.

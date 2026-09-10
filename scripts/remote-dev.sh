@@ -319,6 +319,151 @@ cmd_work() {
   fi
 }
 
+# The wave-chaining lane: near-twin of `work`, for an agent that has just
+# finished a wave and needs to hand off to a fresh one rather than continue in
+# its own (increasingly long) context. Four differences from `work`, all
+# deliberate:
+#
+#   1. Not idempotent. `work` focuses an existing agent for the repo, because
+#      two Claude agents in one checkout race each other's edits — the same
+#      hazard is guarded below (the busy check), but a *new* wave is by
+#      definition a new pane, so unlike `work` this never folds into one that
+#      already exists.
+#   2. Solo mode. `--dangerously-skip-permissions` rides the `-- [AGENT_ARG]`
+#      tail into `herdr agent start`, because an unattended wave has no one to
+#      answer a permission prompt. `work` deliberately omits it — that pane
+#      has a human sitting in front of it.
+#   3. It submits a prompt. `work` hands you an empty pane; `wave` is the
+#      automated form of "open a tab, start claude solo, paste the handover",
+#      so the handover text goes in as the first prompt.
+#   4. It is bounded. See RD_WAVE_MAX below — a wave that can spawn its own
+#      successor is exactly the shape of a chain with no natural end, and
+#      nothing else in this script stops one from running away.
+cmd_wave() {
+  local name="${1:-}"; shift || true
+  local prompt="${*:-}"
+  [[ -n $name && -n $prompt ]] || die "usage: wave <repo> <prompt…>"
+  require_server
+
+  local path
+  path=$(resolve_repo "$name") || die "no git repo named '$name' on $HOST — try 'repos $name'"
+
+  # Wave numbers come from existing workspace labels (`<repo>#<n>`), not a
+  # counter kept anywhere — herdr's workspace list is already the durable
+  # record of what has run, and a separate counter file would just be a
+  # second source of truth that can drift from it. A label that does not
+  # parse, or no workspaces at all, is not a reason to refuse to work — it
+  # just means this is wave 1.
+  local list_json n
+  list_json=$(host_run 'herdr workspace list' 2>/dev/null)
+  n=$(NAME="$name" python3 -c '
+import json, os, re, sys
+name = os.environ["NAME"]
+try:
+    workspaces = json.load(sys.stdin)["result"]["workspaces"]
+except Exception:
+    workspaces = []
+pat = re.compile("^" + re.escape(name) + r"#(\d+)$")
+nums = [int(m.group(1)) for w in workspaces for m in [pat.match(w.get("label") or "")] if m]
+print((max(nums) + 1) if nums else 1)
+' <<<"$list_json" 2>/dev/null)
+  [[ -n $n ]] || n=1
+
+  # An agent that can spawn its own successor is exactly the shape of a chain
+  # with no natural end. RD_WAVE_MAX is the backstop — the failure mode this
+  # guards against is not "one wave too many", it is "did not stop".
+  local wave_max=${RD_WAVE_MAX:-10}
+  (( n <= wave_max )) \
+    || die "wave $n would exceed RD_WAVE_MAX=$wave_max — refusing to keep an unbounded self-spawning chain going"
+
+  # Same hazard `work`'s comment describes, checked the other way round: a
+  # LIVE predecessor (working or blocked) means two Claude agents about to
+  # edit one checkout at once. An idle or done predecessor is exactly what a
+  # finished previous wave looks like, so those are expected, not a reason to
+  # stop.
+  local roster busy
+  roster=$(herdr_agent_list) || exit 1
+  busy=$(CWD="$path" python3 -c '
+import json, os, sys
+cwd = os.environ["CWD"]
+try:
+    agents = json.load(sys.stdin)["result"]["agents"]
+except Exception:
+    agents = []
+for a in agents:
+    if a.get("cwd") == cwd and a.get("agent_status") in ("working", "blocked"):
+        print("%s %s" % (a.get("pane_id") or "?", a.get("agent_status")))
+        break
+' <<<"$roster" 2>/dev/null)
+  [[ -z $busy ]] \
+    || die "a previous wave in $path is still ${busy#* } (pane ${busy%% *}) — two agents editing one checkout race each other"
+
+  # `agent_name` clips at 32 because that is herdr's cap — appending the wave
+  # suffix afterwards pushes it back over, so the base gets clipped by the
+  # suffix's width first. A name that overflows is rejected at `agent start`,
+  # i.e. after the workspace already exists.
+  local suffix agent
+  suffix="-w${n}"
+  agent="$(agent_name "$name")"
+  agent="${agent:0:$((32 - ${#suffix}))}${suffix}"
+
+  # Everything above can be wrong before anything gets created — RD_DRY_RUN
+  # stops here for the same reason `say` stops before the send.
+  if [[ -n ${RD_DRY_RUN:-} ]]; then
+    echo "would create workspace '$name#$n' at $path"
+    echo "would start agent '$agent' solo in that workspace and prompt it"
+    return 0
+  fi
+
+  local pane
+  pane=$(host_run "herdr workspace create --cwd '$path' --label '$name#$n' --no-focus" \
+    | python3 -c "import json,sys; print(json.load(sys.stdin)['result']['root_pane']['pane_id'])" 2>/dev/null)
+  [[ -n $pane ]] || die "herdr workspace create failed for $path"
+
+  # Same `agent_pane_busy` race `work` retries around — the pane exists before
+  # its shell does.
+  local start_cmd="herdr agent start '$agent' --kind claude --pane '$pane' -- --dangerously-skip-permissions"
+  [[ -n ${RD_WAVE_MODEL:-} ]] && start_cmd+=" --model '$RD_WAVE_MODEL'"
+
+  local out="" i=0
+  while (( i < 10 )); do
+    sleep 1; i=$((i+1))
+    out=$(host_run "$start_cmd")
+    echo "$out" | grep -q 'agent_pane_busy' || break
+  done
+
+  if ! echo "$out" | grep -q '"type":"agent_started"'; then
+    host_run "herdr workspace close '${pane%%:*}'" >/dev/null 2>&1
+    die "agent start failed: $out"
+  fi
+
+  # The same two-shell quoting hazard `bg` documents at length: an ssh hop,
+  # then herdr's own argv handling, sit between here and the pane. base64
+  # removes the problem rather than escaping around it — a prompt with single
+  # quotes, double quotes, newlines or a literal `$(...)` all survive
+  # byte-identical.
+  local b64 sent
+  b64=$(printf %s "$prompt" | base64 | tr -d '\n')
+  sent=$(host_run "herdr agent prompt '$pane' \"\$(echo $b64 | base64 -d)\"" 2>&1)
+
+  # `herdr agent prompt` EXITS 0 ON FAILURE and reports it in the body
+  # (`{"error":{"code":"agent_not_found",…}}`, verified 2026-09-10 against a
+  # bogus pane id), so `rc` is not the signal — the body is. Unchecked, a
+  # failed submission is the worst outcome this command has: the pane exists,
+  # a fresh Claude is sitting in it, and it was never told what to do. The
+  # workspace is deliberately NOT rolled back here — unlike the `agent start`
+  # failure above, there is a live agent in it now, and the fix is one `rd say`
+  # rather than a respawn.
+  if echo "$sent" | grep -q '"error"'; then
+    note "   pane $pane is live but UNPROMPTED — recover with:"
+    note "     rd say $agent '<the handover prompt>'"
+    die "wave $n started but the prompt was rejected: $sent"
+  fi
+
+  echo "→ wave $n started: claude '$agent' in pane $pane  ($path)"
+  note "   'rd read $agent' to watch · 'rd say $agent \"...\"' to steer"
+}
+
 # The durable lane. A herdr crash restores the layout and loses every process in
 # it, so anything that must survive goes here instead of into a pane.
 #
@@ -557,12 +702,13 @@ usage() {
 
   rd — drive the mini's workspaces and agents from anywhere
 
-    rd repos [filter]      repos on the dev host, with branch + dirty count
-    rd work <repo>         herdr workspace + claude for that repo (idempotent)
-    rd bg <repo> <task…>   durable claude --bg daemon — survives everything
-    rd agents              every agent on the host, both lanes
-    rd read <agent> [src]  read an agent's output without attaching
-    rd say <agent> <text…> send a prompt to a running agent
+    rd repos [filter]         repos on the dev host, with branch + dirty count
+    rd work <repo>            herdr workspace + claude for that repo (idempotent)
+    rd wave <repo> <prompt…>  fresh pane + solo claude + prompt — the wave chain
+    rd bg <repo> <task…>      durable claude --bg daemon — survives everything
+    rd agents                 every agent on the host, both lanes
+    rd read <agent> [src]     read an agent's output without attaching
+    rd say <agent> <text…>    send a prompt to a running agent
 
   <agent> is a repo name, a pane id (wG:p6) or a bg session id prefix —
   whichever of them 'agents' put in front of you.
@@ -583,6 +729,7 @@ EOF
 case "${1:-}" in
   repos)  shift; cmd_repos "$@" ;;
   work)   shift; cmd_work "$@" ;;
+  wave)   shift; cmd_wave "$@" ;;
   bg)     shift; cmd_bg "$@" ;;
   agents) shift; cmd_agents "$@" ;;
   read)   shift; cmd_read "$@" ;;

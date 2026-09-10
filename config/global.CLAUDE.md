@@ -90,7 +90,7 @@ commits follow `rules/commit-conventions.md`.
 | Lane | Use for |
 |-|-|
 | **inline** — session model | Work needing this conversation's context: `commit`, `pr`, `ship`, `git-cleanup`, `secrets`, `implement`. Keep short. |
-| **native subagent** (`Agent`, `~/.claude/agents/`) — `@implementer` (Sonnet, settled work), `Explore` (search), an Opus subagent (novel-hard logic). Max, but **its own cache** | **The primary offload.** Fresh context, returns a summary, edits hit the live tree. |
+| **native subagent** (`Agent`, `~/.claude/agents/`) — `@implementer` (settled work), `@verifier` (evidence), `Explore` (search). All pinned to Sonnet by `CLAUDE_CODE_SUBAGENT_MODEL`; raise one only for novel-hard logic, and **never `fork`** from Fable/Opus. **Its own cache** | **The primary offload.** Fresh context, returns a summary, edits hit the live tree. |
 | **MCP — sideclaw**, mini only: `check`, `review`, `dispatch`, `otel`, excalidraw, read-image (per-tool model/backend in `sideclaw/server/lib/routing.ts`, live table at `GET /api/routing`) | Heavy work wanting schema-validated output. **Async** — job contract below. |
 | **subprocess — `agent-dispatch`**, IU per-token (Max on the mini lane) | One durable bounded episode against a named repo, output kept out of here. |
 | **`/research`** — research-gateway MCP, tailnet-only, off Max | Any library / API / version fact, never from memory. |
@@ -101,6 +101,8 @@ commits follow `rules/commit-conventions.md`.
 | One bounded episode **in another repo** | `agent-dispatch bg <repo> '<task>'`, or `mcp__sideclaw__dispatch` |
 | Search across many files | `Agent` → `Explore` |
 | Any format / lint / tsc / test loop | `mcp__sideclaw__check` — never inline |
+| Prove a change actually works (UI, traces, endpoints) | `@verifier` — screenshots and trace dumps never land inline |
+| Work too large for one context | `/wave` — a green-gated chain of fresh panes |
 | Code review · library facts | `/review` · `/research` |
 
 ### The two dispatch lanes
@@ -308,7 +310,7 @@ a call costs. **Everything routed through sideclaw exists only on the mini.**
 | **MCP (sideclaw, async)** | `/check` (format·lint·tsc·test·fallow; pass `commands` on non-Node repos) · `/review` (multi-angle + CodeRabbit; `--deep` adds correctness + security) · `/otel` · `/excalidraw-diagram` (drawings are read with sideclaw `read_image` directly) |
 | **MCP · fork · subprocess** | `/research` (research-gateway, off Max) · `/browse` (chrome-devtools, haiku) · `/analyze` (fallow + `claude_iu`) |
 | **inline — git** | `/commit` (`--split`/`--amend`) · `/pr` · `/ship` · `/git-cleanup` |
-| **inline — build** | `/implement` (drives `@implementer`) · `/upgrade-deps` (charts and UI: the basalt-ui per-repo skills + `rules/visx-charts.md`) · `/archify` (standalone HTML diagrams — vendored, not npx) |
+| **inline — build** | `/wave` (long work as a self-continuing chain of panes; drives `rd wave`) · `/implement` (drives `@implementer`) · `/upgrade-deps` (charts and UI: the basalt-ui per-repo skills + `rules/visx-charts.md`) · `/archify` (standalone HTML diagrams — vendored, not npx) |
 | **inline — ops** | `/secrets` · `/cloudflare` (via `op_account_for_cwd`) · `/remote-dev` · `/herdr` (inert unless `HERDR_ENV=1`) · `/img` (`--json`) |
 | **inline — writing** | `/brain` (via `obsidian-cli`) · `/distill` · `/podcast` |
 
